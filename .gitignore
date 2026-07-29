@@ -1,6 +1,15 @@
 # Prerequisites
 *.d
 
+# LLM Models directory
+models/
+*.gguf
+
+# IDE specific files
+.vs/
+.idea/
+*.user
+
 # Compiled Object files
 *.slo
 *.lo

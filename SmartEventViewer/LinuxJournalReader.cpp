@@ -27,6 +27,12 @@ namespace SmartEventViewer
         return true;
     }
 
+    unsigned long long LinuxJournalReader::GetChannelEventCount(const String& sChannelName)
+    {
+        (void)sChannelName;
+        return 100ULL;
+    }
+
     bool LinuxJournalReader::ReadNextEvent(EventRecord& outEvent)
     {
         if (!m_bIsOpen) return false;

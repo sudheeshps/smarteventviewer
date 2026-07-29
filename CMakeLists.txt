@@ -29,6 +29,7 @@ set(SMARTEVENTVIEWER_SOURCES
     SmartEventViewer/LinuxJournalReader.cpp
     SmartEventViewer/LocalLlmEngine.cpp
     SmartEventViewer/RagVectorStore.cpp
+    SmartEventViewer/NativeRestServer.cpp
 )
 
 set(SMARTEVENTVIEWER_HEADERS
@@ -42,6 +43,7 @@ set(SMARTEVENTVIEWER_HEADERS
     Include/Platform/LinuxJournalReader.h
     Include/Ai/LocalLlmEngine.h
     Include/Ai/RagVectorStore.h
+    Include/Core/NativeRestServer.h
     SmartEventViewer/pch.h
 )
 
@@ -58,6 +60,18 @@ if(WIN32)
     target_link_libraries(SmartEventViewer PRIVATE wevtapi)
 endif()
 
+# Dedicated Native C++ REST Server Executable Target
+set(SERVER_SOURCES
+    SmartEventViewerServer/main.cpp
+)
+
+add_executable(SmartEventViewerServer ${SERVER_SOURCES})
+target_link_libraries(SmartEventViewerServer PRIVATE SmartEventViewer)
+
+if(WIN32)
+    target_link_libraries(SmartEventViewerServer PRIVATE wevtapi)
+endif()
+
 # Unit Tests Executable Target
 set(TEST_SOURCES
     SmartEventViewerTests/EventRecordTests.cpp
@@ -72,4 +86,24 @@ endif()
 
 # Enable Testing
 enable_testing()
+
+# ----------------------------------------------------
+# Deployment & Packaging (CPack / Standalone ZIP)
+# ----------------------------------------------------
+install(TARGETS SmartEventViewer SmartEventViewerServer SmartEventViewerTests
+    RUNTIME DESTINATION bin
+    LIBRARY DESTINATION bin
+    ARCHIVE DESTINATION lib
+)
+
+install(DIRECTORY UI/ DESTINATION UI)
+install(DIRECTORY models/ DESTINATION models OPTIONAL)
+
+set(CPACK_PACKAGE_NAME "SmartEventViewer")
+set(CPACK_PACKAGE_VERSION "1.0.0")
+set(CPACK_PACKAGE_VENDOR "SmartEventViewer Team")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "SmartEventViewer SIEM Server & Dashboard Package")
+set(CPACK_GENERATOR "ZIP;NSIS")
+include(CPack)
+
 add_test(NAME SmartEventViewerTests COMMAND SmartEventViewerTests)

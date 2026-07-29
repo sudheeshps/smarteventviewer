@@ -47,11 +47,32 @@ To launch and view the interactive SIEM Dashboard:
 1. Navigate to the `UI/` folder.
 2. Open `index.html` in any web browser:
    ```powershell
-   Start-Process UI/index.html
-   ```
+### 4. Deployment Packaging (ZIP Archive)
+To create a complete self-contained deployment package containing the native C++ REST server DLL, binaries, HTML UI assets, models directory, and launcher script (`start_smarteventviewer.bat`):
+
+```powershell
+.\package_release.bat
+```
+This generates a ready-to-ship ZIP package in `dist/SmartEventViewer_v1.0.0_x64.zip`.
+
+## Package Directory Structure
+```
+SmartEventViewer_v1.0.0_x64/
+├── bin/
+│   ├── SmartEventViewer.dll         # Native C++ SIEM & EvtQuery Kernel Library
+│   ├── SmartEventViewer.lib         # Import Library
+│   └── SmartEventViewerTests.exe    # Native C++ Server & Test Runner
+├── UI/
+│   ├── index.html                   # SIEM Main Analytics Dashboard
+│   ├── events.html                  # Tree Events Explorer & AI Analyst
+│   └── riskcenter.html              # SIEM Risk Center & RDP Sessions
+├── models/                          # GGUF Model Directory
+└── start_smarteventviewer.bat      # One-click Launcher Script
+```
 
 ## Documentation
 - [EventRecord API Documentation](docs/EventRecord.md)
 - [AnomalyEngine API Documentation](docs/AnomalyEngine.md)
 - [LocalLlmEngine API Documentation](docs/LocalLlmEngine.md)
 - [Local LLM & RAG Guide](docs/LocalLlmAndRagGuide.md)
+

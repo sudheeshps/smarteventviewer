@@ -6,6 +6,7 @@
 #include "Platform/LinuxJournalReader.h"
 #include "Ai/LocalLlmEngine.h"
 #include "Ai/RagVectorStore.h"
+#include "Core/NativeRestServer.h"
 
 using String = DotNetDupe::System::String;
 
@@ -73,6 +74,25 @@ void Test_LocalLlmEngine()
     std::cout << "[PASS] Test_LocalLlmEngine\n";
 }
 
+void Test_WebApplication_Lifecycle()
+{
+    SmartEventViewer::WebApplication app = SmartEventViewer::WebApplication::CreateBuilder(0, nullptr).Build();
+    bool bStarted = app.Run(8080);
+    assert(bStarted == true);
+    assert(app.IsRunning() == true);
+    assert(app.GetPort() == 8080);
+
+    String sJsonChannels = app.GetController().GetChannels();
+    assert(!sJsonChannels.IsEmpty());
+
+    String sJsonEvents = app.GetController().GetEvents(String("Application"));
+    assert(!sJsonEvents.IsEmpty());
+
+    app.Stop();
+    assert(app.IsRunning() == false);
+    std::cout << "[PASS] Test_WebApplication_Lifecycle\n";
+}
+
 int main()
 {
     std::cout << "--- Running SmartEventViewer Test Suite ---\n";
@@ -82,6 +102,7 @@ int main()
     Test_AnomalyEngine_RiskEvaluation();
     Test_WinEventLogReader();
     Test_LocalLlmEngine();
+    Test_WebApplication_Lifecycle();
     std::cout << "--- All Tests Passed Successfully ---\n";
     return 0;
 }

@@ -7,6 +7,9 @@ echo ===================================================
 
 set BUILD_TYPE=Release
 set ACTION=build
+set MODEL_DIR=models
+set MODEL_FILE=%MODEL_DIR%\Llama-3-8B-Instruct.Q4_K_M.gguf
+set MODEL_URL=https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf
 
 :parse_args
 if "%~1"=="" goto end_parse
@@ -23,6 +26,30 @@ shift
 goto parse_args
 
 :end_parse
+
+:: Check and ensure local LLM model file exists
+if not exist "%MODEL_DIR%" (
+    echo [INFO] Creating missing models directory at .\%MODEL_DIR%
+    mkdir "%MODEL_DIR%"
+)
+
+if not exist "%MODEL_FILE%" (
+    echo [INFO] Local LLM model file not found at .\%MODEL_FILE%.
+    set /p USER_CHOICE="Do you want to download the local GGUF model binary file (~1 GB) now? (Y/N): "
+    if /i "!USER_CHOICE!"=="Y" (
+        echo [INFO] Downloading quantized model file...
+        powershell -Command "Invoke-WebRequest -Uri '%MODEL_URL%' -OutFile '%MODEL_FILE%'"
+        if exist "%MODEL_FILE%" (
+            echo [SUCCESS] Local LLM model file downloaded successfully to .\%MODEL_FILE%!
+        ) else (
+            echo [WARNING] Automatic model download failed. You may manually place a GGUF model file into .\%MODEL_FILE%.
+        )
+    ) else (
+        echo [INFO] Model download skipped by user. Build will proceed without model download.
+    )
+) else (
+    echo [INFO] Verified local LLM model binary exists at .\%MODEL_FILE%.
+)
 
 set BUILD_DIR=build_%BUILD_TYPE%
 
@@ -52,17 +79,19 @@ if %ERRORLEVEL% neq 0 (
     exit /b %ERRORLEVEL%
 )
 
-echo [INFO] Building SmartEventViewer targets (%BUILD_TYPE%)...
+echo [INFO] Building project targets...
 cmake --build %BUILD_DIR% --config %BUILD_TYPE%
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] CMake build failed.
     exit /b %ERRORLEVEL%
 )
 
-echo [INFO] Running CTest Unit Tests...
+echo [INFO] Running Unit Test Suite...
 ctest --test-dir %BUILD_DIR% -C %BUILD_TYPE% --output-on-failure
+if %ERRORLEVEL% neq 0 (
+    echo [WARNING] Tests finished with exit code %ERRORLEVEL%.
+)
 
 echo ===================================================
 echo [SUCCESS] CMake %BUILD_TYPE% %ACTION% completed!
 echo ===================================================
-exit /b 0

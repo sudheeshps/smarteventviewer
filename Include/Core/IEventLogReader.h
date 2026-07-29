@@ -16,6 +16,7 @@ namespace SmartEventViewer
         virtual ~IEventLogReader() = default;
         virtual StringList EnumerateEventSources() = 0;
         virtual bool OpenLog(const String& sChannelName) = 0;
+        virtual unsigned long long GetChannelEventCount(const String& sChannelName) = 0;
         virtual bool ReadNextEvent(EventRecord& outEvent) = 0;
         virtual void Close() = 0;
     };

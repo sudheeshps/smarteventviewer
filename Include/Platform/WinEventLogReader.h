@@ -18,6 +18,7 @@ namespace SmartEventViewer
 
         StringList EnumerateEventSources() override;
         bool OpenLog(const String& sChannelName) override;
+        unsigned long long GetChannelEventCount(const String& sChannelName) override;
         bool ReadNextEvent(EventRecord& outEvent) override;
         void Close() override;
     };
