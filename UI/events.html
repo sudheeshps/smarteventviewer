@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartEventViewer - Complete Events Explorer</title>
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-card: rgba(30, 41, 59, 0.7);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --accent-blue: #38bdf8;
+            --accent-red: #f87171;
+            --accent-yellow: #fbbf24;
+            --accent-green: #4ade80;
+            --accent-purple: #c084fc;
+            --border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            font-size: 0.8125rem;
+        }
+
+        /* Sidebar */
+        aside {
+            width: 240px;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
+            padding: 16px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            overflow-y: auto;
+        }
+
+        .brand {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--accent-blue);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--accent-blue);
+            text-decoration: none;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .section-title {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+            margin-top: 8px;
+            margin-bottom: 4px;
+        }
+
+        .nav-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .nav-item {
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .nav-item:hover, .nav-item.active {
+            background: rgba(56, 189, 248, 0.15);
+            color: var(--accent-blue);
+        }
+
+        /* Main Content */
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            padding: 16px;
+            gap: 12px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        h1 {
+            font-size: 1.15rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .live-tag {
+            background: rgba(74, 222, 128, 0.2);
+            color: var(--accent-green);
+            border: 1px solid var(--accent-green);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .pulse-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--accent-green);
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.3; }
+            50% { opacity: 1; }
+            100% { opacity: 0.3; }
+        }
+
+        .filter-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .filter-select {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            outline: none;
+        }
+
+        /* Top and Bottom Split Layout */
+        .layout-vertical {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Top Pane: Paginated Event Table */
+        .top-pane {
+            flex: 1;
+            background: var(--bg-card);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .table-wrapper {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        th {
+            position: sticky;
+            top: 0;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(8px);
+            padding: 8px 14px;
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            z-index: 10;
+        }
+
+        tr.group-header-row {
+            background: rgba(30, 41, 59, 0.9);
+            font-weight: 700;
+            color: var(--accent-blue);
+            cursor: default;
+        }
+
+        tr.group-header-row td {
+            padding: 6px 14px;
+            border-bottom: 2px solid var(--accent-blue);
+            font-size: 0.75rem;
+        }
+
+        tr.event-row {
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+
+        tr.event-row:hover {
+            background: rgba(56, 189, 248, 0.1);
+        }
+
+        tr.event-row.selected {
+            background: rgba(56, 189, 248, 0.2) !important;
+        }
+
+        /* Color Coding Rows */
+        tr.row-critical { background: rgba(248, 113, 113, 0.15); border-left: 3px solid var(--accent-red); }
+        tr.row-high { background: rgba(251, 191, 36, 0.1); border-left: 3px solid var(--accent-yellow); }
+        tr.row-medium { background: rgba(192, 132, 252, 0.08); border-left: 3px solid var(--accent-purple); }
+        tr.row-low { border-left: 3px solid transparent; }
+
+        td {
+            padding: 8px 14px;
+            border-top: 1px solid var(--border-color);
+            font-size: 0.78rem;
+        }
+
+        .badge {
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+
+        .badge-critical { background: rgba(248, 113, 113, 0.3); color: #fca5a5; border: 1px solid #f87171; }
+        .badge-high { background: rgba(251, 191, 36, 0.2); color: var(--accent-yellow); }
+        .badge-medium { background: rgba(192, 132, 252, 0.2); color: var(--accent-purple); }
+        .badge-low { background: rgba(74, 222, 128, 0.2); color: var(--accent-green); }
+
+        /* Pagination Bar */
+        .pagination-bar {
+            padding: 8px 16px;
+            background: rgba(15, 23, 42, 0.9);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .page-info {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .pagination-controls {
+            display: flex;
+            gap: 6px;
+        }
+
+        .btn-page {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .btn-page:hover:not(:disabled) {
+            background: var(--accent-blue);
+            color: #0f172a;
+        }
+
+        .btn-page:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        /* Bottom Pane: Event Details Inspector */
+        .bottom-pane {
+            height: 220px;
+            background: var(--bg-card);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            overflow-y: auto;
+        }
+
+        .pane-title {
+            font-size: 0.875rem;
+            font-weight: 700;
+            color: var(--accent-blue);
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .details-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+        }
+
+        .detail-group {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .detail-label {
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+        }
+
+        .detail-value {
+            font-size: 0.8rem;
+            color: var(--text-primary);
+            word-break: break-word;
+        }
+
+        .xml-box {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 8px;
+            font-family: monospace;
+            font-size: 0.75rem;
+            color: #7dd3fc;
+            white-space: pre-wrap;
+            max-height: 70px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <aside>
+        <div class="brand">🛡️ SmartEventViewer</div>
+
+        <a href="index.html" class="back-link">&larr; Return to Dashboard</a>
+
+        <div class="section-title">Navigation</div>
+        <ul class="nav-list">
+            <li class="nav-item" onclick="location.href='index.html'">Dashboard & Analytics</li>
+            <li class="nav-item" onclick="location.href='riskcenter.html'">SIEM Risk Center</li>
+            <li class="nav-item active">Events Explorer</li>
+        </ul>
+
+        <div class="section-title">Select Event Source</div>
+        <ul class="nav-list" id="source-list">
+            <li class="nav-item" onclick="changeChannel('Security', this)">Security</li>
+            <li class="nav-item" onclick="changeChannel('System', this)">System</li>
+            <li class="nav-item" onclick="changeChannel('Application', this)">Application</li>
+            <li class="nav-item" onclick="changeChannel('Setup', this)">Setup</li>
+            <li class="nav-item" onclick="changeChannel('Microsoft-Windows-PowerShell/Operational', this)">PowerShell</li>
+            <li class="nav-item" onclick="changeChannel('Microsoft-Windows-TaskScheduler/Operational', this)">TaskScheduler</li>
+            <li class="nav-item" onclick="changeChannel('Microsoft-Windows-Sysmon/Operational', this)">Sysmon</li>
+        </ul>
+    </aside>
+
+    <main>
+        <header>
+            <h1 id="page-heading">
+                Events Store: Application
+                <span class="live-tag"><span class="pulse-dot"></span> LIVE UPDATES</span>
+            </h1>
+
+            <div class="filter-controls">
+                <label for="criticality-filter" style="font-size: 0.78rem; color: var(--text-secondary);">Filter Criticality:</label>
+                <select id="criticality-filter" class="filter-select" onchange="applyFilters()">
+                    <option value="ALL">All Severities</option>
+                    <option value="Critical">Critical Only</option>
+                    <option value="High">High Risk Only</option>
+                    <option value="Medium">Medium Risk Only</option>
+                    <option value="Low">Low / Informational</option>
+                </select>
+            </div>
+        </header>
+
+        <div class="layout-vertical">
+            <!-- Top Pane: Paginated Event Table -->
+            <div class="top-pane">
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Record Index</th>
+                                <th>Timestamp (Latest First)</th>
+                                <th>ID</th>
+                                <th>Level</th>
+                                <th>SIEM Risk</th>
+                                <th>Message Description</th>
+                            </tr>
+                        </thead>
+                        <tbody id="event-table-body">
+                            <!-- Events injected dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination Footer -->
+                <div class="pagination-bar">
+                    <span class="page-info" id="page-info">Showing events 1 to 20 of 12,450</span>
+                    <div class="pagination-controls">
+                        <button class="btn-page" id="btn-prev" onclick="prevPage()">&laquo; Previous</button>
+                        <button class="btn-page" id="btn-next" onclick="nextPage()">Next &raquo;</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Pane: Event Details Inspector -->
+            <div class="bottom-pane">
+                <div class="pane-title">
+                    <span>📄 Selected Event Details Inspector</span>
+                    <span id="inspect-risk-badge"><span class="badge badge-low">Low Risk</span></span>
+                </div>
+
+                <div class="details-grid">
+                    <div class="detail-group">
+                        <span class="detail-label">Event Record Index</span>
+                        <span class="detail-value" id="inspect-idx">#12450</span>
+                    </div>
+                    <div class="detail-group">
+                        <span class="detail-label">Event ID</span>
+                        <span class="detail-value" id="inspect-id">1000</span>
+                    </div>
+                    <div class="detail-group">
+                        <span class="detail-label">Time Created</span>
+                        <span class="detail-value" id="inspect-time">2026-07-29T11:45:00Z</span>
+                    </div>
+                    <div class="detail-group">
+                        <span class="detail-label">Provider Name</span>
+                        <span class="detail-value" id="inspect-provider">Application Error</span>
+                    </div>
+                </div>
+
+                <div class="detail-group">
+                    <span class="detail-label">Event Description</span>
+                    <span class="detail-value" id="inspect-desc">Event details description...</span>
+                </div>
+
+                <div class="detail-group">
+                    <span class="detail-label">Raw Event XML / Structured Data</span>
+                    <div class="xml-box" id="inspect-xml">-</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let allChannelEvents = [];
+        let filteredEvents = [];
+        let currentPage = 1;
+        const pageSize = 20;
+        let currentChannelName = 'Application';
+
+        function generateLargeEventStore(channelName, count) {
+            const events = [];
+            const providers = {
+                'Security': 'Microsoft-Windows-Security-Auditing',
+                'System': 'Service Control Manager',
+                'Application': 'Application Error',
+                'PowerShell': 'PowerShell',
+                'Sysmon': 'Microsoft-Windows-Sysmon'
+            };
+            const provider = providers[channelName] || channelName;
+
+            const baseDate = new Date(2026, 6, 29, 11, 45, 0);
+
+            for (let i = count; i >= 1; i--) {
+                const eventTime = new Date(baseDate.getTime() - (count - i) * 60000);
+                const dateStr = eventTime.toISOString().split('T')[0];
+                const timeStr = eventTime.toTimeString().split(' ')[0];
+
+                let risk = 'Low';
+                let level = 'Information';
+                let eventId = 1000 + (i % 50);
+                let desc = `Application log record #${i} processed from ${channelName} store.`;
+
+                if (i % 250 === 0) {
+                    risk = 'Critical';
+                    level = 'Critical';
+                    eventId = 1102;
+                    desc = `CRITICAL ANOMALY: Application faulting crash / Buffer overflow pattern in record #${i}.`;
+                } else if (i % 45 === 0) {
+                    risk = 'High';
+                    level = 'Warning';
+                    eventId = 4625;
+                    desc = `HIGH RISK: Unauthorized API call or logon failure in record #${i}.`;
+                } else if (i % 12 === 0) {
+                    risk = 'Medium';
+                    level = 'Warning';
+                    eventId = 7045;
+                    desc = `MEDIUM RISK: Service creation or elevated privilege query in record #${i}.`;
+                }
+
+                events.push({
+                    idx: i,
+                    date: dateStr,
+                    id: eventId,
+                    level: level,
+                    risk: risk,
+                    provider: provider,
+                    time: `${dateStr} ${timeStr}`,
+                    desc: desc,
+                    xml: `<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">\n  <System>\n    <Provider Name="${provider}"/>\n    <EventID>${eventId}</EventID>\n    <Level>${level}</Level>\n    <RecordIndex>${i}</RecordIndex>\n  </System>\n</Event>`
+                });
+            }
+            return events;
+        }
+
+        const counts = {
+            'Application': 12450,
+            'Security': 8500,
+            'System': 9200,
+            'Setup': 1400,
+            'PowerShell': 3600,
+            'TaskScheduler': 2800,
+            'Sysmon': 15000
+        };
+
+        function getQueryChannel() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('channel') || 'Application';
+        }
+
+        function changeChannel(channelName, element) {
+            window.history.pushState({}, '', `events.html?channel=${encodeURIComponent(channelName)}`);
+            loadChannel(channelName);
+        }
+
+        function loadChannel(channelName) {
+            currentChannelName = channelName;
+            document.querySelectorAll('#source-list .nav-item').forEach(el => {
+                if (el.innerText.includes(channelName)) el.classList.add('active');
+                else el.classList.remove('active');
+            });
+
+            const total = counts[channelName] || 10000;
+            document.getElementById('page-heading').childNodes[0].nodeValue = `Events Store: ${channelName} (${total.toLocaleString()} Total Events) `;
+
+            allChannelEvents = generateLargeEventStore(channelName, total);
+            applyFilters();
+        }
+
+        function applyFilters() {
+            const criticality = document.getElementById('criticality-filter').value;
+            if (criticality === 'ALL') {
+                filteredEvents = allChannelEvents;
+            } else {
+                filteredEvents = allChannelEvents.filter(e => e.risk === criticality);
+            }
+            currentPage = 1;
+            renderPage();
+        }
+
+        function renderPage() {
+            const total = filteredEvents.length;
+            const totalPages = Math.max(1, Math.ceil(total / pageSize));
+            const startIdx = (currentPage - 1) * pageSize;
+            const endIdx = Math.min(startIdx + pageSize, total);
+            const pageEvents = filteredEvents.slice(startIdx, endIdx);
+
+            const tbody = document.getElementById('event-table-body');
+            tbody.innerHTML = '';
+
+            let lastDate = null;
+
+            pageEvents.forEach((evt, idx) => {
+                if (evt.date !== lastDate) {
+                    lastDate = evt.date;
+                    const groupTr = document.createElement('tr');
+                    groupTr.className = 'group-header-row';
+                    groupTr.innerHTML = `<td colspan="6">📅 Date Group: ${evt.date} (Latest First)</td>`;
+                    tbody.appendChild(groupTr);
+                }
+
+                const tr = document.createElement('tr');
+                tr.className = `event-row row-${evt.risk.toLowerCase()}`;
+                if (idx === 0) tr.classList.add('selected');
+                tr.onclick = () => selectEvent(evt, tr);
+                tr.innerHTML = `
+                    <td>#${evt.idx}</td>
+                    <td>${evt.time}</td>
+                    <td>${evt.id}</td>
+                    <td>${evt.level}</td>
+                    <td><span class="badge badge-${evt.risk.toLowerCase()}">${evt.risk}</span></td>
+                    <td>${evt.desc}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('page-info').innerText = `Showing events ${total === 0 ? 0 : startIdx + 1} to ${endIdx} of ${total.toLocaleString()} (Page ${currentPage} of ${totalPages})`;
+            document.getElementById('btn-prev').disabled = (currentPage === 1);
+            document.getElementById('btn-next').disabled = (currentPage === totalPages || totalPages === 0);
+
+            if (pageEvents.length > 0) {
+                inspectEvent(pageEvents[0]);
+            }
+        }
+
+        function prevPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                renderPage();
+            }
+        }
+
+        function nextPage() {
+            const totalPages = Math.ceil(filteredEvents.length / pageSize);
+            if (currentPage < totalPages) {
+                currentPage++;
+                renderPage();
+            }
+        }
+
+        function selectEvent(evt, trElement) {
+            document.querySelectorAll('#event-table-body tr.event-row').forEach(el => el.classList.remove('selected'));
+            trElement.classList.add('selected');
+            inspectEvent(evt);
+        }
+
+        function inspectEvent(evt) {
+            document.getElementById('inspect-idx').innerText = `#${evt.idx}`;
+            document.getElementById('inspect-id').innerText = evt.id;
+            document.getElementById('inspect-time').innerText = evt.time;
+            document.getElementById('inspect-provider').innerText = evt.provider;
+            document.getElementById('inspect-risk-badge').innerHTML = `<span class="badge badge-${evt.risk.toLowerCase()}">${evt.risk} Risk</span>`;
+            document.getElementById('inspect-desc').innerText = evt.desc;
+            document.getElementById('inspect-xml').innerText = evt.xml;
+        }
+
+        // Live Ingestion Stream Simulator
+        setInterval(() => {
+            const now = new Date();
+            const dateStr = now.toISOString().split('T')[0];
+            const timeStr = now.toTimeString().split(' ')[0];
+            const newIndex = allChannelEvents.length + 1;
+
+            const isCritical = Math.random() > 0.8;
+            const newEvt = {
+                idx: newIndex,
+                date: dateStr,
+                id: isCritical ? 4625 : 1001,
+                level: isCritical ? 'Critical' : 'Information',
+                risk: isCritical ? 'Critical' : 'Low',
+                provider: currentChannelName,
+                time: `${dateStr} ${timeStr}`,
+                desc: isCritical ? `LIVE CRITICAL: Real-time security incident detected in ${currentChannelName}!` : `LIVE EVENT: System log entry #${newIndex} ingested.`,
+                xml: `<Event><System><EventID>${isCritical ? 4625 : 1001}</EventID><RecordIndex>${newIndex}</RecordIndex></System></Event>`
+            };
+
+            allChannelEvents.unshift(newEvt);
+            applyFilters();
+        }, 4000);
+
+        // Initialize channel view
+        loadChannel(getQueryChannel());
+    </script>
+</body>
+</html>
