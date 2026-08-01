@@ -15,10 +15,11 @@ namespace SmartEventViewer
         DotNetDupe::System::String m_sChannel{};
         DotNetDupe::System::String m_sMessage{};
         DotNetDupe::System::String m_sTimeCreated{};
+        DotNetDupe::System::String m_sRawXml{};
 
     public:
         SMARTEVENTVIEWER_API EventRecord() = default;
-        SMARTEVENTVIEWER_API EventRecord(unsigned int uEventId, EventLevel eLevel, const DotNetDupe::System::String& sProvider, const DotNetDupe::System::String& sChannel, const DotNetDupe::System::String& sMessage, const DotNetDupe::System::String& sTimeCreated);
+        SMARTEVENTVIEWER_API EventRecord(unsigned int uEventId, EventLevel eLevel, const DotNetDupe::System::String& sProvider, const DotNetDupe::System::String& sChannel, const DotNetDupe::System::String& sMessage, const DotNetDupe::System::String& sTimeCreated, const DotNetDupe::System::String& sRawXml = DotNetDupe::System::String());
 
         SMARTEVENTVIEWER_API unsigned int GetEventId() const;
         SMARTEVENTVIEWER_API EventLevel GetLevel() const;
@@ -28,5 +29,6 @@ namespace SmartEventViewer
         SMARTEVENTVIEWER_API DotNetDupe::System::String GetChannel() const;
         SMARTEVENTVIEWER_API DotNetDupe::System::String GetEventMessage() const;
         SMARTEVENTVIEWER_API DotNetDupe::System::String GetTimeCreated() const;
+        SMARTEVENTVIEWER_API DotNetDupe::System::String GetRawXml() const;
     };
 }
