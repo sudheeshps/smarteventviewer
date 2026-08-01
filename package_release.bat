@@ -25,11 +25,13 @@ mkdir "%DIST_DIR%\bin"
 mkdir "%DIST_DIR%\UI"
 mkdir "%DIST_DIR%\models"
 
-echo [INFO] Copying Native Binaries ^& Libraries...
-copy /y bin\x64\Release\SmartEventViewer.dll "%DIST_DIR%\bin\"
-copy /y bin\x64\Release\SmartEventViewer.lib "%DIST_DIR%\bin\"
+echo [INFO] Copying Native Binaries & Libraries (including DotNetDupe and dependencies)...
+copy /y bin\x64\Release\*.dll "%DIST_DIR%\bin\"
+copy /y bin\x64\Release\*.lib "%DIST_DIR%\bin\"
 copy /y bin\x64\Release\SmartEventViewerServer.exe "%DIST_DIR%\bin\"
 copy /y bin\x64\Release\SmartEventViewerTests.exe "%DIST_DIR%\bin\"
+copy /y bin\x64\Release\SmartEventViewerIntegrationTests.exe "%DIST_DIR%\bin\"
+copy /y ui-app\src\apiClient.ts "%DIST_DIR%\bin\"
 
 echo [INFO] Building React + Vite SPA Frontend (ui-app)...
 cd ui-app
@@ -54,15 +56,15 @@ echo [INFO] Creating Launcher Script (start_smarteventviewer.bat)...
     echo echo SmartEventViewer is running at http://localhost:8080/
 ) > "%DIST_DIR%\start_smarteventviewer.bat"
 
-echo [INFO] Creating Release ZIP Archive (%ZIP_NAME%)...
-powershell -Command "Compress-Archive -Path '%DIST_DIR%\*' -DestinationPath '%ZIP_NAME%' -Force"
+rem echo [INFO] Creating Release ZIP Archive (%ZIP_NAME%)...
+rem powershell -Command "Compress-Archive -Path '%DIST_DIR%\*' -DestinationPath '%ZIP_NAME%' -Force"
 
-if exist "%ZIP_NAME%" (
-    echo ===================================================
-    echo [SUCCESS] Package created successfully!
-    echo Zip File: %ZIP_NAME%
-    echo Directory: %DIST_DIR%
-    echo ===================================================
-) else (
-    echo [ERROR] Failed to generate zip archive.
-)
+rem if exist "%ZIP_NAME%" (
+rem     echo ===================================================
+rem     echo [SUCCESS] Package created successfully!
+rem     echo Zip File: %ZIP_NAME%
+rem     echo Directory: %DIST_DIR%
+rem     echo ===================================================
+rem ) else (
+rem     echo [ERROR] Failed to generate zip archive.
+rem )

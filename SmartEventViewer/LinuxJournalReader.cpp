@@ -10,14 +10,14 @@ namespace SmartEventViewer
         Close();
     }
 
-    StringList LinuxJournalReader::EnumerateEventSources()
+    bool LinuxJournalReader::GetEventSources(StringList& outSources)
     {
-        StringList listSources;
-        listSources.Add(String("journald/system"));
-        listSources.Add(String("journald/user"));
-        listSources.Add(String("syslog/auth"));
-        listSources.Add(String("syslog/kernel"));
-        return listSources;
+        outSources.Clear();
+        outSources.Add("journald/system");
+        outSources.Add("journald/user");
+        outSources.Add("syslog/auth");
+        outSources.Add("syslog/kernel");
+        return true;
     }
 
     bool LinuxJournalReader::OpenLog(const String& sChannelName)

@@ -86,7 +86,13 @@ if %ERRORLEVEL% neq 0 (
     exit /b %ERRORLEVEL%
 )
 
-echo [INFO] Running Unit Test Suite...
+echo [INFO] Copying latest React apiClient.ts to common output binary directory...
+if exist ui-app\src\apiClient.ts (
+    if not exist bin\x64\%BUILD_TYPE% mkdir bin\x64\%BUILD_TYPE%
+    copy /y ui-app\src\apiClient.ts bin\x64\%BUILD_TYPE%\apiClient.ts
+)
+
+echo [INFO] Running Unit & Integration Test Suites...
 ctest --test-dir %BUILD_DIR% -C %BUILD_TYPE% --output-on-failure
 if %ERRORLEVEL% neq 0 (
     echo [WARNING] Tests finished with exit code %ERRORLEVEL%.

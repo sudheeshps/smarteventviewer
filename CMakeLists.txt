@@ -29,7 +29,7 @@ set(SMARTEVENTVIEWER_SOURCES
     SmartEventViewer/LinuxJournalReader.cpp
     SmartEventViewer/LocalLlmEngine.cpp
     SmartEventViewer/RagVectorStore.cpp
-    SmartEventViewer/NativeRestServer.cpp
+    
 )
 
 set(SMARTEVENTVIEWER_HEADERS

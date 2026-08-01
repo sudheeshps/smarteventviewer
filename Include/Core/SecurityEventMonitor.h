@@ -1,9 +1,10 @@
 #pragma once
 
-#include "Common.h"
+#include "../Common.h"
 #include "Core/EventRecord.h"
 #include "Core/AnomalyEngine.h"
-#include "DotNetDupe/String.h"
+#include "System/String.h"
+#include "System/Collections/Generic/List.h"
 
 namespace SmartEventViewer
 {

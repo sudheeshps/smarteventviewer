@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "../Include/Core/EventRecord.h"
+using namespace DotNetDupe::System;
 
 namespace SmartEventViewer
 {
@@ -38,7 +39,7 @@ namespace SmartEventViewer
         return m_sChannel;
     }
 
-    String EventRecord::GetMessage() const
+    String EventRecord::GetEventMessage() const
     {
         return m_sMessage;
     }

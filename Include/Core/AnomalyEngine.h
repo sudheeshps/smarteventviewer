@@ -4,9 +4,9 @@
 
 namespace SmartEventViewer
 {
-    class SMARTEVENTVIEWER_API AnomalyEngine
+    class AnomalyEngine
     {
     public:
-        static RiskLevel EvaluateRisk(const EventRecord& eventRec);
+        SMARTEVENTVIEWER_API static RiskLevel EvaluateRisk(const EventRecord& eventRec);
     };
 }

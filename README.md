@@ -59,9 +59,11 @@ This generates a ready-to-ship ZIP package in `dist/SmartEventViewer_v1.0.0_x64.
 ```
 SmartEventViewer_v1.0.0_x64/
 ├── bin/
-│   ├── SmartEventViewer.dll         # Native C++ SIEM & EvtQuery Kernel Library
-│   ├── SmartEventViewer.lib         # Import Library
-│   └── SmartEventViewerTests.exe    # Native C++ Server & Test Runner
+│   ├── SmartEventViewer.dll                  # Native C++ SIEM & EvtQuery Kernel Library
+│   ├── SmartEventViewer.lib                  # Import Library
+│   ├── SmartEventViewerServer.exe           # Native C++ Web API REST Server
+│   ├── SmartEventViewerTests.exe             # Unit Test Runner Suite
+│   └── SmartEventViewerIntegrationTests.exe  # React Client & Server Integration Test Runner
 ├── UI/
 │   ├── index.html                   # SIEM Main Analytics Dashboard
 │   ├── events.html                  # Tree Events Explorer & AI Analyst

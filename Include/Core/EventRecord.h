@@ -1,34 +1,32 @@
 #pragma once
 
-#include "Common.h"
-#include "DotNetDupe/String.h"
+#include "../Common.h"
+#include "System/String.h"
 
 namespace SmartEventViewer
 {
-    using String = DotNetDupe::System::String;
-
-    class SMARTEVENTVIEWER_API EventRecord
+    class EventRecord
     {
     private:
-        unsigned int m_uEventId{ 0 };
+        unsigned int m_uEventId;
         EventLevel m_eLevel{ EventLevel::Informational };
         RiskLevel m_eRiskLevel{ RiskLevel::Low };
-        String m_sProviderName{};
-        String m_sChannel{};
-        String m_sMessage{};
-        String m_sTimeCreated{};
+        DotNetDupe::System::String m_sProviderName{};
+        DotNetDupe::System::String m_sChannel{};
+        DotNetDupe::System::String m_sMessage{};
+        DotNetDupe::System::String m_sTimeCreated{};
 
     public:
-        EventRecord() = default;
-        EventRecord(unsigned int uEventId, EventLevel eLevel, const String& sProvider, const String& sChannel, const String& sMessage, const String& sTimeCreated);
+        SMARTEVENTVIEWER_API EventRecord() = default;
+        SMARTEVENTVIEWER_API EventRecord(unsigned int uEventId, EventLevel eLevel, const DotNetDupe::System::String& sProvider, const DotNetDupe::System::String& sChannel, const DotNetDupe::System::String& sMessage, const DotNetDupe::System::String& sTimeCreated);
 
-        unsigned int GetEventId() const;
-        EventLevel GetLevel() const;
-        RiskLevel GetRiskLevel() const;
-        void SetRiskLevel(RiskLevel eRiskLevel);
-        String GetProviderName() const;
-        String GetChannel() const;
-        String GetMessage() const;
-        String GetTimeCreated() const;
+        SMARTEVENTVIEWER_API unsigned int GetEventId() const;
+        SMARTEVENTVIEWER_API EventLevel GetLevel() const;
+        SMARTEVENTVIEWER_API RiskLevel GetRiskLevel() const;
+        SMARTEVENTVIEWER_API void SetRiskLevel(RiskLevel eRiskLevel);
+        SMARTEVENTVIEWER_API DotNetDupe::System::String GetProviderName() const;
+        SMARTEVENTVIEWER_API DotNetDupe::System::String GetChannel() const;
+        SMARTEVENTVIEWER_API DotNetDupe::System::String GetEventMessage() const;
+        SMARTEVENTVIEWER_API DotNetDupe::System::String GetTimeCreated() const;
     };
 }

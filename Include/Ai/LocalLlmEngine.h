@@ -1,9 +1,8 @@
 #pragma once
 
-#include "Common.h"
-#include "Core/EventRecord.h"
-#include "DotNetDupe/String.h"
-#include "DotNetDupe/List.h"
+#include "../Common.h"
+#include "System/String.h"
+#include "System/Collections/Generic/List.h"
 
 // Forward declaration of internal llama context structures
 struct llama_model;
@@ -14,7 +13,9 @@ namespace SmartEventViewer
     using String = DotNetDupe::System::String;
     using StringList = DotNetDupe::System::Collections::Generic::List<String>;
 
-    class SMARTEVENTVIEWER_API LocalLlmEngine
+    class EventRecord;
+
+    class LocalLlmEngine
     {
     private:
         String m_sModelPath{};
@@ -26,20 +27,20 @@ namespace SmartEventViewer
         llama_context* m_pLlamaCtx{ nullptr };
 
     public:
-        LocalLlmEngine();
-        ~LocalLlmEngine();
+        SMARTEVENTVIEWER_API LocalLlmEngine();
+        SMARTEVENTVIEWER_API ~LocalLlmEngine();
 
         // Non-copyable for safe memory management of in-process native llama handles
         LocalLlmEngine(const LocalLlmEngine&) = delete;
         LocalLlmEngine& operator=(const LocalLlmEngine&) = delete;
 
-        bool Initialize(const String& sModelPath);
-        void Unload();
+        SMARTEVENTVIEWER_API bool Initialize(const String& sModelPath);
+        SMARTEVENTVIEWER_API void Unload();
 
-        String ProcessQuery(const String& sNaturalLanguageQuery, const EventRecord* pContextEvents, unsigned int uEventCount);
-        String ProcessFollowupQuery(const String& sFollowupQuery, const EventRecord* pContextEvents, unsigned int uEventCount);
-        void ClearConversationHistory();
-        size_t GetHistoryCount() const;
-        bool IsModelLoaded() const { return m_bIsLoaded; }
+        SMARTEVENTVIEWER_API String ProcessQuery(const String& sNaturalLanguageQuery, const EventRecord* pContextEvents, unsigned int uEventCount);
+        SMARTEVENTVIEWER_API String ProcessFollowupQuery(const String& sFollowupQuery, const EventRecord* pContextEvents, unsigned int uEventCount);
+        SMARTEVENTVIEWER_API void ClearConversationHistory();
+        SMARTEVENTVIEWER_API size_t GetHistoryCount() const;
+        SMARTEVENTVIEWER_API bool IsModelLoaded() const { return m_bIsLoaded; }
     };
 }

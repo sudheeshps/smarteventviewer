@@ -11,16 +11,16 @@ namespace SmartEventViewer
         m_listIndexedEvents.Add(eventRec);
     }
 
-    EventList RagVectorStore::QuerySimilarEvents(const String& sQuery, size_t nTopK)
+    bool RagVectorStore::QuerySimilarEvents(const String& sQuery, size_t nTopK, EventList& outResults)
     {
         (void)sQuery;
-        EventList results;
+        outResults.Clear();
         size_t nLimit = (nTopK < m_listIndexedEvents.GetCount()) ? nTopK : m_listIndexedEvents.GetCount();
         for (size_t i = 0; i < nLimit; ++i)
         {
-            results.Add(m_listIndexedEvents[i]);
+            outResults.Add(m_listIndexedEvents[static_cast<int>(i)]);
         }
-        return results;
+        return (outResults.GetCount() > 0);
     }
 
     size_t RagVectorStore::GetIndexedCount() const

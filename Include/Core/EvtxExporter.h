@@ -1,12 +1,13 @@
 #pragma once
 
-#include "Common.h"
+#include "../Common.h"
 #include "Core/EventRecord.h"
-#include "DotNetDupe/String.h"
+#include "System/String.h"
+#include "System/Collections/Generic/List.h"
 
 namespace SmartEventViewer
 {
-    using String = DotNetDupe::System::String;
+    using String = System::String;
 
     class SMARTEVENTVIEWER_API EvtxExporter
     {

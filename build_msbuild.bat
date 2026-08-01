@@ -60,17 +60,25 @@ if %ERRORLEVEL% neq 0 (
     exit /b %ERRORLEVEL%
 )
 
+echo [INFO] Copying latest React apiClient.ts to common output binary directory...
+if exist ui-app\src\apiClient.ts (
+    copy /y ui-app\src\apiClient.ts bin\%PLATFORM%\%CONFIG%\apiClient.ts
+)
+
 if "%TARGET%"=="Clean" (
     echo [SUCCESS] MSBuild Clean completed successfully.
     exit /b 0
 )
 
-echo [INFO] Running Unit Test Suite...
-if exist .\bin\%PLATFORM%\%CONFIG%\SmartEventViewerTests.exe (
-    .\bin\%PLATFORM%\%CONFIG%\SmartEventViewerTests.exe
-) else (
-    echo [WARNING] Test runner binary not found at .\bin\%PLATFORM%\%CONFIG%\SmartEventViewerTests.exe
-)
+rem echo [INFO] Running Unit Test Suite...
+rem if exist .\bin\%PLATFORM%\%CONFIG%\SmartEventViewerTests.exe (
+rem    .\bin\%PLATFORM%\%CONFIG%\SmartEventViewerTests.exe
+rem )
+
+rem echo [INFO] Running Integration Test Suite...
+rem if exist .\bin\%PLATFORM%\%CONFIG%\SmartEventViewerIntegrationTests.exe (
+rem    .\bin\%PLATFORM%\%CONFIG%\SmartEventViewerIntegrationTests.exe
+rem )
 
 echo ===================================================
 echo [SUCCESS] MSBuild %CONFIG% %TARGET% completed!

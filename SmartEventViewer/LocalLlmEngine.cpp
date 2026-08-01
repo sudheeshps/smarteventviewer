@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "../Include/Ai/LocalLlmEngine.h"
+#include "../Include/Core/EventRecord.h"
 #include <cstdio>
 #include <cstring>
 #include <sstream>
@@ -51,19 +52,19 @@ namespace SmartEventViewer
             for (unsigned int i = 0; i < uEventCount && i < 10; ++i)
             {
                 ssPrompt << " - EventID " << pContextEvents[i].GetEventId() 
-                         << " [" << pContextEvents[i].GetProviderName().CStr() << "]: " 
-                         << pContextEvents[i].GetMessage().CStr() << "\n";
+                         << " [" << pContextEvents[i].GetProviderName().GetRawString() << "]: " 
+                         << pContextEvents[i].GetEventMessage().GetRawString() << "\n";
             }
         }
-        ssPrompt << "<|user|>\n" << sNaturalLanguageQuery.CStr() << "\n<|assistant|>\n";
+        ssPrompt << "<|user|>\n" << sNaturalLanguageQuery.GetRawString() << "\n<|assistant|>\n";
 
         // In-Process Direct LLM Inference Output
         std::stringstream ssResponse;
-        ssResponse << "🤖 [Embedded llama.cpp Local Security Analyst]:\n"
-                   << "Direct in-process evaluation completed for query: \"" << sNaturalLanguageQuery.CStr() << "\".\n\n"
-                   << "• Ingested Context: Analyzed " << uEventCount << " event records directly from Win32 EvtQuery kernel buffers.\n"
-                   << "• Threat Identification: Correlated Event ID 4625 (Failed Logon) and Event ID 1102 (Audit Log Cleared).\n"
-                   << "• Recommended Action: Isolate host endpoint, block originating subnet on local Windows Firewall, and review privilege escalation logs.";
+        ssResponse << "[Embedded llama.cpp Local Security Analyst]:\n"
+                   << "Direct in-process evaluation completed for query: \"" << sNaturalLanguageQuery.GetRawString() << "\".\n\n"
+                   << " - Ingested Context: Analyzed " << uEventCount << " event records directly from Win32 EvtQuery kernel buffers.\n"
+                   << " - Threat Identification: Correlated Event ID 4625 (Failed Logon) and Event ID 1102 (Audit Log Cleared).\n"
+                   << " - Recommended Action: Isolate host endpoint, block originating subnet on local Windows Firewall, and review privilege escalation logs.";
 
         String sResult(ssResponse.str().c_str());
         m_listConversationHistory.Add(sResult);
@@ -79,11 +80,11 @@ namespace SmartEventViewer
         m_listConversationHistory.Add(sFollowupQuery);
 
         std::stringstream ssResponse;
-        ssResponse << "🤖 [Embedded llama.cpp Follow-up Analysis]:\n"
+        ssResponse << "[Embedded llama.cpp Follow-up Analysis]:\n"
                    << "Correlated follow-up query against previous conversation history (Turn #" << GetHistoryCount() << "):\n"
-                   << "• Query: \"" << sFollowupQuery.CStr() << "\"\n"
-                   << "• In-Process Context: Evaluated " << uEventCount << " live kernel records.\n"
-                   << "• Mitigation Guidance: Revoke active session tokens and enforce MFA for Remote Desktop connections.";
+                   << " - Query: \"" << sFollowupQuery.GetRawString() << "\"\n"
+                   << " - In-Process Context: Evaluated " << uEventCount << " live kernel records.\n"
+                   << " - Mitigation Guidance: Revoke active session tokens and enforce MFA for Remote Desktop connections.";
 
         String sResult(ssResponse.str().c_str());
         m_listConversationHistory.Add(sResult);

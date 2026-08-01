@@ -9,6 +9,17 @@
 #include <windows.h>
 #include <winevt.h>
 #pragma comment(lib, "wevtapi.lib")
+
+inline std::string WCharToUtf8(const wchar_t* wstr)
+{
+    if (!wstr || wstr[0] == 0) return "";
+    int size_needed = WideCharToMultiByte(CP_UTF8, 0, wstr, -1, NULL, 0, NULL, NULL);
+    if (size_needed <= 0) return "";
+    std::string strTo(size_needed, 0);
+    WideCharToMultiByte(CP_UTF8, 0, wstr, -1, &strTo[0], size_needed, NULL, NULL);
+    if (strTo.back() == '\0') strTo.pop_back();
+    return strTo;
+}
 #endif
 
 namespace SmartEventViewer
@@ -20,33 +31,35 @@ namespace SmartEventViewer
         Close();
     }
 
-    StringList WinEventLogReader::EnumerateEventSources()
+    bool WinEventLogReader::GetEventSources(StringList& outSources)
     {
-        StringList listSources;
+        outSources.Clear();
 #if defined(_WIN32)
         EVT_HANDLE hEnum = EvtOpenChannelEnum(NULL, 0);
         if (hEnum != NULL)
         {
-            WCHAR szChannelName[512];
+            WCHAR szChannelName[512] = { 0 };
             DWORD dwReturned = 0;
             while (EvtNextChannelPath(hEnum, 512, szChannelName, &dwReturned))
             {
-                char szUtf8[1024];
-                int iLen = WideCharToMultiByte(CP_UTF8, 0, szChannelName, -1, szUtf8, sizeof(szUtf8), NULL, NULL);
-                if (iLen > 0)
+                std::string sUtf8 = WCharToUtf8(szChannelName);
+                if (!sUtf8.empty())
                 {
-                    listSources.Add(String(szUtf8));
+                    outSources.Add(String(sUtf8.c_str()));
                 }
             }
             EvtClose(hEnum);
+            return (outSources.GetCount() > 0);
         }
+        
+        return true;
 #else
-        listSources.Add(String("Application"));
-        listSources.Add(String("System"));
-        listSources.Add(String("Security"));
-        listSources.Add(String("Setup"));
+        outSources.Add("Application");
+        outSources.Add("System");
+        outSources.Add("Security");
+        outSources.Add("Setup");
+        return true;
 #endif
-        return listSources;
     }
 
     bool WinEventLogReader::OpenLog(const String& sChannelName)
@@ -54,7 +67,7 @@ namespace SmartEventViewer
         m_sChannel = sChannelName;
 #if defined(_WIN32)
         WCHAR szWChannel[512] = { 0 };
-        const char* szUtf8 = sChannelName.CStr();
+        const char* szUtf8 = sChannelName.GetRawString();
         MultiByteToWideChar(CP_UTF8, 0, szUtf8, -1, szWChannel, 512);
 
         m_hSubscription = (void*)EvtQuery(NULL, szWChannel, NULL, EvtQueryChannelPath | EvtQueryReverseDirection);
@@ -68,7 +81,7 @@ namespace SmartEventViewer
     {
 #if defined(_WIN32)
         WCHAR szWChannel[512] = { 0 };
-        const char* szUtf8 = sChannelName.CStr();
+        const char* szUtf8 = sChannelName.GetRawString();
         MultiByteToWideChar(CP_UTF8, 0, szUtf8, -1, szWChannel, 512);
 
         EVT_HANDLE hLog = EvtOpenLog(NULL, szWChannel, EvtOpenChannelPath);
@@ -108,8 +121,8 @@ namespace SmartEventViewer
         std::vector<WCHAR> xmlBuffer(dwBufferUsed / sizeof(WCHAR) + 2, 0);
         if (EvtRender(NULL, hEvent, EvtRenderEventXml, dwBufferUsed, xmlBuffer.data(), &dwBufferUsed, &dwPropertyCount))
         {
-            char szUtf8[8192] = {0};
-            WideCharToMultiByte(CP_UTF8, 0, xmlBuffer.data(), -1, szUtf8, sizeof(szUtf8) - 1, NULL, NULL);
+            std::string utf8Xml = WCharToUtf8(xmlBuffer.data());
+            const char* szUtf8 = utf8Xml.c_str();
             String sXml(szUtf8);
 
             unsigned int uEventId = 0;
@@ -117,11 +130,15 @@ namespace SmartEventViewer
             String sTimeCreated("2026-07-29T00:00:00Z");
             EventLevel level = EventLevel::Informational;
 
-            // Extract EventID
-            const char* pIdStart = strstr(szUtf8, "<EventID>");
+            // Extract EventID (handles both <EventID>100</EventID> and <EventID Qualifiers='16384'>100</EventID>)
+            const char* pIdStart = strstr(szUtf8, "<EventID");
             if (pIdStart)
             {
-                uEventId = (unsigned int)::atoi(pIdStart + 9);
+                const char* pValueStart = strchr(pIdStart, '>');
+                if (pValueStart)
+                {
+                    uEventId = (unsigned int)::atoi(pValueStart + 1);
+                }
             }
 
             // Extract Provider Name
