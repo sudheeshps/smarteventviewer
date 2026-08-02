@@ -30,7 +30,7 @@ void Test_RealWebServer_And_ReactClient_Integration()
         sDeployDir = Path::Combine({ sWorkingDir, "IntegrationTestDeployment" });
     }
 
-    String sUiAppDir = Path::Combine({ sDeployDir, "ui-app" });
+    String sUiAppDir = Path::Combine({ sDeployDir, "SmartEventViewerApp" });
     String sServerExePath = Path::Combine({ sDeployDir, "SmartEventViewerServer.exe" });
 
     if (!File::Exists(Path::Combine({ sUiAppDir, "package.json" })))
@@ -41,7 +41,7 @@ void Test_RealWebServer_And_ReactClient_Integration()
         {
             sRootDir = Path::GetDirectoryName(Path::GetDirectoryName(sRootDir));
         }
-        sUiAppDir = Path::Combine({ sRootDir, "ui-app" });
+        sUiAppDir = Path::Combine({ sRootDir, "SmartEventViewerApp" });
         sServerExePath = Path::Combine({ sWorkingDir, "SmartEventViewerServer.exe" });
     }
 
@@ -54,7 +54,7 @@ void Test_RealWebServer_And_ReactClient_Integration()
     serverStartInfo.FileName = sServerExePath;
     serverStartInfo.WorkingDirectory = sDeployDir;
     serverStartInfo.CreateNoWindow = true;
-
+    
     auto pServerProc = Process::Start(serverStartInfo);
     assert(!pServerProc.IsNull());
 
@@ -63,7 +63,7 @@ void Test_RealWebServer_And_ReactClient_Integration()
     Thread::Sleep(2000);
 
     // 3. Execute React Vitest Integration Suite (src/integration.test.ts) via DotNetDupe Process API
-    Console::WriteLine("[INTEGRATION TEST] Executing React Vitest integration suite (ui-app/src/integration.test.ts)...");
+    Console::WriteLine("[INTEGRATION TEST] Executing React Vitest integration suite (SmartEventViewerApp/src/integration.test.ts)...");
     
     ProcessStartInfo vitestStartInfo;
     vitestStartInfo.FileName = String("cmd.exe");

@@ -2,6 +2,7 @@
 
 #include "../Common.h"
 #include "System/String.h"
+#include "System/SmartPointer.h"
 #include "System/Collections/Generic/List.h"
 
 // Forward declaration of internal llama context structures

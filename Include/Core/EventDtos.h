@@ -35,10 +35,61 @@ namespace SmartEventViewer
     {
         String Channel{};
         unsigned long long TotalCount{ 0 };
+        unsigned long long CriticalCount{ 0 };
+        unsigned long long ErrorCount{ 0 };
+        unsigned long long WarningCount{ 0 };
+        unsigned long long InfoCount{ 0 };
+        unsigned long long VerboseCount{ 0 };
         size_t Page{ 1 };
         size_t PageSize{ 20 };
         size_t TotalPages{ 0 };
         DotNetDupe::System::Collections::Generic::List<EventDto> Events{};
+    };
+
+    struct ProcessResourceDto
+    {
+        unsigned long ProcessId{ 0 };
+        String Name{};
+        String Path{};
+        String CommandLine{};
+        double CpuUsagePercent{ 0.0 };
+        unsigned long long MemoryUsageMB{ 0 };
+        double DiskIoKBps{ 0.0 };
+        double DiskReadKBps{ 0.0 };
+        double DiskWriteKBps{ 0.0 };
+
+        ProcessResourceDto() = default;
+        ProcessResourceDto(const ProcessResourceDto&) = default;
+        ProcessResourceDto& operator=(const ProcessResourceDto&) = default;
+    };
+
+    struct UserSessionDto
+    {
+        String Username{};
+        String Privilege{};
+        String LoginTimestamp{};
+        String LogoutTimestamp{};
+        bool IsActive{ true };
+
+        UserSessionDto() = default;
+        UserSessionDto(const UserSessionDto&) = default;
+        UserSessionDto& operator=(const UserSessionDto&) = default;
+    };
+
+    struct SystemMetricsResponseDto
+    {
+        double CpuUsagePercent{ 0.0 };
+        double MemoryUsagePercent{ 0.0 };
+        unsigned long long MemoryUsedMB{ 0 };
+        unsigned long long MemoryTotalMB{ 0 };
+        double DiskUsagePercent{ 0.0 };
+        double DiskReadMBps{ 0.0 };
+        double DiskWriteMBps{ 0.0 };
+        double NetworkUsageMbps{ 0.0 };
+
+        DotNetDupe::System::Collections::Generic::List<ProcessResourceDto> TopProcesses{};
+        DotNetDupe::System::Collections::Generic::List<UserSessionDto> ActiveUserSessions{};
+        DotNetDupe::System::Collections::Generic::List<UserSessionDto> ExpiredUserSessions{};
     };
 
     struct AnalyzeRequestDto
@@ -53,6 +104,8 @@ namespace SmartEventViewer
 
     struct AnalyzeResponseDto
     {
+        String TaskId{};
+        String Status{}; // "PENDING", "COMPLETED", "FAILED"
         String Channel{};
         String Query{};
         String Analysis{};
@@ -118,6 +171,11 @@ namespace DotNetDupe {
                         JsonElement obj(JsonValueKind::Object);
                         obj.SetProperty(String("channel"), JsonElement(value.Channel));
                         obj.SetProperty(String("totalCount"), JsonElement(static_cast<double>(value.TotalCount)));
+                        obj.SetProperty(String("criticalCount"), JsonElement(static_cast<double>(value.CriticalCount)));
+                        obj.SetProperty(String("errorCount"), JsonElement(static_cast<double>(value.ErrorCount)));
+                        obj.SetProperty(String("warningCount"), JsonElement(static_cast<double>(value.WarningCount)));
+                        obj.SetProperty(String("infoCount"), JsonElement(static_cast<double>(value.InfoCount)));
+                        obj.SetProperty(String("verboseCount"), JsonElement(static_cast<double>(value.VerboseCount)));
                         obj.SetProperty(String("page"), JsonElement(static_cast<double>(value.Page)));
                         obj.SetProperty(String("pageSize"), JsonElement(static_cast<double>(value.PageSize)));
                         obj.SetProperty(String("totalPages"), JsonElement(static_cast<double>(value.TotalPages)));
@@ -129,10 +187,104 @@ namespace DotNetDupe {
                         JsonElement prop;
                         if (element.TryGetProperty(String("channel"), prop)) dto.Channel = prop.GetString();
                         if (element.TryGetProperty(String("totalCount"), prop)) dto.TotalCount = static_cast<unsigned long long>(prop.GetDouble());
+                        if (element.TryGetProperty(String("criticalCount"), prop)) dto.CriticalCount = static_cast<unsigned long long>(prop.GetDouble());
+                        if (element.TryGetProperty(String("errorCount"), prop)) dto.ErrorCount = static_cast<unsigned long long>(prop.GetDouble());
+                        if (element.TryGetProperty(String("warningCount"), prop)) dto.WarningCount = static_cast<unsigned long long>(prop.GetDouble());
+                        if (element.TryGetProperty(String("infoCount"), prop)) dto.InfoCount = static_cast<unsigned long long>(prop.GetDouble());
+                        if (element.TryGetProperty(String("verboseCount"), prop)) dto.VerboseCount = static_cast<unsigned long long>(prop.GetDouble());
                         if (element.TryGetProperty(String("page"), prop)) dto.Page = static_cast<size_t>(prop.GetDouble());
                         if (element.TryGetProperty(String("pageSize"), prop)) dto.PageSize = static_cast<size_t>(prop.GetDouble());
                         if (element.TryGetProperty(String("totalPages"), prop)) dto.TotalPages = static_cast<size_t>(prop.GetDouble());
                         if (element.TryGetProperty(String("events"), prop)) dto.Events = JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::EventDto>>::Read(prop);
+                        return dto;
+                    }
+                };
+
+                template <typename Enable>
+                struct JsonConverter<SmartEventViewer::ProcessResourceDto, Enable> {
+                    static JsonElement Write(const SmartEventViewer::ProcessResourceDto& value) {
+                        JsonElement obj(JsonValueKind::Object);
+                        obj.SetProperty(String("processId"), JsonElement(static_cast<double>(value.ProcessId)));
+                        obj.SetProperty(String("name"), JsonElement(value.Name));
+                        obj.SetProperty(String("path"), JsonElement(value.Path));
+                        obj.SetProperty(String("commandLine"), JsonElement(value.CommandLine));
+                        obj.SetProperty(String("cpuUsagePercent"), JsonElement(value.CpuUsagePercent));
+                        obj.SetProperty(String("memoryUsageMB"), JsonElement(static_cast<double>(value.MemoryUsageMB)));
+                        obj.SetProperty(String("diskIoKBps"), JsonElement(value.DiskIoKBps));
+                        obj.SetProperty(String("diskReadKBps"), JsonElement(value.DiskReadKBps));
+                        obj.SetProperty(String("diskWriteKBps"), JsonElement(value.DiskWriteKBps));
+                        return obj;
+                    }
+                    static SmartEventViewer::ProcessResourceDto Read(const JsonElement& element) {
+                        SmartEventViewer::ProcessResourceDto dto;
+                        JsonElement prop;
+                        if (element.TryGetProperty(String("processId"), prop)) dto.ProcessId = static_cast<unsigned long>(prop.GetDouble());
+                        if (element.TryGetProperty(String("name"), prop)) dto.Name = prop.GetString();
+                        if (element.TryGetProperty(String("path"), prop)) dto.Path = prop.GetString();
+                        if (element.TryGetProperty(String("commandLine"), prop)) dto.CommandLine = prop.GetString();
+                        if (element.TryGetProperty(String("cpuUsagePercent"), prop)) dto.CpuUsagePercent = prop.GetDouble();
+                        if (element.TryGetProperty(String("memoryUsageMB"), prop)) dto.MemoryUsageMB = static_cast<unsigned long long>(prop.GetDouble());
+                        if (element.TryGetProperty(String("diskIoKBps"), prop)) dto.DiskIoKBps = prop.GetDouble();
+                        if (element.TryGetProperty(String("diskReadKBps"), prop)) dto.DiskReadKBps = prop.GetDouble();
+                        if (element.TryGetProperty(String("diskWriteKBps"), prop)) dto.DiskWriteKBps = prop.GetDouble();
+                        return dto;
+                    }
+                };
+
+                template <typename Enable>
+                struct JsonConverter<SmartEventViewer::UserSessionDto, Enable> {
+                    static JsonElement Write(const SmartEventViewer::UserSessionDto& value) {
+                        JsonElement obj(JsonValueKind::Object);
+                        obj.SetProperty(String("username"), JsonElement(value.Username));
+                        obj.SetProperty(String("privilege"), JsonElement(value.Privilege));
+                        obj.SetProperty(String("loginTimestamp"), JsonElement(value.LoginTimestamp));
+                        obj.SetProperty(String("logoutTimestamp"), JsonElement(value.LogoutTimestamp));
+                        obj.SetProperty(String("isActive"), JsonElement(value.IsActive));
+                        return obj;
+                    }
+                    static SmartEventViewer::UserSessionDto Read(const JsonElement& element) {
+                        SmartEventViewer::UserSessionDto dto;
+                        JsonElement prop;
+                        if (element.TryGetProperty(String("username"), prop)) dto.Username = prop.GetString();
+                        if (element.TryGetProperty(String("privilege"), prop)) dto.Privilege = prop.GetString();
+                        if (element.TryGetProperty(String("loginTimestamp"), prop)) dto.LoginTimestamp = prop.GetString();
+                        if (element.TryGetProperty(String("logoutTimestamp"), prop)) dto.LogoutTimestamp = prop.GetString();
+                        if (element.TryGetProperty(String("isActive"), prop)) dto.IsActive = prop.GetBoolean();
+                        return dto;
+                    }
+                };
+
+                template <typename Enable>
+                struct JsonConverter<SmartEventViewer::SystemMetricsResponseDto, Enable> {
+                    static JsonElement Write(const SmartEventViewer::SystemMetricsResponseDto& value) {
+                        JsonElement obj(JsonValueKind::Object);
+                        obj.SetProperty(String("cpuUsagePercent"), JsonElement(value.CpuUsagePercent));
+                        obj.SetProperty(String("memoryUsagePercent"), JsonElement(value.MemoryUsagePercent));
+                        obj.SetProperty(String("memoryUsedMB"), JsonElement(static_cast<double>(value.MemoryUsedMB)));
+                        obj.SetProperty(String("memoryTotalMB"), JsonElement(static_cast<double>(value.MemoryTotalMB)));
+                        obj.SetProperty(String("diskUsagePercent"), JsonElement(value.DiskUsagePercent));
+                        obj.SetProperty(String("diskReadMBps"), JsonElement(value.DiskReadMBps));
+                        obj.SetProperty(String("diskWriteMBps"), JsonElement(value.DiskWriteMBps));
+                        obj.SetProperty(String("networkUsageMbps"), JsonElement(value.NetworkUsageMbps));
+                        obj.SetProperty(String("topProcesses"), JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::ProcessResourceDto>>::Write(value.TopProcesses));
+                        obj.SetProperty(String("activeUserSessions"), JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::UserSessionDto>>::Write(value.ActiveUserSessions));
+                        obj.SetProperty(String("expiredUserSessions"), JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::UserSessionDto>>::Write(value.ExpiredUserSessions));
+                        return obj;
+                    }
+                    static SmartEventViewer::SystemMetricsResponseDto Read(const JsonElement& element) {
+                        SmartEventViewer::SystemMetricsResponseDto dto;
+                        JsonElement prop;
+                        if (element.TryGetProperty(String("cpuUsagePercent"), prop)) dto.CpuUsagePercent = prop.GetDouble();
+                        if (element.TryGetProperty(String("memoryUsagePercent"), prop)) dto.MemoryUsagePercent = prop.GetDouble();
+                        if (element.TryGetProperty(String("memoryUsedMB"), prop)) dto.MemoryUsedMB = static_cast<unsigned long long>(prop.GetDouble());
+                        if (element.TryGetProperty(String("memoryTotalMB"), prop)) dto.MemoryTotalMB = static_cast<unsigned long long>(prop.GetDouble());
+                        if (element.TryGetProperty(String("diskUsagePercent"), prop)) dto.DiskUsagePercent = prop.GetDouble();
+                        if (element.TryGetProperty(String("diskReadMBps"), prop)) dto.DiskReadMBps = prop.GetDouble();
+                        if (element.TryGetProperty(String("diskWriteMBps"), prop)) dto.DiskWriteMBps = prop.GetDouble();
+                        if (element.TryGetProperty(String("networkUsageMbps"), prop)) dto.NetworkUsageMbps = prop.GetDouble();
+                        if (element.TryGetProperty(String("topProcesses"), prop)) dto.TopProcesses = JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::ProcessResourceDto>>::Read(prop);
+                        if (element.TryGetProperty(String("activeUserSessions"), prop)) dto.ActiveUserSessions = JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::UserSessionDto>>::Read(prop);
+                        if (element.TryGetProperty(String("expiredUserSessions"), prop)) dto.ExpiredUserSessions = JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::UserSessionDto>>::Read(prop);
                         return dto;
                     }
                 };
@@ -158,6 +310,8 @@ namespace DotNetDupe {
                 struct JsonConverter<SmartEventViewer::AnalyzeResponseDto, Enable> {
                     static JsonElement Write(const SmartEventViewer::AnalyzeResponseDto& value) {
                         JsonElement obj(JsonValueKind::Object);
+                        obj.SetProperty(String("taskId"), JsonElement(value.TaskId));
+                        obj.SetProperty(String("status"), JsonElement(value.Status));
                         obj.SetProperty(String("channel"), JsonElement(value.Channel));
                         obj.SetProperty(String("query"), JsonElement(value.Query));
                         obj.SetProperty(String("analysis"), JsonElement(value.Analysis));
@@ -167,6 +321,8 @@ namespace DotNetDupe {
                     static SmartEventViewer::AnalyzeResponseDto Read(const JsonElement& element) {
                         SmartEventViewer::AnalyzeResponseDto dto;
                         JsonElement prop;
+                        if (element.TryGetProperty(String("taskId"), prop)) dto.TaskId = prop.GetString();
+                        if (element.TryGetProperty(String("status"), prop)) dto.Status = prop.GetString();
                         if (element.TryGetProperty(String("channel"), prop)) dto.Channel = prop.GetString();
                         if (element.TryGetProperty(String("query"), prop)) dto.Query = prop.GetString();
                         if (element.TryGetProperty(String("analysis"), prop)) dto.Analysis = prop.GetString();

@@ -61,8 +61,8 @@ if %ERRORLEVEL% neq 0 (
 )
 
 echo [INFO] Copying latest React apiClient.ts to common output binary directory...
-if exist ui-app\src\apiClient.ts (
-    copy /y ui-app\src\apiClient.ts bin\%PLATFORM%\%CONFIG%\apiClient.ts
+if exist SmartEventViewerApp\src\apiClient.ts (
+    copy /y SmartEventViewerApp\src\apiClient.ts bin\%PLATFORM%\%CONFIG%\apiClient.ts
 )
 
 if "%TARGET%"=="Clean" (

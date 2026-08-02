@@ -4,8 +4,8 @@ using namespace DotNetDupe::System;
 
 namespace SmartEventViewer
 {
-    EventRecord::EventRecord(unsigned int uEventId, EventLevel eLevel, const String& sProvider, const String& sChannel, const String& sMessage, const String& sTimeCreated)
-        : m_uEventId(uEventId), m_eLevel(eLevel), m_sProviderName(sProvider), m_sChannel(sChannel), m_sMessage(sMessage), m_sTimeCreated(sTimeCreated)
+    EventRecord::EventRecord(unsigned int uEventId, EventLevel eLevel, const String& sProvider, const String& sChannel, const String& sMessage, const String& sTimeCreated, const String& sRawXml)
+        : m_uEventId(uEventId), m_eLevel(eLevel), m_sProviderName(sProvider), m_sChannel(sChannel), m_sMessage(sMessage), m_sTimeCreated(sTimeCreated), m_sRawXml(sRawXml)
     {
     }
 
@@ -47,5 +47,10 @@ namespace SmartEventViewer
     String EventRecord::GetTimeCreated() const
     {
         return m_sTimeCreated;
+    }
+
+    String EventRecord::GetRawXml() const
+    {
+        return m_sRawXml;
     }
 }

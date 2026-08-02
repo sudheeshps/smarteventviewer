@@ -59,7 +59,9 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(SolutionDir)DotNetDupe.3.0.2\runtimes\win-x64\native;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>DotNetDupe.lib;$(OutDir)SmartEventViewer.lib;wevtapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>DotNetDupe.lib;$(OutDir)SmartEventViewerCore.lib;wevtapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <EnableUAC>true</EnableUAC>
+      <UACExecutionLevel>requireAdministrator</UACExecutionLevel>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -80,7 +82,9 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(SolutionDir)DotNetDupe.3.0.2\runtimes\win-x64\native;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>DotNetDupe.lib;$(OutDir)SmartEventViewer.lib;wevtapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>DotNetDupe.lib;$(OutDir)SmartEventViewerCore.lib;wevtapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <EnableUAC>true</EnableUAC>
+      <UACExecutionLevel>requireAdministrator</UACExecutionLevel>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -91,7 +95,7 @@
     <ClCompile Include="EventsController.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\SmartEventViewer\SmartEventViewer.vcxproj">
+    <ProjectReference Include="..\SmartEventViewerCore\SmartEventViewerCore.vcxproj">
       <Project>{A1B2C3D4-E5F6-7A8B-9C0D-1E2F3A4B5C6D}</Project>
     </ProjectReference>
   </ItemGroup>

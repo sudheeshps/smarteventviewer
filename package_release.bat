@@ -31,15 +31,14 @@ copy /y bin\x64\Release\*.lib "%DIST_DIR%\bin\"
 copy /y bin\x64\Release\SmartEventViewerServer.exe "%DIST_DIR%\bin\"
 copy /y bin\x64\Release\SmartEventViewerTests.exe "%DIST_DIR%\bin\"
 copy /y bin\x64\Release\SmartEventViewerIntegrationTests.exe "%DIST_DIR%\bin\"
-copy /y ui-app\src\apiClient.ts "%DIST_DIR%\bin\"
 
-echo [INFO] Building React + Vite SPA Frontend (ui-app)...
-cd ui-app
+echo [INFO] Building React + Vite SPA Frontend (SmartEventViewerApp)...
+cd SmartEventViewerApp
 call npm run build
 cd ..
 
 echo [INFO] Copying Front-end React + Vite Assets...
-xcopy /s /e /y ui-app\dist "%DIST_DIR%\UI\"
+xcopy /s /e /y SmartEventViewerApp\dist "%DIST_DIR%\UI\"
 
 echo [INFO] Copying Local GGUF LLM Model Files...
 if exist models (
@@ -49,7 +48,7 @@ if exist models (
 echo [INFO] Creating Launcher Script (start_smarteventviewer.bat)...
 (
     echo @echo off
-    echo echo Starting SmartEventViewer SIEM REST API Server ^& React Dashboard...
+    echo echo Starting SmartEventViewer SIEM REST API Server and React Dashboard...
     echo start "" "bin\SmartEventViewerServer.exe" 8080
     echo timeout /t 2 /nobreak ^>nul
     echo start "" "http://localhost:8080/"

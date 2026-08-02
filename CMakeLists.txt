@@ -17,18 +17,18 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 # Include directories
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/Include
-    ${CMAKE_CURRENT_SOURCE_DIR}/SmartEventViewer
+    ${CMAKE_CURRENT_SOURCE_DIR}/SmartEventViewerCore
 )
 
 # Core Engine Source Files
 set(SMARTEVENTVIEWER_SOURCES
-    SmartEventViewer/pch.cpp
-    SmartEventViewer/EventRecord.cpp
-    SmartEventViewer/AnomalyEngine.cpp
-    SmartEventViewer/WinEventLogReader.cpp
-    SmartEventViewer/LinuxJournalReader.cpp
-    SmartEventViewer/LocalLlmEngine.cpp
-    SmartEventViewer/RagVectorStore.cpp
+    SmartEventViewerCore/pch.cpp
+    SmartEventViewerCore/EventRecord.cpp
+    SmartEventViewerCore/AnomalyEngine.cpp
+    SmartEventViewerCore/WinEventLogReader.cpp
+    SmartEventViewerCore/LinuxJournalReader.cpp
+    SmartEventViewerCore/LocalLlmEngine.cpp
+    SmartEventViewerCore/RagVectorStore.cpp
     
 )
 
@@ -44,20 +44,20 @@ set(SMARTEVENTVIEWER_HEADERS
     Include/Ai/LocalLlmEngine.h
     Include/Ai/RagVectorStore.h
     Include/Core/NativeRestServer.h
-    SmartEventViewer/pch.h
+    SmartEventViewerCore/pch.h
 )
 
 # Define Shared Library Target
-add_library(SmartEventViewer SHARED
+add_library(SmartEventViewerCore SHARED
     ${SMARTEVENTVIEWER_SOURCES}
     ${SMARTEVENTVIEWER_HEADERS}
 )
 
-target_compile_definitions(SmartEventViewer PRIVATE SMARTEVENTVIEWER_EXPORTS)
+target_compile_definitions(SmartEventViewerCore PRIVATE SMARTEVENTVIEWER_EXPORTS)
 
 # Platform Specific Link Libraries
 if(WIN32)
-    target_link_libraries(SmartEventViewer PRIVATE wevtapi)
+    target_link_libraries(SmartEventViewerCore PRIVATE wevtapi)
 endif()
 
 # Dedicated Native C++ REST Server Executable Target
@@ -66,7 +66,7 @@ set(SERVER_SOURCES
 )
 
 add_executable(SmartEventViewerServer ${SERVER_SOURCES})
-target_link_libraries(SmartEventViewerServer PRIVATE SmartEventViewer)
+target_link_libraries(SmartEventViewerServer PRIVATE SmartEventViewerCore)
 
 if(WIN32)
     target_link_libraries(SmartEventViewerServer PRIVATE wevtapi)
@@ -78,7 +78,7 @@ set(TEST_SOURCES
 )
 
 add_executable(SmartEventViewerTests ${TEST_SOURCES})
-target_link_libraries(SmartEventViewerTests PRIVATE SmartEventViewer)
+target_link_libraries(SmartEventViewerTests PRIVATE SmartEventViewerCore)
 
 if(WIN32)
     target_link_libraries(SmartEventViewerTests PRIVATE wevtapi)
@@ -90,7 +90,7 @@ enable_testing()
 # ----------------------------------------------------
 # Deployment & Packaging (CPack / Standalone ZIP)
 # ----------------------------------------------------
-install(TARGETS SmartEventViewer SmartEventViewerServer SmartEventViewerTests
+install(TARGETS SmartEventViewerCore SmartEventViewerServer SmartEventViewerTests
     RUNTIME DESTINATION bin
     LIBRARY DESTINATION bin
     ARCHIVE DESTINATION lib

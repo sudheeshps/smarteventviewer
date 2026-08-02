@@ -87,9 +87,9 @@ if %ERRORLEVEL% neq 0 (
 )
 
 echo [INFO] Copying latest React apiClient.ts to common output binary directory...
-if exist ui-app\src\apiClient.ts (
+if exist SmartEventViewerApp\src\apiClient.ts (
     if not exist bin\x64\%BUILD_TYPE% mkdir bin\x64\%BUILD_TYPE%
-    copy /y ui-app\src\apiClient.ts bin\x64\%BUILD_TYPE%\apiClient.ts
+    copy /y SmartEventViewerApp\src\apiClient.ts bin\x64\%BUILD_TYPE%\apiClient.ts
 )
 
 echo [INFO] Running Unit & Integration Test Suites...

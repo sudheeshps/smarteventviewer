@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import type { EventDto } from '../types';
-import { fetchApiEvents } from '../apiClient';
+import { fetchApiEvents, fetchApiAnalyze, fetchApiAnalyzeStatus } from '../apiClient';
 
 interface EventsExplorerProps {
   channelName: string;
+  onOpenChat?: (query: string, response: string) => void;
 }
 
-export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName }) => {
+export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onOpenChat }) => {
   const [events, setEvents] = useState<EventDto[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
+  const [isLoadingEvents, setIsLoadingEvents] = useState<boolean>(false);
   const [filterSeverity, setFilterSeverity] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -23,13 +25,23 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName }) =
   const [showSummary, setShowSummary] = useState<boolean>(true);
   const [showAiAssistant, setShowAiAssistant] = useState<boolean>(false);
   const [showInspector, setShowInspector] = useState<boolean>(true);
+  const [showXml, setShowXml] = useState<boolean>(false);
 
   useEffect(() => {
     setCurrentPage(1);
     fetchEvents(channelName, 1);
   }, [channelName]);
 
+  const [serverLevelCounts, setServerLevelCounts] = useState<{ critical: number; error: number; warning: number; info: number; verbose: number }>({
+    critical: 0,
+    error: 0,
+    warning: 0,
+    info: 0,
+    verbose: 0,
+  });
+
   const fetchEvents = async (channel: string, page: number) => {
+    setIsLoadingEvents(true);
     const baseUrl = window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080';
     console.log(`[UI-APP DEBUG] Fetching paged events (Page ${page}) for channel '${channel}' from: ${baseUrl}`);
     try {
@@ -38,14 +50,24 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName }) =
       setTotalCount(data.totalCount || 0);
       setServerTotalPages(data.totalPages || Math.ceil((data.totalCount || 0) / pageSize) || 1);
       
-      const mappedEvents: EventDto[] = ((data.events as unknown as Array<Record<string, unknown>>) || []).map((e) => ({
-        idx: (e.index as number) || 0,
+      setServerLevelCounts({
+        critical: data.criticalCount || 0,
+        error: data.errorCount || 0,
+        warning: data.warningCount || 0,
+        info: data.infoCount || 0,
+        verbose: data.verboseCount || 0,
+      });
+
+      const startIndex = (page - 1) * pageSize;
+      const mappedEvents: EventDto[] = ((data.events as unknown as Array<Record<string, unknown>>) || []).map((e, i) => ({
+        idx: (e.index as number) || (startIndex + i + 1),
         id: (e.id as number) || 0,
         level: ((e.level as string) || 'Information') as EventDto['level'],
         risk: ((e.risk as string) || 'Low') as EventDto['risk'],
         provider: (e.provider as string) || channel,
-        time: (e.time as string) || '',
-        desc: (e.message as string) || `Event ID #${e.id} in ${channel}`,
+        time: e.time ? (typeof e.time === 'string' && e.time.includes('T') ? new Date(e.time).toLocaleString() : (e.time as string)) : '',
+        desc: (e.message as string) || `Event ID #${e.id} logged by ${e.provider || channel}.`,
+        xml: (e.rawXml as string) || '',
       }));
 
       setEvents(mappedEvents);
@@ -74,6 +96,8 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName }) =
       });
       setEvents(mockEvents);
       setSelectedEvent(mockEvents[0]);
+    } finally {
+      setIsLoadingEvents(false);
     }
   };
 
@@ -82,16 +106,51 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName }) =
     fetchEvents(channelName, newPage);
   };
 
-  const handleAnalyze = () => {
+  const handleAnalyze = async () => {
     if (!chatQuery.trim()) return;
+    const queryText = chatQuery.trim();
     setIsAnalyzing(true);
-    setTimeout(() => {
-      setAiResponse(
-        `🤖 **SIEM Threat Intelligence Insights for '${channelName}':**\n` +
-          `Scanned ${totalCount.toLocaleString()} events for query "${chatQuery}". Found correlated Event ID 4625 brute force attempts. Recommended mitigation: Isolate endpoint and enforce MFA.`
-      );
+
+    if (onOpenChat) {
+      onOpenChat(queryText, '⏳ Analyzing RAG event stream & system metrics... Please wait.');
+    }
+
+    const baseUrl = window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080';
+    try {
+      // 1. Immediately enqueue request non-blockingly
+      const enqueueRes = await fetchApiAnalyze(channelName, queryText, baseUrl);
+      const taskId = enqueueRes.taskId;
+
+      if (!taskId) {
+        setAiResponse(enqueueRes.analysis || 'Error initiating analysis task.');
+        if (onOpenChat) onOpenChat(queryText, enqueueRes.analysis || 'Error initiating task.');
+        return;
+      }
+
+      // 2. Poll for async task completion
+      let finalResult = 'Analysis complete.';
+      for (let attempts = 0; attempts < 60; attempts++) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        try {
+          const statusRes = await fetchApiAnalyzeStatus(taskId, baseUrl);
+          if (statusRes.status === 'COMPLETED') {
+            finalResult = (statusRes.analysis && statusRes.analysis.trim().length > 0) ? statusRes.analysis : `Analyzed ${statusRes.eventsAnalyzed || 0} event records for '${channelName}'.`;
+            break;
+          }
+        } catch (pollErr) {
+          console.warn('[POLLING WARN] Retrying task status fetch...', pollErr);
+        }
+      }
+
+      setAiResponse(finalResult);
+      if (onOpenChat) {
+        onOpenChat(queryText, finalResult);
+      }
+    } catch (err) {
+      console.error('[UI-APP DEBUG] Error calling backend analyze endpoint:', err);
+    } finally {
       setIsAnalyzing(false);
-    }, 400);
+    }
   };
 
   const filteredEvents = events.filter((e) => {
@@ -100,14 +159,22 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName }) =
     return matchesSev && matchesSearch;
   });
 
-  const displayTotalPages = Math.max(1, serverTotalPages);
+  const calculatedTotalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const displayTotalPages = serverTotalPages > 1 ? serverTotalPages : calculatedTotalPages;
   const pageEvents = filteredEvents;
 
+  const pagedCounts = {
+    critical: events.filter((e) => e.level === 'Critical' || e.risk === 'Critical').length,
+    error: events.filter((e) => e.level === 'Error' || e.risk === 'High').length,
+    warning: events.filter((e) => e.level === 'Warning' || e.risk === 'Medium').length,
+    info: events.filter((e) => e.level === 'Information' || e.risk === 'Low').length,
+  };
+
   const counts = {
-    critical: events.filter((e) => e.level === 'Critical').length,
-    error: events.filter((e) => e.level === 'Error').length,
-    warning: events.filter((e) => e.level === 'Warning').length,
-    info: Math.max(0, totalCount - events.filter((e) => e.level !== 'Information').length),
+    critical: serverLevelCounts.critical > 0 ? serverLevelCounts.critical : pagedCounts.critical,
+    error: serverLevelCounts.error > 0 ? serverLevelCounts.error : pagedCounts.error,
+    warning: serverLevelCounts.warning > 0 ? serverLevelCounts.warning : pagedCounts.warning,
+    info: serverLevelCounts.info > 0 ? serverLevelCounts.info : (pagedCounts.info > 0 ? pagedCounts.info : (totalCount - (serverLevelCounts.critical + serverLevelCounts.error + serverLevelCounts.warning))),
   };
 
   return (
@@ -235,7 +302,16 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName }) =
       </div>
 
       {/* Events Table Pane */}
-      <div style={{ flex: 1, background: 'rgba(30, 41, 59, 0.7)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)', overflowY: 'auto', maxHeight: '380px' }}>
+      <div style={{ flex: 1, background: 'rgba(30, 41, 59, 0.7)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)', overflowY: 'auto', maxHeight: '380px', position: 'relative' }}>
+        {isLoadingEvents && (
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(2px)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 10, gap: '8px' }}>
+            <div style={{ width: '28px', height: '28px', border: '3px solid rgba(56,189,248,0.2)', borderTop: '3px solid #38bdf8', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ color: '#38bdf8', fontWeight: 600, fontSize: '0.75rem' }}>
+              ⏳ Ingesting and decoding events for channel <span style={{ color: '#f8fafc' }}>{channelName}</span>...
+            </div>
+          </div>
+        )}
+        <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.72rem' }}>
           <thead>
             <tr style={{ background: 'rgba(15, 23, 42, 0.9)', color: '#94a3b8', fontSize: '0.68rem', position: 'sticky', top: 0 }}>
@@ -324,17 +400,39 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName }) =
 
       {/* Collapsible Event Details Inspector */}
       {showInspector && selectedEvent && (
-        <div style={{ background: 'rgba(30, 41, 59, 0.7)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)', padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '0.7rem' }}>
-          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#38bdf8', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '4px' }}>
-            🔍 Event Details Inspector (#{selectedEvent.idx})
+        <div style={{ background: 'rgba(30, 41, 59, 0.7)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)', padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.7rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '4px' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#38bdf8' }}>
+              🔍 Event Details Inspector (#{selectedEvent.idx})
+            </span>
+            {selectedEvent.xml && (
+              <button
+                onClick={() => setShowXml(!showXml)}
+                style={{ background: showXml ? '#38bdf8' : '#1e293b', color: showXml ? '#0f172a' : '#38bdf8', border: '1px solid rgba(56,189,248,0.3)', padding: '2px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.65rem', fontWeight: 600 }}
+              >
+                {showXml ? 'Hide XML Dump' : '📄 View Raw XML'}
+              </button>
+            )}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
-            <div><span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Event ID:</span> <div>{selectedEvent.id}</div></div>
+            <div><span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Event ID:</span> <div style={{ fontWeight: 700, color: '#f8fafc' }}>{selectedEvent.id}</div></div>
             <div><span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Time:</span> <div>{selectedEvent.time}</div></div>
             <div><span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Provider:</span> <div>{selectedEvent.provider}</div></div>
             <div><span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Level:</span> <div>{selectedEvent.level}</div></div>
           </div>
-          <div><span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Description:</span> <div>{selectedEvent.desc}</div></div>
+          <div>
+            <span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Issue / Description:</span>
+            <div style={{ color: '#e2e8f0', marginTop: '2px', fontWeight: 600 }}>{selectedEvent.desc}</div>
+          </div>
+
+          {showXml && selectedEvent.xml && (
+            <div style={{ marginTop: '4px' }}>
+              <span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Raw Windows Event EvtRender XML:</span>
+              <pre style={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', padding: '8px', overflowX: 'auto', fontSize: '0.65rem', color: '#38bdf8', whiteSpace: 'pre-wrap', maxHeight: '180px' }}>
+                {selectedEvent.xml}
+              </pre>
+            </div>
+          )}
         </div>
       )}
     </div>

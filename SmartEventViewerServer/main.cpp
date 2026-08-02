@@ -57,10 +57,13 @@ int main(int argc, char* argv[])
     // 1. Create Builder & Register Controllers
     WebApplicationBuilder builder;
 
-    Console::WriteLine("[SERVER] Registering Controller Routes: /api/channels and /api/events");
+    Console::WriteLine("[SERVER] Registering Controller Routes: /api/channels, /api/events, /api/metrics, /api/analyze, /api/analyze/status");
     builder.AddController<SmartEventViewer::EventsController>("/api")
         .MapGet("/channels", &SmartEventViewer::EventsController::GetChannels)
-        .MapGet("/events", static_cast<SmartEventViewer::EventLogResponseDto (SmartEventViewer::EventsController::*)(const String&)>(&SmartEventViewer::EventsController::GetEvents));
+        .MapGet("/events", static_cast<SmartEventViewer::EventLogResponseDto (SmartEventViewer::EventsController::*)(const String&, size_t, size_t)>(&SmartEventViewer::EventsController::GetEvents))
+        .MapGet("/metrics", &SmartEventViewer::EventsController::GetMetrics)
+        .MapPost("/analyze", &SmartEventViewer::EventsController::AnalyzeEvents)
+        .MapGet("/analyze/status", &SmartEventViewer::EventsController::GetAnalyzeStatus);
 
     // 2. Build the WebApplication
     Console::WriteLine("[SERVER] Building WebApplication pipeline...");
@@ -87,8 +90,9 @@ int main(int argc, char* argv[])
 
     // 4. Configure WebAppServer for static file serving
     String sWebRoot = Path::Combine({ Path::GetFullPath("."), "UI" });
-    if (!DotNetDupe::System::IO::File::Exists(DotNetDupe::System::IO::Path::Combine({ sWebRoot, "index.html" }))) {
-        sWebRoot = "ui-app";
+    if (!File::Exists(Path::Combine({ sWebRoot, "index.html" })))
+    {
+        sWebRoot = "SmartEventViewerApp";
     }
 
     Console::WriteLine("[SERVER] Configuring WebAppServer with web root: {0}", sWebRoot);

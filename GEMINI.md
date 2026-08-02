@@ -15,7 +15,7 @@ Design with cross-platform requirement in perspective.
 - **Its shall latest dotnetdupe library from nuget for basic infrastructure like String etc. Refrain from using STL. But suggest missing features in dotnetdupe
 
 ## Project Structure
-- `SmartEventViewer/`: Source code (`.cpp`) for the main library.
+- `SmartEventViewer/`: Source code (`.cpp`) for the `SmartEventViewerCore` main library.
 - `SmartEventViewerTests/`: Unit tests using Google Test.
 - `docs/`: Markdown documentation for various classes and comparisons.
 - `bin/`: Output directory for compiled binaries.
@@ -57,6 +57,7 @@ The project is configured to generate a NuGet package on build (as specified in 
   - Use the [GSL (Guidelines Support Library)](https://github.com/microsoft/GSL) for runtime safety (e.g., `gsl::span`, `gsl::not_null`, `gsl::finally`).
   - Ensure portability across platforms (Windows, POSIX) when generating new code or updating existing code. Use conditional compilation (`#if defined(_WIN32)`) only when necessary.
 - **DLL Exports**: Use the `SMARTEVENTVIEWER_API` macro (defined in `Include/Common.h`) for any classes or functions that need to be exported from the library DLL.
+- **Function Length Limit**: Functions MUST NOT exceed 15 lines of code. Break down complex functions into small, modular helper functions.
 - **UTF-8 Portability**: Use UTF-8 character encoding for all string operations to ensure cross-platform portability across Windows, Linux, and other environments.
 - **Precompiled Headers**: Implementation files in the `SmartEventViewer/` directory should `#include "pch.h"`.
 - **Memory Management**: **SmartPointer from dotnetdupe shall be used in all places and no direct pointer manipulation (e.g., raw `new`, `delete`, or raw pointers for ownership) is allowed.** Always follow RAII patterns. Many classes (like `FileStream`, `WaitHandle`) implement `.NET`-like patterns but rely on C++ destructors for resource cleanup.

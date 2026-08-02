@@ -25,27 +25,27 @@ echo [DEPLOY] Copying binaries...
 xcopy "%SOLUTION_DIR%\bin\%PLATFORM%\%CONFIG%\*.exe" "%DEPLOY_DIR%\" /Y /Q /I >nul 2>&1
 xcopy "%SOLUTION_DIR%\bin\%PLATFORM%\%CONFIG%\*.dll" "%DEPLOY_DIR%\" /Y /Q /I >nul 2>&1
 
-echo [DEPLOY] Mirroring ui-app client components...
-if not exist "%DEPLOY_DIR%\ui-app" mkdir "%DEPLOY_DIR%\ui-app"
+echo [DEPLOY] Mirroring SmartEventViewerApp client components...
+if not exist "%DEPLOY_DIR%\SmartEventViewerApp" mkdir "%DEPLOY_DIR%\SmartEventViewerApp"
 
-if exist "%SOLUTION_DIR%\ui-app\package.json" (
-    copy /Y "%SOLUTION_DIR%\ui-app\package.json" "%DEPLOY_DIR%\ui-app\" >nul 2>&1
+if exist "%SOLUTION_DIR%\SmartEventViewerApp\package.json" (
+    copy /Y "%SOLUTION_DIR%\SmartEventViewerApp\package.json" "%DEPLOY_DIR%\SmartEventViewerApp\" >nul 2>&1
 )
-if exist "%SOLUTION_DIR%\ui-app\vite.config.ts" (
-    copy /Y "%SOLUTION_DIR%\ui-app\vite.config.ts" "%DEPLOY_DIR%\ui-app\" >nul 2>&1
+if exist "%SOLUTION_DIR%\SmartEventViewerApp\vite.config.ts" (
+    copy /Y "%SOLUTION_DIR%\SmartEventViewerApp\vite.config.ts" "%DEPLOY_DIR%\SmartEventViewerApp\" >nul 2>&1
 )
-if exist "%SOLUTION_DIR%\ui-app\tsconfig.json" (
-    copy /Y "%SOLUTION_DIR%\ui-app\tsconfig*.json" "%DEPLOY_DIR%\ui-app\" >nul 2>&1
-)
-
-if exist "%SOLUTION_DIR%\ui-app\src" (
-    if not exist "%DEPLOY_DIR%\ui-app\src" mkdir "%DEPLOY_DIR%\ui-app\src"
-    xcopy "%SOLUTION_DIR%\ui-app\src" "%DEPLOY_DIR%\ui-app\src\" /S /E /Y /Q /I >nul 2>&1
+if exist "%SOLUTION_DIR%\SmartEventViewerApp\tsconfig.json" (
+    copy /Y "%SOLUTION_DIR%\SmartEventViewerApp\tsconfig*.json" "%DEPLOY_DIR%\SmartEventViewerApp\" >nul 2>&1
 )
 
-if exist "%SOLUTION_DIR%\ui-app\node_modules" (
-    if not exist "%DEPLOY_DIR%\ui-app\node_modules" mkdir "%DEPLOY_DIR%\ui-app\node_modules"
-    xcopy "%SOLUTION_DIR%\ui-app\node_modules" "%DEPLOY_DIR%\ui-app\node_modules\" /S /E /Y /Q /I >nul 2>&1
+if exist "%SOLUTION_DIR%\SmartEventViewerApp\src" (
+    if not exist "%DEPLOY_DIR%\SmartEventViewerApp\src" mkdir "%DEPLOY_DIR%\SmartEventViewerApp\src"
+    xcopy "%SOLUTION_DIR%\SmartEventViewerApp\src" "%DEPLOY_DIR%\SmartEventViewerApp\src\" /S /E /Y /Q /I >nul 2>&1
+)
+
+if exist "%SOLUTION_DIR%\SmartEventViewerApp\node_modules" (
+    if not exist "%DEPLOY_DIR%\SmartEventViewerApp\node_modules" mkdir "%DEPLOY_DIR%\SmartEventViewerApp\node_modules"
+    xcopy "%SOLUTION_DIR%\SmartEventViewerApp\node_modules" "%DEPLOY_DIR%\SmartEventViewerApp\node_modules\" /S /E /Y /Q /I >nul 2>&1
 )
 
 echo [DEPLOY] Integration Test Environment deployed cleanly to %DEPLOY_DIR%!

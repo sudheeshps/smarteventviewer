@@ -142,7 +142,7 @@ void Test_WebApplication_ServerRuntime()
     WebApplicationBuilder builder;
     builder.AddController<SmartEventViewer::EventsController>("/api")
         .MapGet("/channels", &SmartEventViewer::EventsController::GetChannels)
-        .MapGet("/events", static_cast<SmartEventViewer::EventLogResponseDto (SmartEventViewer::EventsController::*)(const String&)>(&SmartEventViewer::EventsController::GetEvents));
+        .MapGet("/events", static_cast<SmartEventViewer::EventLogResponseDto (SmartEventViewer::EventsController::*)(const String&, size_t, size_t)>(&SmartEventViewer::EventsController::GetEvents));
 
     auto app = builder.Build();
     app->MapControllers();
