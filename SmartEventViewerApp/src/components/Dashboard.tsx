@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { fetchApiChannels, fetchApiEvents, fetchApiAnalyze, fetchApiAnalyzeStatus, fetchApiMetrics } from '../apiClient';
+import { fetchApiChannels, fetchApiEvents, fetchApiMetrics } from '../apiClient';
 import type { SystemMetricsData, EventsData } from '../apiClient';
 import type { EventDto } from '../types';
 
 interface DashboardProps {
   onSelectChannel?: (channelName: string) => void;
-  onOpenChat?: (query: string, response: string) => void;
 }
 
 interface ChannelSummaryInfo {
@@ -15,16 +14,13 @@ interface ChannelSummaryInfo {
   errorCount: number;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel, onOpenChat }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
   const [totalChannels, setTotalChannels] = useState<number>(0);
   const [totalEvents, setTotalEvents] = useState<number>(0);
   const [criticalRisks, setCriticalRisks] = useState<number>(0);
   const [recentEvents, setRecentEvents] = useState<EventDto[]>([]);
   const [channelSummaries, setChannelSummaries] = useState<ChannelSummaryInfo[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [chatQuery, setChatQuery] = useState<string>('');
-  const [aiResponse, setAiResponse] = useState<string>('');
-  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [showCriticalModal, setShowCriticalModal] = useState<boolean>(false);
   const [criticalEventsList, setCriticalEventsList] = useState<EventDto[]>([]);
 
@@ -34,54 +30,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel, onOpenCha
     );
     setCriticalEventsList(filtered.length > 0 ? filtered : recentEvents);
     setShowCriticalModal(true);
-  };
-
-  const handleAnalyze = async () => {
-    if (!chatQuery.trim()) return;
-    const queryText = chatQuery.trim();
-    setIsAnalyzing(true);
-
-    if (onOpenChat) {
-      onOpenChat(queryText, '⏳ Analyzing RAG event stream & system metrics... Please wait.');
-    }
-
-    const baseUrl = window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080';
-    try {
-      // 1. Immediately enqueue request non-blockingly
-      const enqueueRes = await fetchApiAnalyze('ALL', queryText, baseUrl);
-      const taskId = enqueueRes.taskId;
-
-      if (!taskId) {
-        setAiResponse(enqueueRes.analysis || 'Error initiating analysis task.');
-        if (onOpenChat) onOpenChat(queryText, enqueueRes.analysis || 'Error initiating task.');
-        return;
-      }
-
-      // 2. Poll for async task completion
-      let finalResult = 'Analysis complete.';
-      for (let attempts = 0; attempts < 60; attempts++) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        try {
-          const statusRes = await fetchApiAnalyzeStatus(taskId, baseUrl);
-          if (statusRes.status === 'COMPLETED') {
-            finalResult = (statusRes.analysis && statusRes.analysis.trim().length > 0) ? statusRes.analysis : `Analyzed ${statusRes.eventsAnalyzed || 0} events across all system channels.`;
-            break;
-          }
-        } catch (pollErr) {
-          console.warn('[POLLING WARN] Retrying task status fetch...', pollErr);
-        }
-      }
-
-      setAiResponse(finalResult);
-      if (onOpenChat) {
-        onOpenChat(queryText, finalResult);
-      }
-    } catch (err) {
-      console.error('[DASHBOARD DEBUG] Error calling backend analyze endpoint:', err);
-      setAiResponse('Error executing AI analysis.');
-    } finally {
-      setIsAnalyzing(false);
-    }
   };
 
   // System Hardware Telemetry & User Sessions State
@@ -111,8 +59,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel, onOpenCha
 
   useEffect(() => {
     loadDashboardData();
-    const interval = setInterval(loadDashboardData, 1000);
-    return () => clearInterval(interval);
   }, []);
 
   const loadDashboardData = async () => {
@@ -198,7 +144,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel, onOpenCha
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '4px 10px', borderRadius: '4px' }}>
           <span style={{ height: '8px', width: '8px', backgroundColor: '#4ade80', borderRadius: '50%', display: 'inline-block' }} />
-          <span style={{ fontSize: '0.7rem', color: '#38bdf8', fontWeight: 600 }}>Live Auto-Refreshing (1s)</span>
+          <span style={{ fontSize: '0.7rem', color: '#38bdf8', fontWeight: 600 }}>Push Notifications Active</span>
         </div>
       </header>
 
@@ -242,55 +188,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel, onOpenCha
         </div>
       </div>
 
-      {/* Global AI Threat Assistant Query Bar (Positioned directly below event count summary) */}
-      <section style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid #38bdf8', borderRadius: '8px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#38bdf8' }}>
-          🤖 Global Natural Language AI Threat Analysis
-        </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <input
-            type="text"
-            placeholder="Ask AI to analyze entire ingested system events (e.g., 'Find security breaches & privilege escalation attempts')..."
-            value={chatQuery}
-            onChange={(e) => setChatQuery(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
-            style={{
-              flex: 1,
-              background: '#0f172a',
-              color: '#f8fafc',
-              border: '1px solid rgba(255,255,255,0.1)',
-              borderRadius: '4px',
-              padding: '6px 12px',
-              fontSize: '0.75rem',
-              outline: 'none',
-            }}
-          />
-          <button
-            onClick={handleAnalyze}
-            disabled={isAnalyzing}
-            style={{
-              background: isAnalyzing ? '#64748b' : '#38bdf8',
-              color: '#0f172a',
-              border: 'none',
-              padding: '6px 16px',
-              borderRadius: '4px',
-              cursor: isAnalyzing ? 'not-allowed' : 'pointer',
-              fontWeight: 700,
-              fontSize: '0.75rem',
-            }}
-          >
-            {isAnalyzing ? 'Analyzing System Logs...' : '⚡ Analyze Events'}
-          </button>
-        </div>
 
-        {aiResponse && (
-          <div style={{ background: '#0f172a', border: '1px solid rgba(56,189,248,0.3)', borderRadius: '6px', padding: '10px', marginTop: '4px' }}>
-            <div style={{ fontSize: '0.75rem', color: '#e2e8f0', whiteSpace: 'pre-wrap', lineHeight: '1.4' }}>
-              {aiResponse}
-            </div>
-          </div>
-        )}
-      </section>
 
       {/* Live Hardware Telemetry Gauges (CPU, Memory, Disk Read, Disk Write, Network) */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px' }}>
@@ -453,6 +351,71 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel, onOpenCha
           </table>
         </section>
       </div>
+
+      {/* DotNetDupe System UserPrincipals & Access Groups Section */}
+      <section style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(168, 85, 247, 0.4)', borderRadius: '8px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <h3 style={{ color: '#c084fc', margin: 0, fontSize: '0.85rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+          👥 Registered System User Accounts & Access Groups (DotNetDupe UserPrincipals API)
+        </h3>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.72rem' }}>
+            <thead>
+              <tr style={{ background: 'rgba(15, 23, 42, 0.9)', color: '#94a3b8', fontSize: '0.68rem' }}>
+                <th style={{ padding: '6px' }}>User Name</th>
+                <th style={{ padding: '6px' }}>Domain</th>
+                <th style={{ padding: '6px' }}>Security SID / UID</th>
+                <th style={{ padding: '6px' }}>Account Class</th>
+                <th style={{ padding: '6px' }}>Account Status</th>
+                <th style={{ padding: '6px' }}>Access Groups</th>
+                <th style={{ padding: '6px' }}>Permissions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(!metrics.systemUsers || metrics.systemUsers.length === 0) ? (
+                <tr>
+                  <td colSpan={7} style={{ padding: '10px', textAlign: 'center', color: '#94a3b8' }}>
+                    Loading System User Principals via DotNetDupe API...
+                  </td>
+                </tr>
+              ) : (
+                metrics.systemUsers.map((u, idx) => (
+                  <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <td style={{ padding: '5px', fontWeight: 700, color: '#f8fafc' }}>{u.username}</td>
+                    <td style={{ padding: '5px', color: '#94a3b8' }}>{u.domain || 'LOCAL'}</td>
+                    <td style={{ padding: '5px', fontFamily: 'monospace', fontSize: '0.68rem', color: '#38bdf8' }}>{u.sidOrUid}</td>
+                    <td style={{ padding: '5px' }}>
+                      <span style={{ padding: '1px 5px', borderRadius: '3px', fontSize: '0.62rem', fontWeight: 700, background: u.userClass === 'Admin' ? 'rgba(248,113,113,0.25)' : 'rgba(56,189,248,0.2)', color: u.userClass === 'Admin' ? '#f87171' : '#38bdf8' }}>
+                        {u.userClass}
+                      </span>
+                    </td>
+                    <td style={{ padding: '5px' }}>
+                      <span style={{ padding: '1px 5px', borderRadius: '3px', fontSize: '0.62rem', fontWeight: 700, background: u.isDisabled ? 'rgba(248,113,113,0.2)' : 'rgba(74,222,128,0.2)', color: u.isDisabled ? '#f87171' : '#4ade80' }}>
+                        {u.isDisabled ? 'Disabled' : 'Active'}
+                      </span>
+                    </td>
+                    <td style={{ padding: '5px' }}>
+                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                        {u.groups && u.groups.length > 0 ? (
+                          u.groups.map((g, gIdx) => (
+                            <span key={gIdx} style={{ background: 'rgba(168, 85, 247, 0.2)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.4)', borderRadius: '3px', padding: '1px 5px', fontSize: '0.62rem', fontWeight: 600 }}>
+                              {g}
+                            </span>
+                          ))
+                        ) : (
+                          <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>None</span>
+                        )}
+                      </div>
+                    </td>
+                    <td style={{ padding: '5px', color: '#94a3b8', fontSize: '0.68rem' }}>
+                      {u.permissions && u.permissions.length > 0 ? u.permissions.join(', ') : 'Standard User Access'}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       {/* Live Active Ingested Log Channels Section */}
       <section style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>

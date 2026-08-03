@@ -97,9 +97,3 @@ void Test_RealWebServer_And_ReactClient_Integration()
 
     Console::WriteLine("[PASS] Test_RealWebServer_And_ReactClient_Integration PASSED CLEANLY!");
 }
-
-int main()
-{
-    Test_RealWebServer_And_ReactClient_Integration();
-    return 0;
-}

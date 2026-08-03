@@ -76,6 +76,22 @@ namespace SmartEventViewer
         UserSessionDto& operator=(const UserSessionDto&) = default;
     };
 
+    struct UserPrincipalDto
+    {
+        String Username{};
+        String Domain{};
+        String SidOrUid{};
+        String UserClass{}; // "Admin", "Normal", "Guest", "System"
+        bool IsDisabled{ false };
+        bool IsAccountLocked{ false };
+        StringList Groups{};
+        StringList Permissions{};
+
+        UserPrincipalDto() = default;
+        UserPrincipalDto(const UserPrincipalDto&) = default;
+        UserPrincipalDto& operator=(const UserPrincipalDto&) = default;
+    };
+
     struct SystemMetricsResponseDto
     {
         double CpuUsagePercent{ 0.0 };
@@ -90,6 +106,7 @@ namespace SmartEventViewer
         DotNetDupe::System::Collections::Generic::List<ProcessResourceDto> TopProcesses{};
         DotNetDupe::System::Collections::Generic::List<UserSessionDto> ActiveUserSessions{};
         DotNetDupe::System::Collections::Generic::List<UserSessionDto> ExpiredUserSessions{};
+        DotNetDupe::System::Collections::Generic::List<UserPrincipalDto> SystemUsers{};
     };
 
     struct AnalyzeRequestDto
@@ -105,7 +122,8 @@ namespace SmartEventViewer
     struct AnalyzeResponseDto
     {
         String TaskId{};
-        String Status{}; // "PENDING", "COMPLETED", "FAILED"
+        String Status{}; // "PENDING", "PROCESSING", "COMPLETED", "FAILED"
+        String ProgressMessage{}; // Push notification status: e.g. "Starting analysis...", "Reading logs from channel Security...", "Ingesting logs...", "Analyzing threat vectors..."
         String Channel{};
         String Query{};
         String Analysis{};
@@ -255,6 +273,35 @@ namespace DotNetDupe {
                 };
 
                 template <typename Enable>
+                struct JsonConverter<SmartEventViewer::UserPrincipalDto, Enable> {
+                    static JsonElement Write(const SmartEventViewer::UserPrincipalDto& value) {
+                        JsonElement obj(JsonValueKind::Object);
+                        obj.SetProperty(String("username"), JsonElement(value.Username));
+                        obj.SetProperty(String("domain"), JsonElement(value.Domain));
+                        obj.SetProperty(String("sidOrUid"), JsonElement(value.SidOrUid));
+                        obj.SetProperty(String("userClass"), JsonElement(value.UserClass));
+                        obj.SetProperty(String("isDisabled"), JsonElement(value.IsDisabled));
+                        obj.SetProperty(String("isAccountLocked"), JsonElement(value.IsAccountLocked));
+                        obj.SetProperty(String("groups"), JsonConverter<DotNetDupe::System::Collections::Generic::List<DotNetDupe::System::String>>::Write(value.Groups));
+                        obj.SetProperty(String("permissions"), JsonConverter<DotNetDupe::System::Collections::Generic::List<DotNetDupe::System::String>>::Write(value.Permissions));
+                        return obj;
+                    }
+                    static SmartEventViewer::UserPrincipalDto Read(const JsonElement& element) {
+                        SmartEventViewer::UserPrincipalDto dto;
+                        JsonElement prop;
+                        if (element.TryGetProperty(String("username"), prop)) dto.Username = prop.GetString();
+                        if (element.TryGetProperty(String("domain"), prop)) dto.Domain = prop.GetString();
+                        if (element.TryGetProperty(String("sidOrUid"), prop)) dto.SidOrUid = prop.GetString();
+                        if (element.TryGetProperty(String("userClass"), prop)) dto.UserClass = prop.GetString();
+                        if (element.TryGetProperty(String("isDisabled"), prop)) dto.IsDisabled = prop.GetBoolean();
+                        if (element.TryGetProperty(String("isAccountLocked"), prop)) dto.IsAccountLocked = prop.GetBoolean();
+                        if (element.TryGetProperty(String("groups"), prop)) dto.Groups = JsonConverter<DotNetDupe::System::Collections::Generic::List<DotNetDupe::System::String>>::Read(prop);
+                        if (element.TryGetProperty(String("permissions"), prop)) dto.Permissions = JsonConverter<DotNetDupe::System::Collections::Generic::List<DotNetDupe::System::String>>::Read(prop);
+                        return dto;
+                    }
+                };
+
+                template <typename Enable>
                 struct JsonConverter<SmartEventViewer::SystemMetricsResponseDto, Enable> {
                     static JsonElement Write(const SmartEventViewer::SystemMetricsResponseDto& value) {
                         JsonElement obj(JsonValueKind::Object);
@@ -269,6 +316,7 @@ namespace DotNetDupe {
                         obj.SetProperty(String("topProcesses"), JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::ProcessResourceDto>>::Write(value.TopProcesses));
                         obj.SetProperty(String("activeUserSessions"), JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::UserSessionDto>>::Write(value.ActiveUserSessions));
                         obj.SetProperty(String("expiredUserSessions"), JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::UserSessionDto>>::Write(value.ExpiredUserSessions));
+                        obj.SetProperty(String("systemUsers"), JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::UserPrincipalDto>>::Write(value.SystemUsers));
                         return obj;
                     }
                     static SmartEventViewer::SystemMetricsResponseDto Read(const JsonElement& element) {
@@ -285,6 +333,7 @@ namespace DotNetDupe {
                         if (element.TryGetProperty(String("topProcesses"), prop)) dto.TopProcesses = JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::ProcessResourceDto>>::Read(prop);
                         if (element.TryGetProperty(String("activeUserSessions"), prop)) dto.ActiveUserSessions = JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::UserSessionDto>>::Read(prop);
                         if (element.TryGetProperty(String("expiredUserSessions"), prop)) dto.ExpiredUserSessions = JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::UserSessionDto>>::Read(prop);
+                        if (element.TryGetProperty(String("systemUsers"), prop)) dto.SystemUsers = JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::UserPrincipalDto>>::Read(prop);
                         return dto;
                     }
                 };
@@ -312,6 +361,7 @@ namespace DotNetDupe {
                         JsonElement obj(JsonValueKind::Object);
                         obj.SetProperty(String("taskId"), JsonElement(value.TaskId));
                         obj.SetProperty(String("status"), JsonElement(value.Status));
+                        obj.SetProperty(String("progressMessage"), JsonElement(value.ProgressMessage));
                         obj.SetProperty(String("channel"), JsonElement(value.Channel));
                         obj.SetProperty(String("query"), JsonElement(value.Query));
                         obj.SetProperty(String("analysis"), JsonElement(value.Analysis));
@@ -323,6 +373,7 @@ namespace DotNetDupe {
                         JsonElement prop;
                         if (element.TryGetProperty(String("taskId"), prop)) dto.TaskId = prop.GetString();
                         if (element.TryGetProperty(String("status"), prop)) dto.Status = prop.GetString();
+                        if (element.TryGetProperty(String("progressMessage"), prop)) dto.ProgressMessage = prop.GetString();
                         if (element.TryGetProperty(String("channel"), prop)) dto.Channel = prop.GetString();
                         if (element.TryGetProperty(String("query"), prop)) dto.Query = prop.GetString();
                         if (element.TryGetProperty(String("analysis"), prop)) dto.Analysis = prop.GetString();

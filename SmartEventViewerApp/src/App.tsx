@@ -88,6 +88,7 @@ export function App() {
   const [chatHistory, setChatHistory] = useState<Array<{ sender: 'user' | 'assistant'; text: string; channel?: string }>>([]);
 
   const [isChatAnalyzing, setIsChatAnalyzing] = useState<boolean>(false);
+  const [chatProgressMessage, setChatProgressMessage] = useState<string>('Analyzing RAG event stream & system metrics...');
 
   return (
     <div style={{ display: 'flex', height: '100vh', width: '100vw', backgroundColor: '#0f172a', color: '#f8fafc', overflow: 'hidden', userSelect: isResizing ? 'none' : 'auto' }}>
@@ -122,24 +123,6 @@ export function App() {
               setCurrentChannel(ch);
               setActiveTab('events');
             }}
-            onOpenChat={(initialQuery, responseText) => {
-              setShowChatPanel(true);
-              setIsChatCollapsed(false);
-              const isPlaceholder = responseText.includes('Analyzing RAG event stream');
-              if (isPlaceholder) {
-                setIsChatAnalyzing(true);
-                setChatHistory((prev) => [
-                  ...prev,
-                  { sender: 'user', text: initialQuery, channel: 'ALL' },
-                ]);
-              } else {
-                setIsChatAnalyzing(false);
-                setChatHistory((prev) => [
-                  ...prev,
-                  { sender: 'assistant', text: responseText, channel: 'ALL' },
-                ]);
-              }
-            }}
           />
         )}
         {activeTab === 'events' && (
@@ -148,13 +131,17 @@ export function App() {
             onOpenChat={(initialQuery, responseText) => {
               setShowChatPanel(true);
               setIsChatCollapsed(false);
-              const isPlaceholder = responseText.includes('Analyzing RAG event stream');
-              if (isPlaceholder) {
+              const isProgressUpdate = responseText.startsWith('⏳ ');
+              if (isProgressUpdate) {
                 setIsChatAnalyzing(true);
-                setChatHistory((prev) => [
-                  ...prev,
-                  { sender: 'user', text: initialQuery, channel: currentChannel },
-                ]);
+                const cleanMsg = responseText.replace('⏳ ', '');
+                setChatProgressMessage(cleanMsg);
+                setChatHistory((prev) => {
+                  if (prev.length > 0 && prev[prev.length - 1].sender === 'user' && prev[prev.length - 1].text === initialQuery) {
+                    return prev;
+                  }
+                  return [...prev, { sender: 'user', text: initialQuery, channel: currentChannel }];
+                });
               } else {
                 setIsChatAnalyzing(false);
                 setChatHistory((prev) => [
@@ -268,8 +255,8 @@ export function App() {
             )}
             {isChatAnalyzing && (
               <div style={{ alignSelf: 'flex-start', background: 'rgba(30, 41, 59, 0.9)', color: '#38bdf8', borderRadius: '8px', padding: '8px 12px', fontSize: '0.75rem', border: '1px solid #38bdf8', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <div style={{ width: '12px', height: '12px', border: '2px solid rgba(56,189,248,0.3)', borderTop: '2px solid #38bdf8', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-                <span>Analyzing RAG event stream & system metrics...</span>
+                <div style={{ width: '14px', height: '14px', border: '2px solid rgba(56,189,248,0.3)', borderTop: '2px solid #38bdf8', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                <span style={{ fontWeight: 600 }}>{chatProgressMessage}</span>
               </div>
             )}
           </div>
@@ -279,41 +266,40 @@ export function App() {
             <input
               type="text"
               disabled={isChatAnalyzing}
-              placeholder={isChatAnalyzing ? 'Analyzing current query... Please wait.' : 'Ask a follow-up question (context & history preserved)...'}
+              placeholder={isChatAnalyzing ? chatProgressMessage : 'Ask a question (context & history preserved)...'}
               onKeyDown={async (e) => {
                 if (e.key === 'Enter' && e.currentTarget.value.trim() && !isChatAnalyzing) {
                   const queryText = e.currentTarget.value.trim();
                   e.currentTarget.value = '';
+                  let finalResult = 'Analysis complete.';
                   setChatHistory((prev) => [...prev, { sender: 'user', text: queryText }]);
                   setIsChatAnalyzing(true);
+                  setChatProgressMessage('Enqueued for analysis...');
                   
-                  const baseUrl = window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080';
-                  try {
-                    const enqueueRes = await fetchApiAnalyze(currentChannel || 'ALL', queryText, baseUrl);
-                    const taskId = enqueueRes.taskId;
-                    if (!taskId) {
-                      setChatHistory((prev) => [...prev, { sender: 'assistant', text: enqueueRes.analysis || 'Error initiating task.' }]);
-                    } else {
-                      let finalResult = 'Analysis complete.';
-                      for (let attempts = 0; attempts < 60; attempts++) {
-                        await new Promise((resolve) => setTimeout(resolve, 1000));
-                        try {
-                          const statusRes = await fetchApiAnalyzeStatus(taskId, baseUrl);
-                          if (statusRes.status === 'COMPLETED') {
-                            finalResult = (statusRes.analysis && statusRes.analysis.trim().length > 0) ? statusRes.analysis : 'Analysis complete (no anomalies flagged).';
-                            break;
-                          }
-                        } catch (pollErr) {
-                          console.warn('[POLLING WARN] Retrying follow-up task status fetch...', pollErr);
+                  setTimeout(async () => {
+                    const baseUrl = window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080';
+                    try {
+                      const enqueueRes = await fetchApiAnalyze(currentChannel || 'ALL', queryText, baseUrl);
+                      const taskId = enqueueRes.taskId;
+                      if (!taskId) {
+                        setChatHistory((prev) => [...prev, { sender: 'assistant', text: enqueueRes.analysis || 'Error initiating task.' }]);
+                      } else {
+                        const statusRes = await fetchApiAnalyzeStatus(taskId, baseUrl);
+                        if (statusRes.status === 'COMPLETED') {
+                          finalResult = (statusRes.analysis && statusRes.analysis.trim().length > 0) ? statusRes.analysis : 'Analysis complete (no anomalies flagged).';
+                        } else {
+                          await new Promise((resolve) => setTimeout(resolve, 1500));
+                          const checkRes = await fetchApiAnalyzeStatus(taskId, baseUrl);
+                          finalResult = (checkRes.analysis && checkRes.analysis.trim().length > 0) ? checkRes.analysis : (checkRes.progressMessage || 'Analysis task completed.');
                         }
+                        setChatHistory((prev) => [...prev, { sender: 'assistant', text: finalResult }]);
                       }
-                      setChatHistory((prev) => [...prev, { sender: 'assistant', text: finalResult }]);
+                    } catch (err) {
+                      setChatHistory((prev) => [...prev, { sender: 'assistant', text: 'Error connecting to RAG engine.' }]);
+                    } finally {
+                      setIsChatAnalyzing(false);
                     }
-                  } catch (err) {
-                    setChatHistory((prev) => [...prev, { sender: 'assistant', text: 'Error connecting to RAG engine.' }]);
-                  } finally {
-                    setIsChatAnalyzing(false);
-                  }
+                  }, 0);
                 }
               }}
               style={{

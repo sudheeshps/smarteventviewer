@@ -27,6 +27,7 @@ export interface EventsData {
 export interface AnalyzeData {
   taskId?: string;
   status?: string;
+  progressMessage?: string;
   channel?: string;
   query?: string;
   analysis?: string;
@@ -53,6 +54,17 @@ export interface UserSessionData {
   isActive: boolean;
 }
 
+export interface UserPrincipalData {
+  username: string;
+  domain: string;
+  sidOrUid: string;
+  userClass: string;
+  isDisabled: boolean;
+  isAccountLocked: boolean;
+  groups: string[];
+  permissions: string[];
+}
+
 export interface SystemMetricsData {
   cpuUsagePercent: number;
   memoryUsagePercent: number;
@@ -65,6 +77,7 @@ export interface SystemMetricsData {
   topProcesses: ProcessResourceData[];
   activeUserSessions: UserSessionData[];
   expiredUserSessions: UserSessionData[];
+  systemUsers?: UserPrincipalData[];
 }
 
 export async function fetchApiChannels(baseUrl: string = 'http://localhost:8080'): Promise<ChannelData> {

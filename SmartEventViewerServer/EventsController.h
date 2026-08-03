@@ -33,7 +33,8 @@ namespace SmartEventViewer
         static LocalLlmEngine s_llmEngine;
 
         // Process-wide background worker thread and thread-safe task queue for async analysis
-        static DotNetDupe::System::Threading::CriticalSection s_analysisCs;
+        static DotNetDupe::System::Threading::CriticalSection s_analysisQueueCs;
+        static DotNetDupe::System::Threading::CriticalSection s_analysisResultsCs;
         static DotNetDupe::System::Threading::AutoResetEvent s_analysisEvent;
         static std::queue<std::shared_ptr<AnalysisTaskItem>> s_analysisQueue;
         static std::map<std::string, AnalyzeResponseDto> s_analysisResults;

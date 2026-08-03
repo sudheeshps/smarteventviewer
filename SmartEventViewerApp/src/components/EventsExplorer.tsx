@@ -112,7 +112,7 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onO
     setIsAnalyzing(true);
 
     if (onOpenChat) {
-      onOpenChat(queryText, '⏳ Analyzing RAG event stream & system metrics... Please wait.');
+      onOpenChat(queryText, '⏳ Enqueued for analysis...');
     }
 
     const baseUrl = window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080';
@@ -127,20 +127,9 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onO
         return;
       }
 
-      // 2. Poll for async task completion
-      let finalResult = 'Analysis complete.';
-      for (let attempts = 0; attempts < 60; attempts++) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        try {
-          const statusRes = await fetchApiAnalyzeStatus(taskId, baseUrl);
-          if (statusRes.status === 'COMPLETED') {
-            finalResult = (statusRes.analysis && statusRes.analysis.trim().length > 0) ? statusRes.analysis : `Analyzed ${statusRes.eventsAnalyzed || 0} event records for '${channelName}'.`;
-            break;
-          }
-        } catch (pollErr) {
-          console.warn('[POLLING WARN] Retrying task status fetch...', pollErr);
-        }
-      }
+      // 2. Fetch analysis status directly (or fall back to current status endpoint payload)
+      const statusRes = await fetchApiAnalyzeStatus(taskId, baseUrl);
+      let finalResult = (statusRes.analysis && statusRes.analysis.trim().length > 0) ? statusRes.analysis : `Analyzed ${statusRes.eventsAnalyzed || 0} event records for '${channelName}'.`;
 
       setAiResponse(finalResult);
       if (onOpenChat) {
@@ -163,18 +152,13 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onO
   const displayTotalPages = serverTotalPages > 1 ? serverTotalPages : calculatedTotalPages;
   const pageEvents = filteredEvents;
 
-  const pagedCounts = {
-    critical: events.filter((e) => e.level === 'Critical' || e.risk === 'Critical').length,
-    error: events.filter((e) => e.level === 'Error' || e.risk === 'High').length,
-    warning: events.filter((e) => e.level === 'Warning' || e.risk === 'Medium').length,
-    info: events.filter((e) => e.level === 'Information' || e.risk === 'Low').length,
-  };
-
   const counts = {
-    critical: serverLevelCounts.critical > 0 ? serverLevelCounts.critical : pagedCounts.critical,
-    error: serverLevelCounts.error > 0 ? serverLevelCounts.error : pagedCounts.error,
-    warning: serverLevelCounts.warning > 0 ? serverLevelCounts.warning : pagedCounts.warning,
-    info: serverLevelCounts.info > 0 ? serverLevelCounts.info : (pagedCounts.info > 0 ? pagedCounts.info : (totalCount - (serverLevelCounts.critical + serverLevelCounts.error + serverLevelCounts.warning))),
+    critical: serverLevelCounts.critical,
+    error: serverLevelCounts.error,
+    warning: serverLevelCounts.warning,
+    info: (serverLevelCounts.info > 0)
+      ? serverLevelCounts.info
+      : Math.max(0, totalCount - (serverLevelCounts.critical + serverLevelCounts.error + serverLevelCounts.warning)),
   };
 
   return (

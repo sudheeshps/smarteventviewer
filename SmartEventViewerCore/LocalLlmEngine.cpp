@@ -2,6 +2,7 @@
 #include "../Include/Ai/LocalLlmEngine.h"
 #include "../Include/Core/EventRecord.h"
 #include "../Include/Core/AnomalyEngine.h"
+#include "System/Convert.h"
 #include <cstdio>
 #include <cstring>
 #include <sstream>
@@ -9,59 +10,89 @@
 
 namespace SmartEventViewer
 {
-    static std::string FormatThreatAnalysisResponse(const std::vector<EventRecord>& events)
+    using Convert = DotNetDupe::System::Convert;
+    static void CountRiskMetrics(const std::vector<EventRecord>& events, unsigned int& crit, unsigned int& high, unsigned int& err, unsigned int& warn)
     {
-        unsigned int crit = 0, high = 0, err = 0, warn = 0;
-        size_t uCount = events.size();
-        for (size_t i = 0; i < uCount; ++i)
+        crit = 0; high = 0; err = 0; warn = 0;
+        for (size_t i = 0; i < events.size(); ++i)
         {
             EventLevel lvl = events[i].GetLevel();
             RiskLevel risk = AnomalyEngine::EvaluateRisk(events[i]);
+
             if (lvl == EventLevel::Critical || risk == RiskLevel::Critical) crit++;
             else if (risk == RiskLevel::High) high++;
             else if (lvl == EventLevel::Error) err++;
             else if (lvl == EventLevel::Warning || risk == RiskLevel::Medium) warn++;
         }
-        unsigned int total = crit + high + err + warn;
+    }
+
+    static int ComputeThreatScore(unsigned int crit, unsigned int high, unsigned int err, unsigned int warn, unsigned int total)
+    {
+        if (total == 0) return 12;
         int rawScore = static_cast<int>((crit * 30) + (high * 20) + (err * 10) + (warn * 5));
-        int score = (rawScore > 100) ? 100 : rawScore;
-        if (total == 0) score = 12;
+        return (rawScore > 100) ? 100 : rawScore;
+    }
 
-        std::string sev = (score >= 75) ? "CRITICAL (Immediate Action Required)" :
-                         ((score >= 45) ? "HIGH (Active Investigation Needed)" :
-                         ((score >= 20) ? "MEDIUM (Elevated Monitoring)" : "LOW (Normal Operational Baseline)"));
+    static String GetSeverityLabel(int score)
+    {
+        if (score >= 75) return String("CRITICAL (Immediate Action Required)");
+        if (score >= 45) return String("HIGH (Active Investigation Needed)");
+        if (score >= 20) return String("MEDIUM (Elevated Monitoring)");
+        return String("LOW (Normal Operational Baseline)");
+    }
 
-        std::stringstream ss;
-        ss << "📌 EXECUTIVE SUMMARY:\n"
-           << (total > 0 ? "Correlated RAG analysis identified " + std::to_string(total) + " anomalous events (" + std::to_string(crit) + " Critical, " + std::to_string(err) + " Errors, " + std::to_string(warn) + " Warnings)."
-                         : "All ingested event channels & telemetry metrics operating within normal baseline.")
-           << "\n\n🚨 THREAT SCORE: " << score << " / 100 — " << sev << "\n\n"
-           << "🔍 ROOT CAUSE ANALYSIS:\n"
-           << (total > 0 ? "Primary risks stem from process creation, token assignment, or authentication logs."
-                         : "No suspicious root cause vectors observed.")
-           << "\n\n📊 KEY ANOMALIES & CORRELATED INDICATORS:\n";
+    static String FormatAnomaliesSection(const std::vector<EventRecord>& events)
+    {
+        if (events.empty()) return String(" • No active event records returned.\n");
 
-        if (uCount > 0)
+        String sResult;
+        unsigned int shown = 0;
+        for (size_t i = 0; i < events.size() && shown < 5; ++i)
         {
-            unsigned int shown = 0;
-            for (size_t i = 0; i < uCount && shown < 5; ++i)
-            {
-                EventLevel lvl = events[i].GetLevel();
-                RiskLevel risk = AnomalyEngine::EvaluateRisk(events[i]);
-                if (lvl == EventLevel::Critical || lvl == EventLevel::Error || risk == RiskLevel::Critical || risk == RiskLevel::High)
-                {
-                    ss << " • Event ID " << events[i].GetEventId() << " [" << events[i].GetProviderName().GetRawString() << "]: " << events[i].GetEventMessage().GetRawString() << "\n";
-                    shown++;
-                }
-            }
-            if (shown == 0) ss << " • Baseline telemetry verified. No anomalous event IDs flagged.\n";
-        }
-        else ss << " • No active event records returned.\n";
+            EventLevel lvl = events[i].GetLevel();
+            RiskLevel risk = AnomalyEngine::EvaluateRisk(events[i]);
 
-        ss << "\n🛡️ RECOMMENDED MITIGATIONS & ACTION PLAN:\n"
-           << (total > 0 ? "1. Isolate high-risk endpoints.\n2. Verify active user session privileges.\n3. Restrict administrative execution."
-                         : "1. Maintain continuous 1s log ingestion.\n2. Enforce audit log retention.");
-        return ss.str();
+            if (lvl == EventLevel::Critical || lvl == EventLevel::Error || risk == RiskLevel::Critical || risk == RiskLevel::High)
+            {
+                sResult = sResult + String(" • Event ID ") + Convert::ToString(events[i].GetEventId()) +
+                    String(" [") + events[i].GetProviderName() + String("]: ") + events[i].GetEventMessage() + String("\n");
+                shown++;
+            }
+        }
+
+        if (shown == 0) return String(" • Baseline telemetry verified. No anomalous event IDs flagged.\n");
+        return sResult;
+    }
+
+    static String FormatThreatAnalysisResponse(const std::vector<EventRecord>& events)
+    {
+        unsigned int crit = 0, high = 0, err = 0, warn = 0;
+        CountRiskMetrics(events, crit, high, err, warn);
+        unsigned int total = crit + high + err + warn;
+
+        int score = ComputeThreatScore(crit, high, err, warn, total);
+        String sSev = GetSeverityLabel(score);
+
+        String sExecSummary = (total > 0)
+            ? String("Correlated RAG analysis identified ") + Convert::ToString(static_cast<int>(total)) + String(" anomalous events (") +
+              Convert::ToString(static_cast<int>(crit)) + String(" Critical, ") + Convert::ToString(static_cast<int>(err)) + String(" Errors, ") + Convert::ToString(static_cast<int>(warn)) + String(" Warnings).")
+            : String("All ingested event channels & telemetry metrics operating within normal baseline.");
+
+        String sRootCause = (total > 0)
+            ? String("Primary risks stem from process creation, token assignment, or authentication logs.")
+            : String("No suspicious root cause vectors observed.");
+
+        String sMitigations = (total > 0)
+            ? String("1. Isolate high-risk endpoints.\n2. Verify active user session privileges.\n3. Restrict administrative execution.")
+            : String("1. Maintain continuous 1s log ingestion.\n2. Enforce audit log retention.");
+
+        String sResponse = String("📌 EXECUTIVE SUMMARY:\n") + sExecSummary +
+            String("\n\n🚨 THREAT SCORE: ") + Convert::ToString(score) + String(" / 100 — ") + sSev +
+            String("\n\n🔍 ROOT CAUSE ANALYSIS:\n") + sRootCause +
+            String("\n\n📊 KEY ANOMALIES & CORRELATED INDICATORS:\n") + FormatAnomaliesSection(events) +
+            String("\n🛡️ RECOMMENDED MITIGATIONS & ACTION PLAN:\n") + sMitigations;
+
+        return sResponse;
     }
 
     LocalLlmEngine::LocalLlmEngine() = default;
@@ -99,8 +130,7 @@ namespace SmartEventViewer
             for (unsigned int i = 0; i < uEventCount; ++i) eventCopy.push_back(pContextEvents[i]);
         }
 
-        std::string resStr = FormatThreatAnalysisResponse(eventCopy);
-        String sResult(resStr.c_str());
+        String sResult = FormatThreatAnalysisResponse(eventCopy);
         m_listConversationHistory.Add(sResult);
         return sResult;
     }
@@ -113,14 +143,13 @@ namespace SmartEventViewer
         }
         m_listConversationHistory.Add(sFollowupQuery);
 
-        std::stringstream ssResponse;
-        ssResponse << "[Embedded llama.cpp Follow-up Analysis]:\n"
-                   << "Correlated follow-up query against previous conversation history (Turn #" << GetHistoryCount() << "):\n"
-                   << " - Query: \"" << sFollowupQuery.GetRawString() << "\"\n"
-                   << " - In-Process Context: Evaluated " << uEventCount << " live kernel records.\n"
-                   << " - Mitigation Guidance: Revoke active session tokens and enforce MFA for Remote Desktop connections.";
+        String sResult = String("[Embedded llama.cpp Follow-up Analysis]:\n") +
+            String("Correlated follow-up query against previous conversation history (Turn #") +
+            String::FromInt(static_cast<int>(GetHistoryCount())) + String("):\n") +
+            String(" - Query: \"") + sFollowupQuery + String("\"\n") +
+            String(" - In-Process Context: Evaluated ") + String::FromInt(static_cast<int>(uEventCount)) + String(" live kernel records.\n") +
+            String(" - Mitigation Guidance: Revoke active session tokens and enforce MFA for Remote Desktop connections.");
 
-        String sResult(ssResponse.str().c_str());
         m_listConversationHistory.Add(sResult);
         return sResult;
     }

@@ -85,6 +85,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="EventRecordTests.cpp" />
+    <ClCompile Include="IntegrationTests.cpp" />
     <ClCompile Include="..\SmartEventViewerServer\EventsController.cpp" />
   </ItemGroup>
   <ItemGroup>

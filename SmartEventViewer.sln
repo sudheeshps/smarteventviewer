@@ -6,8 +6,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SmartEventViewerServer", "S
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SmartEventViewerTests", "SmartEventViewerTests\SmartEventViewerTests.vcxproj", "{F1E2D3C4-B5A6-9788-7766-554433221100}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SmartEventViewerIntegrationTests", "SmartEventViewerIntegrationTests\SmartEventViewerIntegrationTests.vcxproj", "{C3D4E5F6-A7B8-9012-3456-7890ABCDEF12}"
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SmartEventViewerCore", "SmartEventViewerCore\SmartEventViewerCore.vcxproj", "{A1B2C3D4-E5F6-7A8B-9C0D-1E2F3A4B5C6D}"
 EndProject
 Global
@@ -24,10 +22,6 @@ Global
 		{F1E2D3C4-B5A6-9788-7766-554433221100}.Debug|x64.Build.0 = Debug|x64
 		{F1E2D3C4-B5A6-9788-7766-554433221100}.Release|x64.ActiveCfg = Release|x64
 		{F1E2D3C4-B5A6-9788-7766-554433221100}.Release|x64.Build.0 = Release|x64
-		{C3D4E5F6-A7B8-9012-3456-7890ABCDEF12}.Debug|x64.ActiveCfg = Debug|x64
-		{C3D4E5F6-A7B8-9012-3456-7890ABCDEF12}.Debug|x64.Build.0 = Debug|x64
-		{C3D4E5F6-A7B8-9012-3456-7890ABCDEF12}.Release|x64.ActiveCfg = Release|x64
-		{C3D4E5F6-A7B8-9012-3456-7890ABCDEF12}.Release|x64.Build.0 = Release|x64
 		{A1B2C3D4-E5F6-7A8B-9C0D-1E2F3A4B5C6D}.Debug|x64.ActiveCfg = Debug|x64
 		{A1B2C3D4-E5F6-7A8B-9C0D-1E2F3A4B5C6D}.Debug|x64.Build.0 = Debug|x64
 		{A1B2C3D4-E5F6-7A8B-9C0D-1E2F3A4B5C6D}.Release|x64.ActiveCfg = Release|x64

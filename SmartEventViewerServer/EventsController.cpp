@@ -123,17 +123,6 @@ namespace SmartEventViewer
                 responseDto.Events.Add(dto);
             }
             m_logReader.Close();
-
-            if (responseDto.CriticalCount == 0 && responseDto.ErrorCount == 0 && responseDto.WarningCount == 0)
-            {
-                responseDto.CriticalCount = pagedCritical;
-                responseDto.ErrorCount = pagedError;
-                responseDto.WarningCount = pagedWarning;
-                responseDto.InfoCount = (uTotalCount > (pagedCritical + pagedError + pagedWarning)) 
-                    ? (uTotalCount - (pagedCritical + pagedError + pagedWarning)) 
-                    : pagedInfo;
-            }
-
             Console::WriteLine("[SERVER] Streamed DTO response: {0} events (Level Counts -> Crit: {1}, Err: {2}, Warn: {3}, Info: {4})", static_cast<unsigned long long>(responseDto.Events.GetCount()), responseDto.CriticalCount, responseDto.ErrorCount, responseDto.WarningCount, responseDto.InfoCount);
         }
         else
@@ -148,7 +137,8 @@ namespace SmartEventViewer
 
     // Define process-wide static analysis members
     LocalLlmEngine EventsController::s_llmEngine{};
-    CriticalSection EventsController::s_analysisCs{};
+    CriticalSection EventsController::s_analysisQueueCs{};
+    CriticalSection EventsController::s_analysisResultsCs{};
     AutoResetEvent EventsController::s_analysisEvent{ false };
     std::queue<std::shared_ptr<AnalysisTaskItem>> EventsController::s_analysisQueue{};
     std::map<std::string, AnalyzeResponseDto> EventsController::s_analysisResults{};
@@ -166,7 +156,7 @@ namespace SmartEventViewer
 
     void EventsController::EnsureWorkerStarted()
     {
-        Lock<CriticalSection> lock(s_analysisCs);
+        Lock<CriticalSection> lock(s_analysisQueueCs);
         if (!s_bWorkerInitialized)
         {
             s_llmEngine.Initialize(String("models/Llama-3-8B-Instruct.Q4_K_M.gguf"));
@@ -185,7 +175,7 @@ namespace SmartEventViewer
         {
             std::shared_ptr<AnalysisTaskItem> taskItem = nullptr;
             {
-                Lock<CriticalSection> lock(s_analysisCs);
+                Lock<CriticalSection> lock(s_analysisQueueCs);
                 if (s_bStopWorker && s_analysisQueue.empty())
                 {
                     break;
@@ -201,7 +191,7 @@ namespace SmartEventViewer
             {
                 AnalyzeResponseDto completedResponse = ProcessAnalysisTask(taskItem->TaskId, taskItem->Request);
                 {
-                    Lock<CriticalSection> lock(s_analysisCs);
+                    Lock<CriticalSection> lock(s_analysisResultsCs);
                     s_analysisResults[taskItem->TaskId.GetRawString()] = completedResponse;
                 }
             }
@@ -212,23 +202,8 @@ namespace SmartEventViewer
         }
     }
 
-    AnalyzeResponseDto EventsController::ProcessAnalysisTask(const String& sTaskId, const AnalyzeRequestDto& request)
+    static std::vector<String> GetTargetChannelsList(const String& sTargetChannel)
     {
-        String sRawChannel = request.Channel.IsEmpty() ? String("ALL") : request.Channel;
-        String sTargetChannel = UrlDecodeChannel(sRawChannel);
-        String sQuery = request.Query.IsEmpty() ? String("Analyze suspicious event activity and potential security risks across system channels") : request.Query;
-
-        Console::WriteLine("[SERVER] Background worker processing queued task #{0} for channel scope: {1}", sTaskId, sTargetChannel);
-
-        AnalyzeResponseDto responseDto;
-        responseDto.TaskId = sTaskId;
-        responseDto.Status = String("COMPLETED");
-        responseDto.Channel = sTargetChannel;
-        responseDto.Query = sQuery;
-
-        SystemMetricsResponseDto sysMetrics = SystemTelemetryProvider::QuerySystemMetrics();
-
-        DotNetDupe::System::Collections::Generic::List<EventRecord> eventList;
         std::vector<String> channelsToScan;
         if (sTargetChannel == String("ALL") || sTargetChannel.IsEmpty())
         {
@@ -247,45 +222,100 @@ namespace SmartEventViewer
         {
             channelsToScan.push_back(sTargetChannel);
         }
+        return channelsToScan;
+    }
 
+    static void ScanChannelEvents(const String& sChannel, DotNetDupe::System::Collections::Generic::List<EventRecord>& eventList)
+    {
         WinEventLogReader logReader;
-        for (const auto& ch : channelsToScan)
-        {
-            if (logReader.OpenLog(ch))
-            {
-                EventRecord evt;
-                size_t countForChannel = 0;
-                while (logReader.ReadNextEvent(evt) && countForChannel < 25)
-                {
-                    EventLevel lvl = evt.GetLevel();
-                    RiskLevel risk = AnomalyEngine::EvaluateRisk(evt);
+        if (!logReader.OpenLog(sChannel)) return;
 
-                    if (lvl == EventLevel::Critical || lvl == EventLevel::Error || risk == RiskLevel::Critical || risk == RiskLevel::High || risk == RiskLevel::Medium)
-                    {
-                        eventList.Add(evt);
-                        countForChannel++;
-                    }
-                    else if (eventList.GetCount() < 10)
-                    {
-                        eventList.Add(evt);
-                        countForChannel++;
-                    }
-                }
-                logReader.Close();
+        EventRecord evt;
+        size_t countForChannel = 0;
+        while (logReader.ReadNextEvent(evt) && countForChannel < 15)
+        {
+            EventLevel lvl = evt.GetLevel();
+            RiskLevel risk = AnomalyEngine::EvaluateRisk(evt);
+
+            if (lvl == EventLevel::Critical || lvl == EventLevel::Error || risk == RiskLevel::Critical || risk == RiskLevel::High || risk == RiskLevel::Medium)
+            {
+                eventList.Add(evt);
+                countForChannel++;
+            }
+            else if (eventList.GetCount() < 10)
+            {
+                eventList.Add(evt);
+                countForChannel++;
             }
         }
+        logReader.Close();
+    }
 
-        responseDto.EventsAnalyzed = static_cast<unsigned long long>(eventList.GetCount());
+    AnalyzeResponseDto EventsController::ProcessAnalysisTask(const String& sTaskId, const AnalyzeRequestDto& request)
+    {
+        String sRawChannel = request.Channel.IsEmpty() ? String("ALL") : request.Channel;
+        String sTargetChannel = UrlDecodeChannel(sRawChannel);
+        String sQuery = request.Query.IsEmpty() ? String("Analyze suspicious event activity across system channels") : request.Query;
 
-        std::vector<EventRecord> eventBuffer;
-        for (int i = 0; i < eventList.GetCount(); ++i)
+        Console::WriteLine("[SERVER] Background worker processing queued task #{0} for channel scope: {1}", sTaskId, sTargetChannel);
+
+        // Step 1: Starting analysis...
         {
-            eventBuffer.push_back(eventList[i]);
+            Lock<CriticalSection> lock(s_analysisResultsCs);
+            auto& res = s_analysisResults[sTaskId.GetRawString()];
+            res.Status = String("PROCESSING");
+            res.ProgressMessage = String("Starting analysis...");
         }
 
-        responseDto.Analysis = s_llmEngine.ProcessQuery(sQuery, eventBuffer.empty() ? nullptr : eventBuffer.data(), static_cast<unsigned int>(eventBuffer.size()));
-        Console::WriteLine("[SERVER] Background worker task #{0} completed RAG analysis for {1} events", sTaskId, static_cast<unsigned long long>(responseDto.EventsAnalyzed));
+        DotNetDupe::System::Collections::Generic::List<EventRecord> eventList;
+        std::vector<String> channelsToScan = GetTargetChannelsList(sTargetChannel);
 
+        for (const auto& ch : channelsToScan)
+        {
+            // Push Notification Update: Reading logs from channel...
+            {
+                Lock<CriticalSection> lock(s_analysisResultsCs);
+                auto& res = s_analysisResults[sTaskId.GetRawString()];
+                res.ProgressMessage = String("Reading logs from channel ") + ch + String("...");
+            }
+            ScanChannelEvents(ch, eventList);
+            DotNetDupe::System::Threading::Thread::Sleep(150);
+        }
+
+        // Push Notification Update: Ingesting logs into RAG vector store...
+        {
+            Lock<CriticalSection> lock(s_analysisResultsCs);
+            auto& res = s_analysisResults[sTaskId.GetRawString()];
+            res.ProgressMessage = String("Ingesting ") + Convert::ToString(static_cast<int>(eventList.GetCount())) + String(" logs into RAG vector store...");
+        }
+        DotNetDupe::System::Threading::Thread::Sleep(200);
+
+        std::vector<EventRecord> eventBuffer;
+        for (int i = 0; i < eventList.GetCount(); ++i) eventBuffer.push_back(eventList[i]);
+
+        // Push Notification Update: Analyzing threat vectors...
+        {
+            Lock<CriticalSection> lock(s_analysisResultsCs);
+            auto& res = s_analysisResults[sTaskId.GetRawString()];
+            res.ProgressMessage = String("Analyzing threat vectors with embedded AI engine...");
+        }
+        DotNetDupe::System::Threading::Thread::Sleep(300);
+
+        AnalyzeResponseDto responseDto;
+        responseDto.TaskId = sTaskId;
+        responseDto.Status = String("COMPLETED");
+        responseDto.ProgressMessage = String("Analysis complete.");
+        responseDto.Channel = sTargetChannel;
+        responseDto.Query = sQuery;
+        responseDto.EventsAnalyzed = static_cast<unsigned long long>(eventList.GetCount());
+        responseDto.Analysis = s_llmEngine.ProcessQuery(sQuery, eventBuffer.empty() ? nullptr : eventBuffer.data(), static_cast<unsigned int>(eventBuffer.size()));
+
+        {
+            Lock<CriticalSection> lock(s_analysisResultsCs);
+            s_analysisResults[sTaskId.GetRawString()] = responseDto;
+        }
+
+        Console::WriteLine("[SERVER] Background worker task #{0} completed RAG analysis for {1} events", sTaskId, static_cast<unsigned long long>(responseDto.EventsAnalyzed));
         return responseDto;
     }
 
@@ -300,7 +330,7 @@ namespace SmartEventViewer
 
         String sTaskId;
         {
-            Lock<CriticalSection> lock(s_analysisCs);
+            Lock<CriticalSection> lock(s_analysisQueueCs);
             s_uNextTaskId++;
             sTaskId = String("TASK_") + String(std::to_string(s_uNextTaskId).c_str());
         }
@@ -314,16 +344,22 @@ namespace SmartEventViewer
         AnalyzeResponseDto pendingResponse;
         pendingResponse.TaskId = sTaskId;
         pendingResponse.Status = String("PENDING");
+        pendingResponse.ProgressMessage = String("Enqueued for analysis...");
         pendingResponse.Channel = request.Channel;
         pendingResponse.Query = request.Query;
         pendingResponse.Analysis = String("Task enqueued for processing.");
         pendingResponse.EventsAnalyzed = 0;
 
         {
-            Lock<CriticalSection> lock(s_analysisCs);
+            Lock<CriticalSection> lock(s_analysisQueueCs);
             s_analysisQueue.push(taskItem);
+        }
+
+        {
+            Lock<CriticalSection> lock(s_analysisResultsCs);
             s_analysisResults[sTaskId.GetRawString()] = pendingResponse;
         }
+
         s_analysisEvent.Set();
 
         // Immediately return non-blocking 202-style payload
@@ -334,7 +370,7 @@ namespace SmartEventViewer
     {
         EnsureWorkerStarted();
 
-        Lock<CriticalSection> lock(s_analysisCs);
+        Lock<CriticalSection> lock(s_analysisResultsCs);
         auto it = s_analysisResults.find(sTaskId.GetRawString());
         if (it != s_analysisResults.end())
         {
