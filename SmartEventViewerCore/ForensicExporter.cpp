@@ -1,5 +1,8 @@
 #include "pch.h"
-#include "../Include/Core/ForensicExporter.h"
+#include "Core/ForensicExporter.h"
+#include "System/Text/Json/JsonElement.h"
+
+using namespace DotNetDupe::System::Text::Json;
 
 namespace SmartEventViewer
 {
@@ -12,33 +15,42 @@ namespace SmartEventViewer
 
     String ForensicExporter::ExportToForensicPackageJson(const EventRecord* pEvents, unsigned int uCount, const String& sInvestigatorNotes)
     {
-        String sOutput = String("{\n") +
-            String("  \"evidencePackageHeader\": {\n") +
-            String("    \"title\": \"CRITICAL SIEM FORENSIC EVIDENCE REPORT\",\n") +
-            String("    \"authorityCompliance\": \"ISO/IEC 27037 & NIST SP 800-86 Forensic Standard\",\n") +
-            String("    \"timestampUtc\": \"2026-07-29T13:18:05Z\",\n") +
-            String("    \"chainOfCustodyHash\": \"") + GenerateDigitalSignatureSha256(sInvestigatorNotes) + String("\",\n") +
-            String("    \"investigatorNotes\": \"") + sInvestigatorNotes + String("\"\n") +
-            String("  },\n") +
-            String("  \"criticalEvents\": [\n");
+        JsonElement rootObj(JsonValueKind::Object);
 
-        for (unsigned int i = 0; i < uCount; i++)
+        // Build evidencePackageHeader JsonElement Object
+        JsonElement headerObj(JsonValueKind::Object);
+        headerObj.SetProperty(String("title"), JsonElement(String("CRITICAL SIEM FORENSIC EVIDENCE REPORT")));
+        headerObj.SetProperty(String("authorityCompliance"), JsonElement(String("ISO/IEC 27037 & NIST SP 800-86 Forensic Standard")));
+        headerObj.SetProperty(String("timestampUtc"), JsonElement(String("2026-07-29T13:18:05Z")));
+        headerObj.SetProperty(String("chainOfCustodyHash"), JsonElement(GenerateDigitalSignatureSha256(sInvestigatorNotes)));
+        headerObj.SetProperty(String("investigatorNotes"), JsonElement(sInvestigatorNotes));
+
+        rootObj.SetProperty(String("evidencePackageHeader"), headerObj);
+
+        // Build criticalEvents JsonElement Array
+        JsonElement eventsArray(JsonValueKind::Array);
+
+        if (pEvents != nullptr && uCount > 0)
         {
-            const EventRecord& rec = pEvents[i];
-            if (AnomalyEngine::EvaluateRisk(rec) == RiskLevel::Critical)
+            for (unsigned int i = 0; i < uCount; i++)
             {
-                sOutput = sOutput + String("    {\n") +
-                    String("      \"recordIndex\": ") + String::FromInt(rec.GetRecordIndex()) + String(",\n") +
-                    String("      \"eventId\": ") + String::FromInt(rec.GetEventId()) + String(",\n") +
-                    String("      \"providerName\": \"") + rec.GetProviderName() + String("\",\n") +
-                    String("      \"timeCreated\": \"") + rec.GetTimeCreated() + String("\",\n") +
-                    String("      \"rawXml\": \"") + rec.GetRawXml() + String("\"\n") +
-                    String("    }");
-                if (i < uCount - 1) sOutput = sOutput + String(",\n");
-                else sOutput = sOutput + String("\n");
+                const EventRecord& rec = pEvents[i];
+                if (AnomalyEngine::EvaluateRisk(rec) == RiskLevel::Critical)
+                {
+                    JsonElement itemObj(JsonValueKind::Object);
+                    itemObj.SetProperty(String("recordIndex"), JsonElement(static_cast<double>(i)));
+                    itemObj.SetProperty(String("eventId"), JsonElement(static_cast<double>(rec.GetEventId())));
+                    itemObj.SetProperty(String("providerName"), JsonElement(rec.GetProviderName()));
+                    itemObj.SetProperty(String("timeCreated"), JsonElement(rec.GetTimeCreated()));
+                    itemObj.SetProperty(String("rawXml"), JsonElement(rec.GetRawXml()));
+
+                    eventsArray.AddArrayElement(itemObj);
+                }
             }
         }
-        sOutput = sOutput + String("  ]\n}");
-        return sOutput;
+
+        rootObj.SetProperty(String("criticalEvents"), eventsArray);
+
+        return rootObj.ToString();
     }
 }

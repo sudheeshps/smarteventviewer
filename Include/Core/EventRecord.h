@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../Common.h"
+#include "ViewerCommon.h"
 #include "System/String.h"
 
 namespace SmartEventViewer

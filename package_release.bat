@@ -25,12 +25,14 @@ mkdir "%DIST_DIR%\bin"
 mkdir "%DIST_DIR%\UI"
 mkdir "%DIST_DIR%\models"
 
-echo [INFO] Copying Native Binaries & Libraries (including DotNetDupe and dependencies)...
-copy /y bin\x64\Release\*.dll "%DIST_DIR%\bin\"
-copy /y bin\x64\Release\*.lib "%DIST_DIR%\bin\"
+echo [INFO] Copying Native Binaries & Libraries (including llama.cpp and DotNetDupe)...
+copy /y bin\x64\Release\*.dll "%DIST_DIR%\bin\" 2>nul
+copy /y bin\x64\Release\*.lib "%DIST_DIR%\bin\" 2>nul
+copy /y bin\x64\Release\llama.dll "%DIST_DIR%\bin\" 2>nul
+copy /y bin\x64\Release\ggml.dll "%DIST_DIR%\bin\" 2>nul
 copy /y bin\x64\Release\SmartEventViewerServer.exe "%DIST_DIR%\bin\"
 copy /y bin\x64\Release\SmartEventViewerTests.exe "%DIST_DIR%\bin\"
-copy /y bin\x64\Release\SmartEventViewerIntegrationTests.exe "%DIST_DIR%\bin\"
+copy /y bin\x64\Release\SmartEventViewerIntegrationTests.exe "%DIST_DIR%\bin\" 2>nul
 
 echo [INFO] Building React + Vite SPA Frontend (SmartEventViewerApp)...
 cd SmartEventViewerApp
@@ -40,7 +42,7 @@ cd ..
 echo [INFO] Copying Front-end React + Vite Assets...
 xcopy /s /e /y SmartEventViewerApp\dist "%DIST_DIR%\UI\"
 
-echo [INFO] Copying Local GGUF LLM Model Files...
+echo [INFO] Copying Local GGUF LLM Model Files (models/Llama-3-8B-Instruct.Q4_K_M.gguf)...
 if exist models (
     xcopy /s /e /y models "%DIST_DIR%\models\"
 )

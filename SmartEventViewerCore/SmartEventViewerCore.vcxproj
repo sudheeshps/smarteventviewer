@@ -47,6 +47,9 @@
     <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
     <TargetName>SmartEventViewerCore</TargetName>
   </PropertyGroup>
+  <PropertyGroup Label="Vcpkg">
+    <VcpkgEnableManifest>true</VcpkgEnableManifest>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -57,7 +60,7 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(SolutionDir)Include;$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Include;$(ProjectDir);$(SolutionDir)packages\DotNetDupe.3.0.2\include;$(SolutionDir)external\llama.cpp\include;$(SolutionDir)external\llama.cpp\ggml\include;$(SolutionDir)external\llama.cpp\common;$(SolutionDir)external\llama.cpp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -79,7 +82,7 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(SolutionDir)DotNetDupe.3.0.2\include;$(SolutionDir)Include;$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Include;$(ProjectDir);$(SolutionDir)packages\DotNetDupe.3.0.2\include;$(SolutionDir)external\llama.cpp\include;$(SolutionDir)external\llama.cpp\ggml\include;$(SolutionDir)external\llama.cpp\common;$(SolutionDir)external\llama.cpp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -93,28 +96,39 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
-    <ClInclude Include="..\Include\Common.h" />
+    <ClInclude Include="..\Include\ViewerCommon.h" />
     <ClInclude Include="..\Include\Core\EventRecord.h" />
     <ClInclude Include="..\Include\Core\IEventLogReader.h" />
     <ClInclude Include="..\Include\Core\AnomalyEngine.h" />
     <ClInclude Include="..\Include\Platform\WinEventLogReader.h" />
-    <ClInclude Include="..\Include\Platform\SystemTelemetryProvider.h" />
     <ClInclude Include="..\Include\Platform\LinuxJournalReader.h" />
+    <ClInclude Include="..\Include\Ai\ILlamaModelProvider.h" />
     <ClInclude Include="..\Include\Ai\LocalLlmEngine.h" />
     <ClInclude Include="..\Include\Ai\RagVectorStore.h" />
+    <ClInclude Include="SystemTelemetryProvider.h" />
+    <ClInclude Include="EventsController.h" />
+    <ClInclude Include="TelemetryController.h" />
+    <ClInclude Include="LlmAnalysisController.h" />
+    <ClInclude Include="DiagnosticsController.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
+      <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">pch.h</PrecompiledHeaderFile>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
+      <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Release|x64'">pch.h</PrecompiledHeaderFile>
     </ClCompile>
     <ClCompile Include="EventRecord.cpp" />
     <ClCompile Include="AnomalyEngine.cpp" />
     <ClCompile Include="WinEventLogReader.cpp" />
-    <ClCompile Include="SystemTelemetryProvider.cpp" />
     <ClCompile Include="LinuxJournalReader.cpp" />
     <ClCompile Include="LocalLlmEngine.cpp" />
     <ClCompile Include="RagVectorStore.cpp" />
+    <ClCompile Include="SystemTelemetryProvider.cpp" />
+    <ClCompile Include="EventsController.cpp" />
+    <ClCompile Include="TelemetryController.cpp" />
+    <ClCompile Include="LlmAnalysisController.cpp" />
+    <ClCompile Include="DiagnosticsController.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

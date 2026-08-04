@@ -1,0 +1,7 @@
+{
+  "name": "smarteventviewer",
+  "version-string": "1.0.0",
+  "dependencies": [
+    "llama-cpp"
+  ]
+}

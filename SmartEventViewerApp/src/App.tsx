@@ -3,10 +3,11 @@ import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
 import { EventsExplorer } from './components/EventsExplorer';
 import { RiskCenter } from './components/RiskCenter';
+import { ServerLogsViewer } from './components/ServerLogsViewer';
 import { fetchApiChannels, fetchApiAnalyze, fetchApiAnalyzeStatus } from './apiClient';
 
 export function App() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'events' | 'riskcenter'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'events' | 'riskcenter' | 'serverlogs'>('dashboard');
   const [currentChannel, setCurrentChannel] = useState<string>('Security');
   const [sidebarWidth, setSidebarWidth] = useState<number>(300);
   const [isResizing, setIsResizing] = useState<boolean>(false);
@@ -159,6 +160,9 @@ export function App() {
               setActiveTab('events');
             }}
           />
+        )}
+        {activeTab === 'serverlogs' && (
+          <ServerLogsViewer />
         )}
 
         {/* Floating Chat Drawer Toggle Button when collapsed or hidden */}

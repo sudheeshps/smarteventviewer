@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../Common.h"
+#include "ViewerCommon.h"
 #include "Core/EventRecord.h"
 #include "System/String.h"
 #include "System/Collections/Generic/List.h"

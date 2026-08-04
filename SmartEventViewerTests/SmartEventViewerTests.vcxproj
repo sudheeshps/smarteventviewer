@@ -53,13 +53,13 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(SolutionDir)Include;$(SolutionDir)SmartEventViewer;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Include;$(SolutionDir)SmartEventViewerServer;$(SolutionDir)SmartEventViewerCore;$(SolutionDir)packages\DotNetDupe.3.0.2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(SolutionDir)DotNetDupe.3.0.2\runtimes\win-x64\native;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>DotNetDupe.lib;$(OutDir)SmartEventViewer.lib;wevtapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>DotNetDupe.lib;$(OutDir)SmartEventViewerCore.lib;wevtapi.lib;wtsapi32.lib;iphlpapi.lib;psapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -72,7 +72,7 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(SolutionDir)DotNetDupe.3.0.2\include;$(SolutionDir)Include;$(SolutionDir)SmartEventViewer;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Include;$(SolutionDir)SmartEventViewerServer;$(SolutionDir)SmartEventViewerCore;$(SolutionDir)packages\DotNetDupe.3.0.2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -80,13 +80,13 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(SolutionDir)DotNetDupe.3.0.2\runtimes\win-x64\native;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>DotNetDupe.lib;$(OutDir)SmartEventViewer.lib;wevtapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>DotNetDupe.lib;$(OutDir)SmartEventViewerCore.lib;wevtapi.lib;wtsapi32.lib;iphlpapi.lib;psapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="EventRecordTests.cpp" />
     <ClCompile Include="IntegrationTests.cpp" />
-    <ClCompile Include="..\SmartEventViewerServer\EventsController.cpp" />
+    <ClCompile Include="..\SmartEventViewerServer\SystemTelemetryProvider.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\SmartEventViewerCore\SmartEventViewerCore.vcxproj">
@@ -95,6 +95,9 @@
   </ItemGroup>
   <PropertyGroup>
     <gtest_force_shared_crt>true</gtest_force_shared_crt>
+  </PropertyGroup>
+  <PropertyGroup Label="Vcpkg">
+    <VcpkgEnableManifest>true</VcpkgEnableManifest>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.googletest.v140.windesktop.msvcstl.dyn.rt-dyn" Version="1.8.1.7" />

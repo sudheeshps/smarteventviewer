@@ -47,6 +47,8 @@ After building, execute unit tests via the test runner:
   - **Private Members**: Prefixed with `m_` followed by type prefix (e.g., `m_nItems`, `m_hHandle`).
   - **Static Fields**: Prefixed with `s_` (e.g., `s_defaultInstance`).
 - **Headers**: Use `#pragma once` and include files relative to `Include/`.
+- **Unit Test Naming**: Unit test names must strictly follow the `GivenWhenThen` naming convention format as established in DotNetDupe (e.g., `TEST(EventRecordTest, GivenValidRecord_WhenGetLevelCalled_ThenReturnsCorrectLevel)`).
+- **Test Coverage Rules**: Every feature or component must include unit tests covering positive scenarios (happy path), negative scenarios (invalid inputs, exception throwing), and edge cases (empty strings, zero bounds, null pointers, boundary limits).
 
 ### Code Patterns & Logical Line Constraints
 - **DotNetDupe Framework First**: **Use DotNetDupe data structures and classes exclusively (e.g., `DotNetDupe::System::String`, `Path`, `Collections::Generic::List`, `Thread`, `Task`) for internal logic and implementation.** Refrain from using STL types (`std::string`, `std::vector`, `std::map`) unless a feature is genuinely missing in `DotNetDupe`. If an STL type or algorithm must be used due to a missing `DotNetDupe` feature, **explicitly report the missing feature to the user**.

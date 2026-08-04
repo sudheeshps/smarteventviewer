@@ -14,7 +14,7 @@ using File = DotNetDupe::System::IO::File;
 using namespace DotNetDupe::System::Threading;
 using namespace DotNetDupe::System::Diagnostics;
 
-void Test_RealWebServer_And_ReactClient_Integration()
+void GivenDeployedServerAndReactClient_WhenLaunched_ThenValidatesEndToEndIntegration()
 {
     Console::WriteLine("========================================================================");
     Console::WriteLine("  SmartEventViewer Real WebServer & React Client Integration Test Suite");

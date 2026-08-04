@@ -1,8 +1,10 @@
 #include "pch.h"
-#include "../Include/Platform/SystemTelemetryProvider.h"
+#include "SystemTelemetryProvider.h"
+#include "TelemetryController.h"
 #include "System/Console.h"
 #include "System/Diagnostics/SystemMetrics.h"
 #include "System/Diagnostics/ActiveUserSession.h"
+#include "System/Diagnostics/TerminalSession.h"
 #include "System/Security/Principal/UserPrincipal.h"
 
 namespace SmartEventViewer
@@ -10,10 +12,12 @@ namespace SmartEventViewer
     using Console = DotNetDupe::System::Console;
     using SystemMetrics = DotNetDupe::System::Diagnostics::SystemMetrics;
     using ActiveUserSession = DotNetDupe::System::Diagnostics::ActiveUserSession;
+    using TerminalSession = DotNetDupe::System::Diagnostics::TerminalSession;
+    using RdpSessionState = DotNetDupe::System::Diagnostics::RdpSessionState;
     using UserPrincipal = DotNetDupe::System::Security::Principal::UserPrincipal;
     using UserClass = DotNetDupe::System::Security::Principal::UserClass;
 
-    static void CalculateDiskRates(const DotNetDupe::System::Diagnostics::RealTimeSystemInfo& realInfo, double& outReadMb, double& outWriteMb)
+    void SystemTelemetryProvider::CalculateDiskRates(const DotNetDupe::System::Diagnostics::RealTimeSystemInfo& realInfo, double& outReadMb, double& outWriteMb)
     {
         static uint64_t s_lastDiskReadBytes = 0;
         static uint64_t s_lastDiskWriteBytes = 0;
@@ -36,23 +40,23 @@ namespace SmartEventViewer
         outWriteMb = static_cast<double>(deltaWrite) / (1024.0 * 1024.0);
     }
 
-    static String FormatCommandLine(const String& sPath, const String& sCmd)
+    String SystemTelemetryProvider::FormatCommandLine(const String& sPath, const String& sCmd)
     {
-        if (sCmd.IsEmpty()) return String("Access Denied (System Protected)");
+        if (sCmd.IsEmpty()) return "Access Denied (System Protected)";
 
         String sResult = sCmd;
         if (!sPath.IsEmpty() && sResult.StartsWith(sPath))
         {
             sResult = sResult.Substring(static_cast<int>(sPath.GetLength()));
         }
-        else if (sResult.StartsWith(String("\"")))
+        else if (sResult.StartsWith("\""))
         {
-            int nextQuote = sResult.IndexOf(String("\""), 1);
+            int nextQuote = sResult.IndexOf("\"", 1);
             if (nextQuote != -1) sResult = sResult.Substring(nextQuote + 1);
         }
         else
         {
-            int spaceIdx = sResult.IndexOf(String(" "));
+            int spaceIdx = sResult.IndexOf(" ");
             if (spaceIdx != -1) sResult = sResult.Substring(spaceIdx);
         }
 
@@ -60,7 +64,7 @@ namespace SmartEventViewer
         return sResult.IsEmpty() ? String("-") : sResult;
     }
 
-    static ProcessResourceDto MapProcessResourceDto(const DotNetDupe::System::Diagnostics::ProcessResourceInfo& proc)
+    ProcessResourceDto SystemTelemetryProvider::MapProcessResourceDto(const DotNetDupe::System::Diagnostics::ProcessResourceInfo& proc)
     {
         ProcessResourceDto procDto;
         procDto.ProcessId = static_cast<unsigned long>(proc.iProcessId);
@@ -76,15 +80,29 @@ namespace SmartEventViewer
         long long rawRamBytes = proc.lMemoryUsageBytes;
         procDto.MemoryUsageMB = static_cast<unsigned long long>(rawRamBytes > 0 ? (rawRamBytes / (1024 * 1024)) : 0);
 
-        double readMb = static_cast<double>(proc.lDiskReadBytes > 0 ? (proc.lDiskReadBytes / (1024.0 * 1024.0)) : 0.0);
-        double writeMb = static_cast<double>(proc.lDiskWriteBytes > 0 ? (proc.lDiskWriteBytes / (1024.0 * 1024.0)) : 0.0);
-        procDto.DiskReadKBps = readMb;
-        procDto.DiskWriteKBps = writeMb;
-        procDto.DiskIoKBps = readMb + writeMb;
+        procDto.NetworkReadBytes = static_cast<unsigned long long>(proc.lNetworkReadBytes > 0 ? proc.lNetworkReadBytes : 0);
+        procDto.NetworkWriteBytes = static_cast<unsigned long long>(proc.lNetworkWriteBytes > 0 ? proc.lNetworkWriteBytes : 0);
+
+        if (proc.lstOpenPorts.GetCount() > 0)
+        {
+            String portsStr = "";
+            for (int i = 0; i < proc.lstOpenPorts.GetCount(); ++i)
+            {
+                if (i > 0) portsStr = portsStr + ", ";
+                portsStr = portsStr + String::FromInt(proc.lstOpenPorts[i]);
+            }
+            procDto.OpenPorts = portsStr;
+        }
+        else
+        {
+            procDto.OpenPorts = String("-");
+        }
+
+        procDto.ConnectionEstablished = proc.bHasEstablishedInboundConnection;
         return procDto;
     }
 
-    static void PopulateUserSessions(SystemMetricsResponseDto& metrics)
+    void SystemTelemetryProvider::PopulateUserSessions(SystemMetricsResponseDto& metrics)
     {
         auto activeSessions = ActiveUserSession::GetActiveSessions();
         for (int i = 0; i < activeSessions.GetCount(); ++i)
@@ -120,15 +138,44 @@ namespace SmartEventViewer
             dto.Username = u.sUsername;
             dto.Domain = u.sDomain;
             dto.SidOrUid = u.sSidOrUid;
-            if (u.eUserClass == UserClass::Admin) dto.UserClass = String("Admin");
-            else if (u.eUserClass == UserClass::System) dto.UserClass = String("System");
-            else if (u.eUserClass == UserClass::Guest) dto.UserClass = String("Guest");
-            else dto.UserClass = String("Normal");
+            if (u.eUserClass == UserClass::Admin) dto.UserClass = "Admin";
+            else if (u.eUserClass == UserClass::System) dto.UserClass = "System";
+            else if (u.eUserClass == UserClass::Guest) dto.UserClass = "Guest";
+            else dto.UserClass = "Normal";
             dto.IsDisabled = u.bIsDisabled;
             dto.IsAccountLocked = u.bIsAccountLocked;
             dto.Groups = u.lstGroups;
             dto.Permissions = u.lstPermissions;
             metrics.SystemUsers.Add(dto);
+        }
+
+        auto rdpList = TerminalSession::GetSessions();
+        for (int i = 0; i < rdpList.GetCount(); ++i)
+        {
+            const auto& r = rdpList[i];
+            RdpSessionDto dto;
+            dto.SessionId = r.uSessionId;
+            dto.SessionName = r.sSessionName;
+            dto.UserName = r.sUserName;
+            dto.DomainName = r.sDomainName;
+            dto.ClientName = r.sClientName;
+            dto.ClientIpAddress = r.sClientIpAddress;
+            dto.IsRdpSession = r.bIsRdpSession;
+
+            switch (r.eState)
+            {
+                case RdpSessionState::Active: dto.State = "Active"; break;
+                case RdpSessionState::Connected: dto.State = "Connected"; break;
+                case RdpSessionState::Disconnected: dto.State = "Disconnected"; break;
+                case RdpSessionState::Idle: dto.State = "Idle"; break;
+                case RdpSessionState::Listen: dto.State = "Listen"; break;
+                case RdpSessionState::Shadow: dto.State = "Shadow"; break;
+                case RdpSessionState::Reset: dto.State = "Reset"; break;
+                case RdpSessionState::Down: dto.State = "Down"; break;
+                case RdpSessionState::Init: dto.State = "Init"; break;
+                default: dto.State = "Unknown"; break;
+            }
+            metrics.RdpSessions.Add(dto);
         }
     }
 

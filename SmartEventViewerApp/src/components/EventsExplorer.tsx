@@ -127,8 +127,23 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onO
         return;
       }
 
-      // 2. Fetch analysis status directly (or fall back to current status endpoint payload)
-      const statusRes = await fetchApiAnalyzeStatus(taskId, baseUrl);
+      // 2. Poll status endpoint to stream real-time push notification updates
+      let isCompleted = false;
+      let statusRes = enqueueRes;
+
+      while (!isCompleted) {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        statusRes = await fetchApiAnalyzeStatus(taskId, baseUrl);
+        
+        if (statusRes.progressMessage && onOpenChat) {
+          onOpenChat(queryText, `⏳ ${statusRes.progressMessage}`);
+        }
+
+        if (statusRes.status === 'COMPLETED' || statusRes.status === 'FAILED' || (statusRes.analysis && statusRes.analysis.trim().length > 0)) {
+          isCompleted = true;
+        }
+      }
+
       let finalResult = (statusRes.analysis && statusRes.analysis.trim().length > 0) ? statusRes.analysis : `Analyzed ${statusRes.eventsAnalyzed || 0} event records for '${channelName}'.`;
 
       setAiResponse(finalResult);
@@ -329,11 +344,11 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onO
                       borderRadius: '3px',
                       fontSize: '0.62rem',
                       fontWeight: 700,
-                      background: evt.risk === 'Critical' ? 'rgba(248,113,113,0.25)' : 'rgba(74,222,128,0.2)',
-                      color: evt.risk === 'Critical' ? '#f87171' : '#4ade80',
+                      background: (evt.level === 'Critical' || evt.risk === 'Critical') ? 'rgba(248,113,113,0.25)' : ((evt.level === 'Error' || evt.risk === 'High') ? 'rgba(248,113,113,0.15)' : ((evt.level === 'Warning' || evt.risk === 'Medium') ? 'rgba(251,191,36,0.2)' : 'rgba(74,222,128,0.2)')),
+                      color: (evt.level === 'Critical' || evt.risk === 'Critical' || evt.level === 'Error' || evt.risk === 'High') ? '#f87171' : ((evt.level === 'Warning' || evt.risk === 'Medium') ? '#fbbf24' : '#4ade80'),
                     }}
                   >
-                    {evt.risk}
+                    {evt.level !== 'Information' ? evt.level : evt.risk}
                   </span>
                 </td>
                 <td style={{ padding: '5px 10px' }}>{evt.provider}</td>

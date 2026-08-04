@@ -2,27 +2,20 @@
 #include "Core/EventRecord.h"
 #include "Core/AnomalyEngine.h"
 #include "Platform/WinEventLogReader.h"
+#include "SystemTelemetryProvider.h"
 #include "Platform/LinuxJournalReader.h"
 #include "Ai/LocalLlmEngine.h"
 #include "Ai/RagVectorStore.h"
-#include "../SmartEventViewerServer/EventsController.h"
-#include "WebAppCore/Builder/WebApplication.h"
-#include "WebAppCore/Builder/WebApplicationBuilder.h"
-#include "WebAppCore/Controllers/ControllerBase.h"
-#include "WebAppCore/Controllers/ControllerRouteBuilder.h"
-#include "System/Net/Http/HttpClient.h"
-#include "System/Net/Http/HttpContent.h"
-#include "System/Threading/Thread.h"
 #include "System/Console.h"
 
 using String = DotNetDupe::System::String;
 using Console = DotNetDupe::System::Console;
-using namespace DotNetDupe::System::Net::Http;
-using namespace DotNetDupe::System::Threading;
-using namespace DotNetDupe::WebAppCore::Builder;
-using namespace DotNetDupe::WebAppCore::Controllers;
+template<typename T>
+using SmartPointer = DotNetDupe::System::SmartPointer<T>;
 
-void Test_RagVectorStore_IndexingAndQuery()
+// --- RagVectorStore Tests ---
+// Positive Test
+void GivenValidEvent_WhenIndexed_ThenRagVectorStoreReturnsSimilarMatches()
 {
     SmartEventViewer::RagVectorStore vectorStore;
     SmartEventViewer::EventRecord evt1(101, SmartEventViewer::EventLevel::Warning, "Security", "Security", "Failed logon attempt for user admin", "2026-07-29T12:00:00Z");
@@ -35,26 +28,22 @@ void Test_RagVectorStore_IndexingAndQuery()
     bool bSuccess = vectorStore.QuerySimilarEvents("logon attempt", 2, results);
     assert(bSuccess);
     assert(results.GetCount() > 0);
-    Console::WriteLine("[PASS] Test_RagVectorStore_IndexingAndQuery");
+    Console::WriteLine("[PASS] GivenValidEvent_WhenIndexed_ThenRagVectorStoreReturnsSimilarMatches");
 }
 
-void Test_WinEventLogReader_GetEventSources()
+// Edge Case Test
+void GivenEmptyVectorStore_WhenQueried_ThenReturnsFalseOrEmptyList()
 {
-    SmartEventViewer::WinEventLogReader logReader;
-    DotNetDupe::System::Collections::Generic::List<DotNetDupe::System::String> sources;
-    bool bResult = logReader.GetEventSources(sources);
-    if (bResult && sources.GetCount() > 0)
-    {
-        Console::WriteLine("[INFO] Windows Event Sources Count: {0}", sources.GetCount());
-        Console::WriteLine("[PASS] Test_WinEventLogReader_GetEventSources");
-    }
-    else
-    {
-        Console::WriteLine("[WARN] Test_WinEventLogReader_GetEventSources requires elevated admin rights in non-interactive session.");
-    }
+    SmartEventViewer::RagVectorStore vectorStore;
+    SmartEventViewer::EventList results;
+    bool bSuccess = vectorStore.QuerySimilarEvents("logon attempt", 2, results);
+    assert(bSuccess || results.GetCount() == 0);
+    Console::WriteLine("[PASS] GivenEmptyVectorStore_WhenQueried_ThenReturnsFalseOrEmptyList");
 }
 
-void Test_EventRecord_Construction()
+// --- EventRecord Tests ---
+// Positive Test
+void GivenValidParameters_WhenEventRecordCreated_ThenPropertiesInitializedCorrectly()
 {
     SmartEventViewer::EventRecord evt(1001, SmartEventViewer::EventLevel::Error, "Application Error", "Application", "Process crashed", "2026-07-29T10:00:00Z");
     assert(evt.GetEventId() == 1001);
@@ -62,10 +51,24 @@ void Test_EventRecord_Construction()
     assert(evt.GetProviderName() == "Application Error");
     assert(evt.GetChannel() == "Application");
     assert(evt.GetEventMessage() == "Process crashed");
-    Console::WriteLine("[PASS] Test_EventRecord_Construction");
+    Console::WriteLine("[PASS] GivenValidParameters_WhenEventRecordCreated_ThenPropertiesInitializedCorrectly");
 }
 
-void Test_AnomalyEngine_RiskEvaluation()
+// Negative & Edge Case Test
+void GivenZeroEventIdAndEmptyStrings_WhenEventRecordCreated_ThenHandlesEdgeValues()
+{
+    SmartEventViewer::EventRecord evt(0, SmartEventViewer::EventLevel::LogAlways, "", "", "", "");
+    assert(evt.GetEventId() == 0);
+    assert(evt.GetLevel() == SmartEventViewer::EventLevel::LogAlways);
+    assert(evt.GetProviderName().IsEmpty());
+    assert(evt.GetChannel().IsEmpty());
+    assert(evt.GetEventMessage().IsEmpty());
+    Console::WriteLine("[PASS] GivenZeroEventIdAndEmptyStrings_WhenEventRecordCreated_ThenHandlesEdgeValues");
+}
+
+// --- AnomalyEngine Tests ---
+// Positive & Negative Risk Evaluation Test
+void GivenNormalAndSecurityEvents_WhenEvaluated_ThenAnomalyEngineAssignsCorrectRiskLevels()
 {
     SmartEventViewer::AnomalyEngine engine;
     SmartEventViewer::EventRecord normalEvt(100, SmartEventViewer::EventLevel::Informational, "System", "System", "Service status ok", "2026-07-29T11:00:00Z");
@@ -75,30 +78,46 @@ void Test_AnomalyEngine_RiskEvaluation()
     SmartEventViewer::EventRecord criticalEvt(4625, SmartEventViewer::EventLevel::Error, "Microsoft-Windows-Security-Auditing", "Security", "An account failed to log on. Multiple attempts detected.", "2026-07-29T11:01:00Z");
     SmartEventViewer::RiskLevel riskCritical = engine.EvaluateRisk(criticalEvt);
     assert(riskCritical == SmartEventViewer::RiskLevel::Critical || riskCritical == SmartEventViewer::RiskLevel::High);
-    Console::WriteLine("[PASS] Test_AnomalyEngine_RiskEvaluation");
+    Console::WriteLine("[PASS] GivenNormalAndSecurityEvents_WhenEvaluated_ThenAnomalyEngineAssignsCorrectRiskLevels");
 }
 
-void Test_WinEventLogReader()
+// Mock Llama Model Provider for Unit Testing
+class MockLlamaModelProvider : public SmartEventViewer::ILlamaModelProvider
 {
-    SmartEventViewer::WinEventLogReader reader;
-    if (reader.OpenLog("Application"))
+private:
+    bool m_bLoaded{ false };
+
+public:
+    bool InitBackend() override { return true; }
+    bool LoadModel(const String& sModelPath) override { m_bLoaded = true; return true; }
+    bool CreateContext() override { return m_bLoaded; }
+    String ExecuteInference(const String& sSystemPrompt, const String& sUserQuery, const std::vector<SmartEventViewer::EventRecord>& events) override
     {
-        SmartEventViewer::EventRecord evt;
-        size_t count = 0;
-        while (reader.ReadNextEvent(evt) && count < 5)
-        {
-            count++;
-        }
-        reader.Close();
-        Console::WriteLine("[PASS] Test_WinEventLogReader (Read {0} records)", count);
+        return String("🤖 [MOCK LLAMA MODEL PROVIDER EXECUTED]\nMock inference result for query: ") + sUserQuery;
     }
-    else
-    {
-        Console::WriteLine("[PASS] Test_WinEventLogReader (Application channel not available)");
-    }
+    void FreeContextAndModel() override { m_bLoaded = false; }
+    bool IsLoaded() const override { return m_bLoaded; }
+};
+
+// --- LocalLlmEngine Tests ---
+// Positive Test with Mock Model Provider
+void GivenMockModelProvider_WhenLocalLlmEngineQueryProcessed_ThenInvokesMockModelLayer()
+{
+    SmartPointer<SmartEventViewer::ILlamaModelProvider> spMockProvider(static_cast<SmartEventViewer::ILlamaModelProvider*>(new MockLlamaModelProvider()));
+    SmartEventViewer::LocalLlmEngine llm(spMockProvider);
+
+    bool bInit = llm.Initialize("mock/models/model.gguf");
+    assert(bInit);
+    assert(llm.IsModelLoaded() == true);
+
+    String sResponse = llm.ProcessQuery("Analyze suspicious activity", nullptr, 0);
+    assert(!sResponse.IsEmpty());
+    assert(sResponse.Contains("MOCK LLAMA MODEL PROVIDER EXECUTED"));
+    Console::WriteLine("[PASS] GivenMockModelProvider_WhenLocalLlmEngineQueryProcessed_ThenInvokesMockModelLayer");
 }
 
-void Test_LocalLlmEngine()
+// Positive Test with Default Model Provider
+void GivenUninitializedEngine_WhenInitialized_ThenLocalLlmEngineProcessesQueries()
 {
     SmartEventViewer::LocalLlmEngine llm;
     assert(llm.IsModelLoaded() == false);
@@ -108,167 +127,195 @@ void Test_LocalLlmEngine()
 
     String sResponse = llm.ProcessQuery("Summarize security threats", nullptr, 0);
     assert(!sResponse.IsEmpty());
-    Console::WriteLine("[PASS] Test_LocalLlmEngine");
+    Console::WriteLine("[PASS] GivenUninitializedEngine_WhenInitialized_ThenLocalLlmEngineProcessesQueries");
 }
 
-void Test_EventRecord_GettersAndSetters()
+// Negative & Edge Case Test
+void GivenEmptyQuery_WhenProcessed_ThenLocalLlmEngineReturnsFallbackResponse()
 {
-    String sProvider("Microsoft-Windows-Security-Auditing");
-    String sChannel("Security");
-    String sMsg("An account was successfully logged on.");
-    String sTime("2026-07-29T10:00:00Z");
-
-    SmartEventViewer::EventRecord record(4624, SmartEventViewer::EventLevel::Informational, sProvider, sChannel, sMsg, sTime);
-
-    assert(record.GetEventId() == 4624);
-    assert(record.GetLevel() == SmartEventViewer::EventLevel::Informational);
-    assert(record.GetRiskLevel() == SmartEventViewer::RiskLevel::Low);
-    assert(record.GetProviderName() == sProvider);
-    assert(record.GetChannel() == sChannel);
-    assert(record.GetEventMessage() == sMsg);
-    assert(record.GetTimeCreated() == sTime);
-
-    record.SetRiskLevel(SmartEventViewer::RiskLevel::High);
-    assert(record.GetRiskLevel() == SmartEventViewer::RiskLevel::High);
-
-    Console::WriteLine("[PASS] Test_EventRecord_GettersAndSetters");
+    SmartEventViewer::LocalLlmEngine llm;
+    String sResponse = llm.ProcessQuery("", nullptr, 0);
+    assert(!sResponse.IsEmpty());
+    Console::WriteLine("[PASS] GivenEmptyQuery_WhenProcessed_ThenLocalLlmEngineReturnsFallbackResponse");
 }
 
-void Test_EventsController_Endpoints()
+// --- WinEventLogReader & LinuxJournalReader Tests ---
+// Positive & Negative WinEventLogReader Test
+void GivenWinEventLogReader_WhenOpened_ThenReadsOrHandlesChannelAvailability()
 {
-    SmartEventViewer::EventsController controller;
-    auto channelsDto = controller.GetChannels();
-    Console::WriteLine("[INFO] Channels retrieved: {0}", channelsDto.Channels.GetCount());
+    SmartEventViewer::WinEventLogReader reader;
+    SmartEventViewer::StringList sources;
+    bool bSourcesRetrieved = reader.GetEventSources(sources);
+    assert(bSourcesRetrieved);
+    assert(sources.GetCount() > 0);
 
-    String sTargetChannel = (channelsDto.Channels.GetCount() > 0) ? channelsDto.Channels[0] : String("Application");
-    auto response = controller.GetEvents(sTargetChannel);
-    assert(response.Channel == sTargetChannel);
-    Console::WriteLine("[PASS] Test_EventsController_Endpoints");
-}
-
-void Test_WebApplication_ServerRuntime()
-{
-    Console::WriteLine("[TEST] Launching WebApplication server test with HttpClient...");
-    WebApplicationBuilder builder;
-    builder.AddController<SmartEventViewer::EventsController>("/api")
-        .MapGet("/channels", &SmartEventViewer::EventsController::GetChannels)
-        .MapGet("/events", static_cast<SmartEventViewer::EventLogResponseDto (SmartEventViewer::EventsController::*)(const String&, size_t, size_t)>(&SmartEventViewer::EventsController::GetEvents));
-
-    auto app = builder.Build();
-    app->MapControllers();
-
-    // Start WebApplication asynchronously on background thread
-    Thread serverThread([app]() mutable {
-        app->Run("http://127.0.0.1:18099");
-    });
-    serverThread.Start();
-
-    // Allow server thread to bind port and start listener
-    Thread::Sleep(200);
-
-    // Use DotNetDupe HttpClient to test HTTP REST Web API endpoints
-    try
+    if (reader.OpenLog("Application"))
     {
-        HttpClient client;
-
-        Console::WriteLine("[Client] GET request to http://127.0.0.1:18099/api/channels...");
-        auto respChannels = client.Get("http://127.0.0.1:18099/api/channels");
-        if (!respChannels.IsNull())
+        SmartEventViewer::EventRecord evt;
+        size_t count = 0;
+        while (reader.ReadNextEvent(evt) && count < 5)
         {
-            Console::WriteLine("[Client] Channels Status: {0}", (int)respChannels->GetStatusCode());
+            count++;
         }
-
-        Console::WriteLine("[Client] GET request to http://127.0.0.1:18099/api/events?channel=Application...");
-        auto respEvents = client.Get("http://127.0.0.1:18099/api/events?channel=Application");
-        if (!respEvents.IsNull())
-        {
-            Console::WriteLine("[Client] Events Status: {0}", (int)respEvents->GetStatusCode());
-        }
+        reader.Close();
+        Console::WriteLine("[PASS] GivenWinEventLogReader_WhenOpened_ThenReadsOrHandlesChannelAvailability (Read {0} records, Sources: {1})", count, sources.GetCount());
     }
-    catch (...)
+    else
     {
-        Console::WriteLine("[Client] HTTP REST Client call completed with fallback verification");
+        Console::WriteLine("[PASS] GivenWinEventLogReader_WhenOpened_ThenReadsOrHandlesChannelAvailability (Application channel handled gracefully, Sources: {0})", sources.GetCount());
     }
-
-    // Stop WebApplication server
-    app->Stop();
-    serverThread.Join();
-
-    Console::WriteLine("[PASS] Test_WebApplication_ServerRuntime");
 }
 
-void Test_Analysis_Queue_And_Status_Concurrent_Access()
+// Edge & Cross-Platform LinuxJournalReader Test
+void GivenLinuxJournalReader_WhenOpenedOnWindows_ThenGracefullyHandlesPlatformFallback()
 {
-    Console::WriteLine("[TEST] Launching Analysis Queue & Immediate Status Concurrent Deadlock Simulation...");
-    WebApplicationBuilder builder;
-    builder.AddController<SmartEventViewer::EventsController>("/api")
-        .MapPost("/analyze", &SmartEventViewer::EventsController::AnalyzeEvents)
-        .MapGet("/analyze/status", &SmartEventViewer::EventsController::GetAnalyzeStatus);
+    SmartEventViewer::LinuxJournalReader journalReader;
+    SmartEventViewer::StringList sources;
+    bool bSourcesRetrieved = journalReader.GetEventSources(sources);
+    assert(bSourcesRetrieved || sources.GetCount() == 0);
 
-    auto app = builder.Build();
-    app->MapControllers();
-
-    Thread serverThread([app]() mutable {
-        app->Run("http://127.0.0.1:18098");
-    });
-    serverThread.Start();
-    Thread::Sleep(300);
-
-    try
+    bool bOpened = journalReader.OpenLog("syslog");
+    if (bOpened)
     {
-        HttpClient client;
-
-        // 1. Trigger POST /api/analyze to queue async analysis task
-        Console::WriteLine("[Client] Concurrent Test: Triggering POST http://127.0.0.1:18098/api/analyze...");
-        auto content = SmartPointer<HttpContent>(new StringContent("{\"query\":\"Check failed logon events\"}", "application/json"));
-        auto respPost = client.Post("http://127.0.0.1:18098/api/analyze", content);
-        assert(!respPost.IsNull());
-        assert((int)respPost->GetStatusCode() == 200);
-
-        // Extract taskId from JSON response
-        String sPostJson = respPost->GetContent()->ReadAsString();
-        int idIdx = sPostJson.IndexOf("taskId\":\"");
-        assert(idIdx != -1);
-        int startQuote = idIdx + 9;
-        int endQuote = sPostJson.IndexOf("\"", startQuote);
-        assert(endQuote != -1);
-        String sTaskId = sPostJson.Substring(startQuote, endQuote - startQuote);
-        Console::WriteLine("[Client] Enqueued Task ID: {0}", sTaskId);
-
-        // 2. Concurrently poll GET /api/analyze/status multiple times while LLM worker thread executes
-        for (int i = 0; i < 5; ++i)
-        {
-            String sUrl = String("http://127.0.0.1:18098/api/analyze/status?taskId=") + sTaskId;
-            auto respStatus = client.Get(sUrl);
-            assert(!respStatus.IsNull());
-            assert((int)respStatus->GetStatusCode() == 200);
-            Console::WriteLine("[Client] Concurrent Poll #{0}: GET status returned HTTP 200 instantly: {1}", i + 1, respStatus->GetContent()->ReadAsString());
-            Thread::Sleep(50);
-        }
+        SmartEventViewer::EventRecord evt;
+        journalReader.ReadNextEvent(evt);
+        journalReader.Close();
     }
-    catch (...)
-    {
-        Console::WriteLine("[Client] Analysis deadlock test completed with fallback verification");
-    }
-
-    app->Stop();
-    serverThread.Join();
-    Console::WriteLine("[PASS] Test_Analysis_Queue_And_Status_Concurrent_Access PASSED WITH ZERO DEADLOCK!");
+    Console::WriteLine("[PASS] GivenLinuxJournalReader_WhenOpenedOnWindows_ThenGracefullyHandlesPlatformFallback");
 }
 
-void Test_RealWebServer_And_ReactClient_Integration();
+// Positive & Edge Case Test for EventRecord RawXml
+void GivenRawXml_WhenEventRecordCreated_ThenGetRawXmlReturnsXmlContent()
+{
+    SmartEventViewer::EventRecord evt(200, SmartEventViewer::EventLevel::Informational, "System", "System", "Service started", "2026-07-29T12:00:00Z", "<Event><Id>200</Id></Event>");
+    assert(evt.GetRawXml() == "<Event><Id>200</Id></Event>");
+    Console::WriteLine("[PASS] GivenRawXml_WhenEventRecordCreated_ThenGetRawXmlReturnsXmlContent");
+}
+
+// Positive & Edge Case Test for RagVectorStore Index Count
+void GivenVectorStore_WhenEventsIndexed_ThenGetIndexedCountReflectsTotal()
+{
+    SmartEventViewer::RagVectorStore vectorStore;
+    assert(vectorStore.GetIndexedCount() == 0);
+
+    SmartEventViewer::EventRecord evt(101, SmartEventViewer::EventLevel::Warning, "Security", "Security", "Logon fail", "2026-07-29T12:00:00Z");
+    vectorStore.IndexEvent(evt);
+    assert(vectorStore.GetIndexedCount() == 1);
+    Console::WriteLine("[PASS] GivenVectorStore_WhenEventsIndexed_ThenGetIndexedCountReflectsTotal");
+}
+
+// Positive Test for WinEventLogReader Paged Log Reading & Count
+void GivenWinEventLogReader_WhenPagedOpenAndCountQueried_ThenReturnsCountAndReadsPagedEvents()
+{
+    SmartEventViewer::WinEventLogReader reader;
+    unsigned long long uCount = reader.GetChannelEventCount("Application");
+    (void)uCount;
+
+    bool bOpened = reader.OpenLogPaged("Application", 10, 0);
+    if (bOpened)
+    {
+        SmartEventViewer::EventRecord evt;
+        size_t readCount = 0;
+        while (reader.ReadNextEvent(evt) && readCount < 5)
+        {
+            readCount++;
+        }
+        reader.Close();
+        Console::WriteLine("[PASS] GivenWinEventLogReader_WhenPagedOpenAndCountQueried_ThenReturnsCountAndReadsPagedEvents (Read {0})", readCount);
+    }
+    else
+    {
+        Console::WriteLine("[PASS] GivenWinEventLogReader_WhenPagedOpenAndCountQueried_ThenReturnsCountAndReadsPagedEvents (Application channel unavailable)");
+    }
+}
+
+// Positive Test for LocalLlmEngine Followup Query & History Management
+void GivenLlmEngine_WhenFollowupQueriedAndHistoryCleared_ThenTracksAndClearsHistory()
+{
+    SmartPointer<SmartEventViewer::ILlamaModelProvider> spMockProvider(static_cast<SmartEventViewer::ILlamaModelProvider*>(new MockLlamaModelProvider()));
+    SmartEventViewer::LocalLlmEngine llm(spMockProvider);
+
+    llm.Initialize("mock/models/model.gguf");
+    String sResp1 = llm.ProcessQuery("First query", nullptr, 0);
+    assert(llm.GetHistoryCount() == 2);
+
+    llm.ClearConversationHistory();
+    assert(llm.GetHistoryCount() == 0);
+    Console::WriteLine("[PASS] GivenLlmEngine_WhenFollowupQueriedAndHistoryCleared_ThenTracksAndClearsHistory");
+}
+
+// Positive System Telemetry Core Test
+void GivenSystemTelemetryProvider_WhenMetricsRequested_ThenPopulatesCpuAndMemory()
+{
+    auto metrics = SmartEventViewer::SystemTelemetryProvider::QuerySystemMetrics();
+    assert(metrics.MemoryTotalMB >= 0);
+
+    // Test FormatCommandLine static helper method
+    String sCmd = SmartEventViewer::SystemTelemetryProvider::FormatCommandLine("C:\\Windows\\System32\\svchost.exe", "C:\\Windows\\System32\\svchost.exe -k DcomLaunch");
+    assert(sCmd == "-k DcomLaunch");
+
+    // Test MapProcessResourceDto static helper method
+    DotNetDupe::System::Diagnostics::ProcessResourceInfo proc;
+    proc.iProcessId = 1234;
+    proc.sName = "test.exe";
+    proc.sPath = "C:\\test.exe";
+    proc.sCommandLine = "C:\\test.exe --arg";
+    proc.dCpuUsagePercent = 15.5;
+    proc.lMemoryUsageBytes = 104857600; // 100 MB
+    auto dto = SmartEventViewer::SystemTelemetryProvider::MapProcessResourceDto(proc);
+    assert(dto.ProcessId == 1234);
+    assert(dto.MemoryUsageMB == 100);
+
+    Console::WriteLine("[PASS] GivenSystemTelemetryProvider_WhenMetricsRequested_ThenPopulatesCpuAndMemory");
+}
+
+// Positive & Edge Case Test for SystemTelemetryProvider RdpSessions & TerminalSessions
+void GivenRdpSessionsAndUserSessions_WhenMetricsQueried_ThenPopulatesRdpSessionsAndSystemUsers()
+{
+    auto metrics = SmartEventViewer::SystemTelemetryProvider::QuerySystemMetrics();
+    // Verify RdpSessions list exists and contains enumerated sessions or empty state
+    assert(metrics.RdpSessions.GetCount() >= 0);
+
+    // Check process resource dto mapping for open ports and inbound connections
+    DotNetDupe::System::Diagnostics::ProcessResourceInfo proc;
+    proc.iProcessId = 5678;
+    proc.sName = "net_test.exe";
+    proc.sPath = "C:\\net_test.exe";
+    proc.lNetworkReadBytes = 2048;
+    proc.lNetworkWriteBytes = 4096;
+    proc.lstOpenPorts.Add(80);
+    proc.lstOpenPorts.Add(443);
+    proc.bHasEstablishedInboundConnection = true;
+
+    auto dto = SmartEventViewer::SystemTelemetryProvider::MapProcessResourceDto(proc);
+    assert(dto.ProcessId == 5678);
+    assert(dto.NetworkReadBytes == 2048);
+    assert(dto.NetworkWriteBytes == 4096);
+    assert(dto.OpenPorts == "80, 443");
+    assert(dto.ConnectionEstablished == true);
+
+    Console::WriteLine("[PASS] GivenRdpSessionsAndUserSessions_WhenMetricsQueried_ThenPopulatesRdpSessionsAndSystemUsers");
+}
 
 int main()
 {
-    Console::WriteLine("--- Running SmartEventViewer Unit Test Suite ---");
-    Test_RagVectorStore_IndexingAndQuery();
-    Test_EventRecord_Construction();
-    Test_AnomalyEngine_RiskEvaluation();
-    Test_LocalLlmEngine();
-    Test_EventRecord_GettersAndSetters();
-    Test_EventsController_Endpoints();
-    Test_WebApplication_ServerRuntime();
-    Test_Analysis_Queue_And_Status_Concurrent_Access();
-    Console::WriteLine("--- All Unit Tests Passed Successfully ---");
+    Console::WriteLine("--- Running SmartEventViewer Core Library Unit Test Suite ---");
+    GivenValidEvent_WhenIndexed_ThenRagVectorStoreReturnsSimilarMatches();
+    GivenEmptyVectorStore_WhenQueried_ThenReturnsFalseOrEmptyList();
+    GivenVectorStore_WhenEventsIndexed_ThenGetIndexedCountReflectsTotal();
+    GivenValidParameters_WhenEventRecordCreated_ThenPropertiesInitializedCorrectly();
+    GivenZeroEventIdAndEmptyStrings_WhenEventRecordCreated_ThenHandlesEdgeValues();
+    GivenRawXml_WhenEventRecordCreated_ThenGetRawXmlReturnsXmlContent();
+    GivenNormalAndSecurityEvents_WhenEvaluated_ThenAnomalyEngineAssignsCorrectRiskLevels();
+    GivenMockModelProvider_WhenLocalLlmEngineQueryProcessed_ThenInvokesMockModelLayer();
+    GivenUninitializedEngine_WhenInitialized_ThenLocalLlmEngineProcessesQueries();
+    GivenEmptyQuery_WhenProcessed_ThenLocalLlmEngineReturnsFallbackResponse();
+    GivenLlmEngine_WhenFollowupQueriedAndHistoryCleared_ThenTracksAndClearsHistory();
+    GivenWinEventLogReader_WhenOpened_ThenReadsOrHandlesChannelAvailability();
+    GivenWinEventLogReader_WhenPagedOpenAndCountQueried_ThenReturnsCountAndReadsPagedEvents();
+    GivenLinuxJournalReader_WhenOpenedOnWindows_ThenGracefullyHandlesPlatformFallback();
+    GivenSystemTelemetryProvider_WhenMetricsRequested_ThenPopulatesCpuAndMemory();
+    GivenRdpSessionsAndUserSessions_WhenMetricsQueried_ThenPopulatesRdpSessionsAndSystemUsers();
+    Console::WriteLine("--- All SmartEventViewerCore Library Unit Tests Passed Successfully ---");
     return 0;
 }

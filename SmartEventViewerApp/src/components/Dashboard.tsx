@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { fetchApiChannels, fetchApiEvents, fetchApiMetrics } from '../apiClient';
+import { ServerLogsViewer } from './ServerLogsViewer';
 import type { SystemMetricsData, EventsData } from '../apiClient';
 import type { EventDto } from '../types';
 
@@ -15,6 +16,7 @@ interface ChannelSummaryInfo {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
+  const [activeDashboardTab, setActiveDashboardTab] = useState<'overview' | 'processes' | 'sessions' | 'users'>('overview');
   const [totalChannels, setTotalChannels] = useState<number>(0);
   const [totalEvents, setTotalEvents] = useState<number>(0);
   const [criticalRisks, setCriticalRisks] = useState<number>(0);
@@ -33,50 +35,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
   };
 
   // System Hardware Telemetry & User Sessions State
-  const [metrics, setMetrics] = useState<SystemMetricsData>({
-    cpuUsagePercent: 12.4,
-    memoryUsagePercent: 48.2,
-    memoryUsedMB: 7890,
-    memoryTotalMB: 16384,
-    diskUsagePercent: 38.5,
-    networkUsageMbps: 8.2,
-    topProcesses: [
-      { processId: 4, name: 'System', path: 'C:\\Windows\\System32\\ntoskrnl.exe', commandLine: 'ntoskrnl.exe', cpuUsagePercent: 8.4, memoryUsageMB: 240, diskIoKBps: 1024.5 },
-      { processId: 944, name: 'svchost.exe', path: 'C:\\Windows\\System32\\svchost.exe', commandLine: 'C:\\Windows\\system32\\svchost.exe -k DcomLaunch -p', cpuUsagePercent: 5.2, memoryUsageMB: 185, diskIoKBps: 512.0 },
-      { processId: 1820, name: 'SmartEventViewerServer.exe', path: 'D:\\Personal\\Projects\\C++\\smarteventviewer\\bin\\x64\\Release\\SmartEventViewerServer.exe', commandLine: 'SmartEventViewerServer.exe 8080', cpuUsagePercent: 3.1, memoryUsageMB: 310, diskIoKBps: 2048.0 },
-      { processId: 5120, name: 'lsass.exe', path: 'C:\\Windows\\System32\\lsass.exe', commandLine: 'C:\\Windows\\system32\\lsass.exe', cpuUsagePercent: 1.8, memoryUsageMB: 96, diskIoKBps: 128.0 },
-      { processId: 7412, name: 'SearchIndexer.exe', path: 'C:\\Windows\\System32\\SearchIndexer.exe', commandLine: 'C:\\Windows\\system32\\SearchIndexer.exe /Embedding', cpuUsagePercent: 1.2, memoryUsageMB: 142, diskIoKBps: 45.0 },
-    ],
-    activeUserSessions: [
-      { username: 'SUDHIPC\\sudhe', privilege: 'Administrator (Elevated UAC)', loginTimestamp: '2026-08-02 08:14:22', logoutTimestamp: 'Active Session', isActive: true },
-      { username: 'NT AUTHORITY\\SYSTEM', privilege: 'SYSTEM / Kernel Service', loginTimestamp: '2026-08-02 07:30:00', logoutTimestamp: 'Active Session', isActive: true },
-    ],
-    expiredUserSessions: [
-      { username: 'SUDHIPC\\Guest', privilege: 'Standard User', loginTimestamp: '2026-08-01 19:22:10', logoutTimestamp: '2026-08-01 21:05:44', isActive: false },
-      { username: 'WORKGROUP\\RemoteSupport', privilege: 'Remote Desktop User', loginTimestamp: '2026-08-01 14:10:00', logoutTimestamp: '2026-08-01 15:30:12', isActive: false },
-    ],
-  });
+  const [metrics, setMetrics] = useState<SystemMetricsData | null>(null);
 
   useEffect(() => {
-    loadDashboardData();
+    loadDashboardData(true);
+    const intervalId = setInterval(() => {
+      loadDashboardData(false);
+    }, 1000);
+    return () => clearInterval(intervalId);
   }, []);
 
-  const loadDashboardData = async () => {
-    setIsLoading(true);
-    const baseUrl = window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080';
+  const fetchDashboardChannelsAndEvents = async (baseUrl: string) => {
     try {
-      // 1. Fetch live system hardware metrics and user sessions from /api/metrics
-      const metricsData = await fetchApiMetrics(baseUrl).catch(() => null);
-      if (metricsData) {
-        setMetrics(metricsData);
-      }
-
-      // 2. Fetch channel count from native backend
+      // 1. Fetch channel count from native backend
       const channelsData = await fetchApiChannels(baseUrl).catch(() => ({ channels: [] }));
       const channelList = channelsData.channels || (Array.isArray(channelsData) ? (channelsData as unknown as string[]) : []);
       setTotalChannels(channelList.length || 18);
 
-      // 3. Fetch top channels (Security, System, Application) to aggregate real ingested counts and events
+      // 2. Fetch top channels (Security, System, Application) to aggregate real ingested counts and events
       const targetChannels = ['Security', 'System', 'Application'];
       const eventPromises = targetChannels.map((ch) =>
         fetchApiEvents(ch, baseUrl, 1, 20).catch((): EventsData => ({ totalCount: 0, criticalCount: 0, errorCount: 0, warningCount: 0, infoCount: 0, verboseCount: 0, events: [] }))
@@ -125,14 +101,37 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
       ).length;
       setCriticalRisks(aggregatedCriticals > 0 ? aggregatedCriticals : pageCriticals);
     } catch (err) {
-      console.error('[DASHBOARD DEBUG] Error fetching real backend metrics:', err);
-    } finally {
-      setIsLoading(false);
+      console.error('[DASHBOARD DEBUG] Error fetching dashboard channels and events:', err);
     }
   };
 
+  const loadDashboardData = async (isInitial: boolean = false) => {
+    if (isInitial) setIsLoading(true);
+    const baseUrl = window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080';
+    try {
+      const metricsData = await fetchApiMetrics(baseUrl).catch(() => null);
+      if (metricsData) {
+        setMetrics(metricsData);
+      }
+      await fetchDashboardChannelsAndEvents(baseUrl);
+    } catch (err) {
+      console.error('[DASHBOARD DEBUG] Error fetching real backend metrics:', err);
+    } finally {
+      if (isInitial) setIsLoading(false);
+    }
+  };
+
+  if (isLoading || !metrics) {
+    return (
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#38bdf8', gap: '12px', fontSize: '0.9rem' }}>
+        <div style={{ width: '32px', height: '32px', border: '3px solid rgba(56,189,248,0.2)', borderTopColor: '#38bdf8', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <span>Loading live system telemetry & risk metrics...</span>
+      </div>
+    );
+  }
+
   return (
-    <div style={{ flex: 1, padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto', fontSize: '0.78rem' }}>
+    <div style={{ flex: 1, padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto', fontSize: '0.78rem' }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(30, 41, 59, 0.7)', padding: '10px 16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
         <div>
           <h1 style={{ fontSize: '1.2rem', color: '#f8fafc', margin: 0, fontWeight: 700 }}>
@@ -144,278 +143,560 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '4px 10px', borderRadius: '4px' }}>
           <span style={{ height: '8px', width: '8px', backgroundColor: '#4ade80', borderRadius: '50%', display: 'inline-block' }} />
-          <span style={{ fontSize: '0.7rem', color: '#38bdf8', fontWeight: 600 }}>Push Notifications Active</span>
+          <span style={{ fontSize: '0.7rem', color: '#38bdf8', fontWeight: 600 }}>1-Sec Real-Time Polling Active</span>
         </div>
       </header>
 
-      {/* Live Metric Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
-        <div style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '14px' }}>
-          <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>TOTAL EVENTS INGESTED</div>
-          <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#38bdf8', marginTop: '4px' }}>
-            {totalEvents.toLocaleString()}
-          </div>
-        </div>
-        <div
-          onClick={handleOpenCriticalModal}
+      {/* Dashboard Section Sub-Navigation Tabs */}
+      <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '8px' }}>
+        <button
+          onClick={() => setActiveDashboardTab('overview')}
           style={{
-            background: 'rgba(30, 41, 59, 0.7)',
-            border: '1px solid #f87171',
-            borderRadius: '8px',
-            padding: '14px',
+            background: activeDashboardTab === 'overview' ? 'rgba(56, 189, 248, 0.2)' : 'transparent',
+            color: activeDashboardTab === 'overview' ? '#38bdf8' : '#94a3b8',
+            border: activeDashboardTab === 'overview' ? '1px solid #38bdf8' : '1px solid transparent',
+            borderRadius: '6px',
+            padding: '6px 14px',
+            fontSize: '0.76rem',
+            fontWeight: 700,
             cursor: 'pointer',
-            transition: 'transform 0.15s, border-color 0.15s',
+            transition: 'all 0.15s',
           }}
-          title="Click to view details of all detected critical risk events"
         >
-          <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>CRITICAL RISKS DETECTED</span>
-            <span style={{ fontSize: '0.65rem', color: '#f87171', fontWeight: 600 }}>🔍 View Details</span>
-          </div>
-          <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#f87171', marginTop: '4px' }}>
-            {criticalRisks}
-          </div>
-        </div>
-        <div style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '14px' }}>
-          <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>SYSTEM SOURCES ACTIVE</div>
-          <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#fbbf24', marginTop: '4px' }}>
-            {totalChannels}
-          </div>
-        </div>
-        <div style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '14px' }}>
-          <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>LOCAL RAG LLM ENGINE</div>
-          <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#4ade80', marginTop: '4px' }}>ACTIVE</div>
-        </div>
+          📊 Overview & Telemetry
+        </button>
+
+        <button
+          onClick={() => setActiveDashboardTab('processes')}
+          style={{
+            background: activeDashboardTab === 'processes' ? 'rgba(56, 189, 248, 0.2)' : 'transparent',
+            color: activeDashboardTab === 'processes' ? '#38bdf8' : '#94a3b8',
+            border: activeDashboardTab === 'processes' ? '1px solid #38bdf8' : '1px solid transparent',
+            borderRadius: '6px',
+            padding: '6px 14px',
+            fontSize: '0.76rem',
+            fontWeight: 700,
+            cursor: 'pointer',
+            transition: 'all 0.15s',
+          }}
+        >
+          🔥 Process Activity ({metrics.topProcesses ? metrics.topProcesses.length : 0})
+        </button>
+
+        <button
+          onClick={() => setActiveDashboardTab('sessions')}
+          style={{
+            background: activeDashboardTab === 'sessions' ? 'rgba(56, 189, 248, 0.2)' : 'transparent',
+            color: activeDashboardTab === 'sessions' ? '#38bdf8' : '#94a3b8',
+            border: activeDashboardTab === 'sessions' ? '1px solid #38bdf8' : '1px solid transparent',
+            borderRadius: '6px',
+            padding: '6px 14px',
+            fontSize: '0.76rem',
+            fontWeight: 700,
+            cursor: 'pointer',
+            transition: 'all 0.15s',
+          }}
+        >
+          🖥️ RDP & User Sessions ({metrics.rdpSessions ? metrics.rdpSessions.length : 0})
+        </button>
+
+        <button
+          onClick={() => setActiveDashboardTab('users')}
+          style={{
+            background: activeDashboardTab === 'users' ? 'rgba(168, 85, 247, 0.2)' : 'transparent',
+            color: activeDashboardTab === 'users' ? '#c084fc' : '#94a3b8',
+            border: activeDashboardTab === 'users' ? '1px solid #c084fc' : '1px solid transparent',
+            borderRadius: '6px',
+            padding: '6px 14px',
+            fontSize: '0.76rem',
+            fontWeight: 700,
+            cursor: 'pointer',
+            transition: 'all 0.15s',
+          }}
+        >
+          👥 User Principals ({metrics.systemUsers ? metrics.systemUsers.length : 0})
+        </button>
       </div>
 
+      {/* Sub-Tab 1: OVERVIEW & TELEMETRY */}
+      {activeDashboardTab === 'overview' && (
+        <>
+          {/* Live Metric Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+            <div style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '14px' }}>
+              <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>TOTAL EVENTS INGESTED</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#38bdf8', marginTop: '4px' }}>
+                {totalEvents.toLocaleString()}
+              </div>
+            </div>
+            <div
+              onClick={handleOpenCriticalModal}
+              style={{
+                background: 'rgba(30, 41, 59, 0.7)',
+                border: '1px solid #f87171',
+                borderRadius: '8px',
+                padding: '14px',
+                cursor: 'pointer',
+                transition: 'transform 0.15s, border-color 0.15s',
+              }}
+              title="Click to view details of all detected critical risk events"
+            >
+              <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>CRITICAL RISKS DETECTED</span>
+                <span style={{ fontSize: '0.65rem', color: '#f87171', fontWeight: 600 }}>🔍 View Details</span>
+              </div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#f87171', marginTop: '4px' }}>
+                {criticalRisks}
+              </div>
+            </div>
+            <div style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '14px' }}>
+              <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>SYSTEM SOURCES ACTIVE</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#fbbf24', marginTop: '4px' }}>
+                {totalChannels}
+              </div>
+            </div>
+            <div style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '14px' }}>
+              <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>LOCAL RAG LLM ENGINE</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#4ade80', marginTop: '4px' }}>ACTIVE</div>
+            </div>
+          </div>
 
+          {/* Live Hardware Telemetry Gauges */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px' }}>
+            <div style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '8px', padding: '12px' }}>
+              <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between' }}>
+                <span>💻 CPU USAGE</span>
+                <span style={{ color: '#38bdf8', fontWeight: 700 }}>{metrics.cpuUsagePercent.toFixed(1)}%</span>
+              </div>
+              <div style={{ background: '#0f172a', borderRadius: '4px', height: '8px', marginTop: '6px', overflow: 'hidden' }}>
+                <div style={{ background: metrics.cpuUsagePercent > 80 ? '#f87171' : metrics.cpuUsagePercent > 50 ? '#fbbf24' : '#38bdf8', height: '100%', width: `${metrics.cpuUsagePercent}%`, transition: 'width 0.5s' }} />
+              </div>
+            </div>
 
-      {/* Live Hardware Telemetry Gauges (CPU, Memory, Disk Read, Disk Write, Network) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px' }}>
-        <div style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '8px', padding: '12px' }}>
-          <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between' }}>
-            <span>💻 CPU USAGE</span>
-            <span style={{ color: '#38bdf8', fontWeight: 700 }}>{metrics.cpuUsagePercent.toFixed(1)}%</span>
-          </div>
-          <div style={{ background: '#0f172a', borderRadius: '4px', height: '8px', marginTop: '6px', overflow: 'hidden' }}>
-            <div style={{ background: metrics.cpuUsagePercent > 80 ? '#f87171' : metrics.cpuUsagePercent > 50 ? '#fbbf24' : '#38bdf8', height: '100%', width: `${metrics.cpuUsagePercent}%`, transition: 'width 0.5s' }} />
-          </div>
-        </div>
+            <div style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(168, 85, 247, 0.3)', borderRadius: '8px', padding: '12px' }}>
+              <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between' }}>
+                <span>🧠 MEMORY USAGE</span>
+                <span style={{ color: '#c084fc', fontWeight: 700 }}>{metrics.memoryUsagePercent.toFixed(1)}% ({metrics.memoryUsedMB} / {metrics.memoryTotalMB} MB)</span>
+              </div>
+              <div style={{ background: '#0f172a', borderRadius: '4px', height: '8px', marginTop: '6px', overflow: 'hidden' }}>
+                <div style={{ background: '#c084fc', height: '100%', width: `${metrics.memoryUsagePercent}%`, transition: 'width 0.5s' }} />
+              </div>
+            </div>
 
-        <div style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(168, 85, 247, 0.3)', borderRadius: '8px', padding: '12px' }}>
-          <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between' }}>
-            <span>🧠 MEMORY USAGE</span>
-            <span style={{ color: '#c084fc', fontWeight: 700 }}>{metrics.memoryUsagePercent.toFixed(1)}% ({metrics.memoryUsedMB} / {metrics.memoryTotalMB} MB)</span>
-          </div>
-          <div style={{ background: '#0f172a', borderRadius: '4px', height: '8px', marginTop: '6px', overflow: 'hidden' }}>
-            <div style={{ background: '#c084fc', height: '100%', width: `${metrics.memoryUsagePercent}%`, transition: 'width 0.5s' }} />
-          </div>
-        </div>
+            <div style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '8px', padding: '12px' }}>
+              <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between' }}>
+                <span>📖 OVERALL DISK READ RATE</span>
+                <span style={{ color: '#38bdf8', fontWeight: 700 }}>{(metrics.diskReadMBps ?? 0).toFixed(2)} MB/s</span>
+              </div>
+              <div style={{ background: '#0f172a', borderRadius: '4px', height: '8px', marginTop: '6px', overflow: 'hidden' }}>
+                <div style={{ background: '#38bdf8', height: '100%', width: `${Math.min(100, (metrics.diskReadMBps ?? 0) * 10)}%`, transition: 'width 0.5s' }} />
+              </div>
+            </div>
 
-        <div style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '8px', padding: '12px' }}>
-          <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between' }}>
-            <span>📖 OVERALL DISK READ RATE</span>
-            <span style={{ color: '#38bdf8', fontWeight: 700 }}>{(metrics.diskReadMBps ?? 0).toFixed(2)} MB/s</span>
-          </div>
-          <div style={{ background: '#0f172a', borderRadius: '4px', height: '8px', marginTop: '6px', overflow: 'hidden' }}>
-            <div style={{ background: '#38bdf8', height: '100%', width: `${Math.min(100, (metrics.diskReadMBps ?? 0) * 10)}%`, transition: 'width 0.5s' }} />
-          </div>
-        </div>
+            <div style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(251, 191, 36, 0.3)', borderRadius: '8px', padding: '12px' }}>
+              <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between' }}>
+                <span>✍️ OVERALL DISK WRITE RATE</span>
+                <span style={{ color: '#fbbf24', fontWeight: 700 }}>{(metrics.diskWriteMBps ?? 0).toFixed(2)} MB/s</span>
+              </div>
+              <div style={{ background: '#0f172a', borderRadius: '4px', height: '8px', marginTop: '6px', overflow: 'hidden' }}>
+                <div style={{ background: '#fbbf24', height: '100%', width: `${Math.min(100, (metrics.diskWriteMBps ?? 0) * 10)}%`, transition: 'width 0.5s' }} />
+              </div>
+            </div>
 
-        <div style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(251, 191, 36, 0.3)', borderRadius: '8px', padding: '12px' }}>
-          <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between' }}>
-            <span>✍️ OVERALL DISK WRITE RATE</span>
-            <span style={{ color: '#fbbf24', fontWeight: 700 }}>{(metrics.diskWriteMBps ?? 0).toFixed(2)} MB/s</span>
+            <div style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(74, 222, 128, 0.3)', borderRadius: '8px', padding: '12px' }}>
+              <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between' }}>
+                <span>🌐 NETWORK BANDWIDTH</span>
+                <span style={{ color: '#4ade80', fontWeight: 700 }}>{metrics.networkUsageMbps.toFixed(1)} Mbps</span>
+              </div>
+              <div style={{ background: '#0f172a', borderRadius: '4px', height: '8px', marginTop: '6px', overflow: 'hidden' }}>
+                <div style={{ background: '#4ade80', height: '100%', width: `${Math.min(100, metrics.networkUsageMbps * 5)}%`, transition: 'width 0.5s' }} />
+              </div>
+            </div>
           </div>
-          <div style={{ background: '#0f172a', borderRadius: '4px', height: '8px', marginTop: '6px', overflow: 'hidden' }}>
-            <div style={{ background: '#fbbf24', height: '100%', width: `${Math.min(100, (metrics.diskWriteMBps ?? 0) * 10)}%`, transition: 'width 0.5s' }} />
-          </div>
-        </div>
 
-        <div style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(74, 222, 128, 0.3)', borderRadius: '8px', padding: '12px' }}>
-          <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between' }}>
-            <span>🌐 NETWORK BANDWIDTH</span>
-            <span style={{ color: '#4ade80', fontWeight: 700 }}>{metrics.networkUsageMbps.toFixed(1)} Mbps</span>
-          </div>
-          <div style={{ background: '#0f172a', borderRadius: '4px', height: '8px', marginTop: '6px', overflow: 'hidden' }}>
-            <div style={{ background: '#4ade80', height: '100%', width: `${Math.min(100, metrics.networkUsageMbps * 5)}%`, transition: 'width 0.5s' }} />
-          </div>
-        </div>
-      </div>
-
-      {/* Top Resource Consuming Processes Section */}
-      <section style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        <h3 style={{ color: '#38bdf8', margin: 0, fontSize: '0.85rem', fontWeight: 700 }}>
-          🔥 Top Resource Consuming System Processes
-        </h3>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.72rem' }}>
-            <thead>
-              <tr style={{ background: 'rgba(15, 23, 42, 0.9)', color: '#94a3b8', fontSize: '0.68rem' }}>
-                <th style={{ padding: '6px', resize: 'horizontal', overflow: 'hidden' }}>PID</th>
-                <th style={{ padding: '6px', resize: 'horizontal', overflow: 'hidden' }}>Process Name</th>
-                <th style={{ padding: '6px', resize: 'horizontal', overflow: 'hidden' }}>CPU %</th>
-                <th style={{ padding: '6px', resize: 'horizontal', overflow: 'hidden' }}>RAM (MB)</th>
-                <th style={{ padding: '6px', resize: 'horizontal', overflow: 'hidden' }}>Disk Read (MB)</th>
-                <th style={{ padding: '6px', resize: 'horizontal', overflow: 'hidden' }}>Disk Write (MB)</th>
-                <th style={{ padding: '6px', resize: 'horizontal', overflow: 'hidden' }}>Executable Path</th>
-                <th style={{ padding: '6px', resize: 'horizontal', overflow: 'hidden' }}>Command Line</th>
-              </tr>
-            </thead>
-            <tbody>
-              {metrics.topProcesses.map((p, idx) => {
-                const isProtected = p.path.includes('Access Denied') || p.commandLine.includes('Access Denied');
-                const cpuDisplay = (p.cpuUsagePercent < 0 || (isProtected && p.cpuUsagePercent === 0)) ? 'Protected' : p.cpuUsagePercent.toFixed(1);
-                const ramDisplay = (p.memoryUsageMB <= 0 || (isProtected && p.memoryUsageMB === 0)) ? 'Protected' : p.memoryUsageMB.toString();
-                
-                const readVal = p.diskReadKBps ?? 0.0;
-                const writeVal = p.diskWriteKBps ?? 0.0;
-                const readDisplay = isProtected ? 'Protected' : readVal.toFixed(1);
-                const writeDisplay = isProtected ? 'Protected' : writeVal.toFixed(1);
-
-                return (
-                  <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                    <td style={{ padding: '5px', fontWeight: 700, color: '#38bdf8' }}>{p.processId}</td>
-                    <td style={{ padding: '5px', fontWeight: 600, color: '#f8fafc' }}>{p.name}</td>
-                    <td style={{ padding: '5px', color: cpuDisplay === 'Protected' ? '#94a3b8' : (p.cpuUsagePercent > 5 ? '#f87171' : '#e2e8f0'), fontWeight: 700, fontStyle: cpuDisplay === 'Protected' ? 'italic' : 'normal' }}>{cpuDisplay}</td>
-                    <td style={{ padding: '5px', color: ramDisplay === 'Protected' ? '#94a3b8' : '#c084fc', fontWeight: 600, fontStyle: ramDisplay === 'Protected' ? 'italic' : 'normal' }}>{ramDisplay}</td>
-                    <td style={{ padding: '5px', color: readDisplay === 'Protected' ? '#94a3b8' : '#38bdf8', fontStyle: readDisplay === 'Protected' ? 'italic' : 'normal' }}>{readDisplay}</td>
-                    <td style={{ padding: '5px', color: writeDisplay === 'Protected' ? '#94a3b8' : '#fbbf24', fontStyle: writeDisplay === 'Protected' ? 'italic' : 'normal' }}>{writeDisplay}</td>
-                    <td style={{ padding: '5px', fontFamily: 'monospace', fontSize: '0.65rem', color: isProtected ? '#f87171' : '#94a3b8', wordBreak: 'break-all', whiteSpace: 'normal', maxWidth: '240px' }}>{p.path}</td>
-                    <td style={{ padding: '5px', fontFamily: 'monospace', fontSize: '0.65rem', color: isProtected ? '#f87171' : '#cbd5e1', wordBreak: 'break-all', whiteSpace: 'normal', maxWidth: '280px' }}>{p.commandLine}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* User Sessions Overview (Active & Expired) */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-        {/* Realtime Active User Sessions */}
-        <section style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(74, 222, 128, 0.3)', borderRadius: '8px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <h3 style={{ color: '#4ade80', margin: 0, fontSize: '0.85rem', fontWeight: 700 }}>
-            👤 Realtime Active Logged In User Sessions
-          </h3>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.72rem' }}>
-            <thead>
-              <tr style={{ background: 'rgba(15, 23, 42, 0.9)', color: '#94a3b8', fontSize: '0.68rem' }}>
-                <th style={{ padding: '6px' }}>User Name</th>
-                <th style={{ padding: '6px' }}>Privilege Level</th>
-                <th style={{ padding: '6px' }}>Login Timestamp</th>
-                <th style={{ padding: '6px' }}>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {metrics.activeUserSessions.map((s, idx) => (
-                <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                  <td style={{ padding: '5px', fontWeight: 700, color: '#f8fafc' }}>{s.username}</td>
-                  <td style={{ padding: '5px', color: '#fbbf24', fontWeight: 600 }}>{s.privilege}</td>
-                  <td style={{ padding: '5px' }}>{s.loginTimestamp}</td>
-                  <td style={{ padding: '5px' }}>
-                    <span style={{ background: 'rgba(74,222,128,0.2)', color: '#4ade80', padding: '1px 6px', borderRadius: '3px', fontWeight: 700, fontSize: '0.62rem' }}>
-                      ACTIVE
+          {/* Live Active Ingested Log Channels Section */}
+          <section style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <h3 style={{ color: '#38bdf8', margin: 0, fontSize: '0.85rem', fontWeight: 700 }}>
+              📂 Live Active System Log Channels Overview (Click to Open Channel)
+            </h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+              {channelSummaries.map((ch, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => onSelectChannel && onSelectChannel(ch.name)}
+                  style={{
+                    background: '#0f172a',
+                    border: '1px solid rgba(56, 189, 248, 0.3)',
+                    borderRadius: '6px',
+                    padding: '10px 14px',
+                    cursor: 'pointer',
+                    transition: 'transform 0.15s, border-color 0.15s',
+                  }}
+                  title={`Click to open ${ch.name} event explorer`}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontWeight: 700, color: '#f8fafc', fontSize: '0.8rem' }}>{ch.name}</span>
+                    <span style={{ fontSize: '0.65rem', color: '#38bdf8', fontWeight: 600 }}>🔍 Open Channel</span>
+                  </div>
+                  <div style={{ marginTop: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <span style={{ fontSize: '1.2rem', fontWeight: 700, color: '#38bdf8' }}>{ch.totalCount.toLocaleString()}</span>
+                    <span style={{ fontSize: '0.65rem', color: (ch.criticalCount + ch.errorCount) > 0 ? '#f87171' : '#4ade80', fontWeight: 600 }}>
+                      {(ch.criticalCount + ch.errorCount) > 0 ? `🚨 ${ch.criticalCount + ch.errorCount} Critical/Errors` : '✓ Healthy'}
                     </span>
-                  </td>
-                </tr>
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
-        </section>
+            </div>
+          </section>
 
-        {/* Expired User Sessions */}
-        <section style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(248, 113, 113, 0.3)', borderRadius: '8px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <h3 style={{ color: '#f87171', margin: 0, fontSize: '0.85rem', fontWeight: 700 }}>
-            🚪 Last Expired / Logged Out User Sessions
+          {/* Live Recent System Telemetry Table */}
+          <section style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <h3 style={{ color: '#38bdf8', margin: 0, fontSize: '0.85rem', fontWeight: 700 }}>
+              ⚡ Recent Live System Telemetry
+            </h3>
+            <div style={{ overflowY: 'auto', maxHeight: '320px' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.72rem' }}>
+                <thead>
+                  <tr style={{ background: 'rgba(15, 23, 42, 0.9)', color: '#94a3b8', fontSize: '0.68rem', position: 'sticky', top: 0 }}>
+                    <th style={{ padding: '6px' }}>Index</th>
+                    <th style={{ padding: '6px' }}>Timestamp</th>
+                    <th style={{ padding: '6px' }}>Event ID</th>
+                    <th style={{ padding: '6px' }}>Level</th>
+                    <th style={{ padding: '6px' }}>Risk Badge</th>
+                    <th style={{ padding: '6px' }}>Provider Source</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentEvents.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ padding: '12px', textAlign: 'center', color: '#94a3b8' }}>
+                        {isLoading ? 'Querying backend log channels...' : 'No telemetry events loaded.'}
+                      </td>
+                    </tr>
+                  ) : (
+                    recentEvents.map((evt, i) => (
+                      <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={{ padding: '5px' }}>#{evt.idx}</td>
+                        <td style={{ padding: '5px' }}>{evt.time}</td>
+                        <td style={{ padding: '5px', fontWeight: 700, color: '#38bdf8' }}>{evt.id}</td>
+                        <td style={{ padding: '5px' }}>
+                          <span
+                            style={{
+                              padding: '1px 6px',
+                              borderRadius: '3px',
+                              fontWeight: 700,
+                              fontSize: '0.62rem',
+                              background:
+                                evt.level === 'Critical' ? 'rgba(239, 68, 68, 0.25)' :
+                                evt.level === 'Error' ? 'rgba(245, 158, 11, 0.25)' :
+                                evt.level === 'Warning' ? 'rgba(234, 179, 8, 0.25)' : 'rgba(56, 189, 248, 0.15)',
+                              color:
+                                evt.level === 'Critical' ? '#ef4444' :
+                                evt.level === 'Error' ? '#f59e0b' :
+                                evt.level === 'Warning' ? '#eab308' : '#38bdf8',
+                              border:
+                                evt.level === 'Critical' ? '1px solid rgba(239, 68, 68, 0.4)' :
+                                evt.level === 'Error' ? '1px solid rgba(245, 158, 11, 0.4)' :
+                                evt.level === 'Warning' ? '1px solid rgba(234, 179, 8, 0.4)' : '1px solid rgba(56, 189, 248, 0.3)',
+                            }}
+                          >
+                            {evt.level}
+                          </span>
+                        </td>
+                        <td style={{ padding: '5px' }}>
+                          <span
+                            style={{
+                              padding: '1px 6px',
+                              borderRadius: '3px',
+                              fontWeight: 700,
+                              fontSize: '0.62rem',
+                              background:
+                                evt.risk === 'Critical' ? 'rgba(239, 68, 68, 0.25)' :
+                                evt.risk === 'High' ? 'rgba(245, 158, 11, 0.25)' :
+                                evt.risk === 'Medium' ? 'rgba(234, 179, 8, 0.25)' : 'rgba(34, 197, 94, 0.15)',
+                              color:
+                                evt.risk === 'Critical' ? '#ef4444' :
+                                evt.risk === 'High' ? '#f59e0b' :
+                                evt.risk === 'Medium' ? '#eab308' : '#22c55e',
+                              border:
+                                evt.risk === 'Critical' ? '1px solid rgba(239, 68, 68, 0.4)' :
+                                evt.risk === 'High' ? '1px solid rgba(245, 158, 11, 0.4)' :
+                                evt.risk === 'Medium' ? '1px solid rgba(234, 179, 8, 0.4)' : '1px solid rgba(34, 197, 94, 0.3)',
+                            }}
+                          >
+                            {evt.risk}
+                          </span>
+                        </td>
+                        <td style={{ padding: '5px', color: '#94a3b8' }}>{evt.provider}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </>
+      )}
+
+      {/* Sub-Tab 2: PROCESS ACTIVITY */}
+      {activeDashboardTab === 'processes' && (
+        <section style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <h3 style={{ color: '#38bdf8', margin: 0, fontSize: '0.85rem', fontWeight: 700 }}>
+            🔥 Top Resource Consuming System Processes
           </h3>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.72rem' }}>
-            <thead>
-              <tr style={{ background: 'rgba(15, 23, 42, 0.9)', color: '#94a3b8', fontSize: '0.68rem' }}>
-                <th style={{ padding: '6px' }}>User Name</th>
-                <th style={{ padding: '6px' }}>Privilege Level</th>
-                <th style={{ padding: '6px' }}>Login Timestamp</th>
-                <th style={{ padding: '6px' }}>Logout Timestamp</th>
-              </tr>
-            </thead>
-            <tbody>
-              {metrics.expiredUserSessions.map((s, idx) => (
-                <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                  <td style={{ padding: '5px', fontWeight: 700, color: '#94a3b8' }}>{s.username}</td>
-                  <td style={{ padding: '5px', color: '#94a3b8' }}>{s.privilege}</td>
-                  <td style={{ padding: '5px' }}>{s.loginTimestamp}</td>
-                  <td style={{ padding: '5px', color: '#f87171', fontWeight: 600 }}>{s.logoutTimestamp}</td>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.72rem' }}>
+              <thead>
+                <tr style={{ background: 'rgba(15, 23, 42, 0.9)', color: '#94a3b8', fontSize: '0.68rem' }}>
+                  <th style={{ padding: '6px', resize: 'horizontal', overflow: 'hidden' }}>PID</th>
+                  <th style={{ padding: '6px', resize: 'horizontal', overflow: 'hidden' }}>Process Name</th>
+                  <th style={{ padding: '6px', resize: 'horizontal', overflow: 'hidden' }}>CPU %</th>
+                  <th style={{ padding: '6px', resize: 'horizontal', overflow: 'hidden' }}>RAM (MB)</th>
+                  <th style={{ padding: '6px', resize: 'horizontal', overflow: 'hidden' }}>Net Read (Bytes)</th>
+                  <th style={{ padding: '6px', resize: 'horizontal', overflow: 'hidden' }}>Net Write (Bytes)</th>
+                  <th style={{ padding: '6px', resize: 'horizontal', overflow: 'hidden' }}>Open Ports</th>
+                  <th style={{ padding: '6px', resize: 'horizontal', overflow: 'hidden' }}>Conn Status</th>
+                  <th style={{ padding: '6px', resize: 'horizontal', overflow: 'hidden' }}>Executable Path</th>
+                  <th style={{ padding: '6px', resize: 'horizontal', overflow: 'hidden' }}>Command Line</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-      </div>
+              </thead>
+              <tbody>
+                {metrics.topProcesses.map((p, idx) => {
+                  const isProtected = p.path.includes('Access Denied') || p.commandLine.includes('Access Denied');
+                  const cpuDisplay = (p.cpuUsagePercent < 0 || (isProtected && p.cpuUsagePercent === 0)) ? 'Protected' : p.cpuUsagePercent.toFixed(1);
+                  const ramDisplay = (p.memoryUsageMB <= 0 || (isProtected && p.memoryUsageMB === 0)) ? 'Protected' : p.memoryUsageMB.toString();
+                  
+                  const netReadDisplay = isProtected ? 'Protected' : (p.networkReadBytes ? p.networkReadBytes.toLocaleString() : '0 B');
+                  const netWriteDisplay = isProtected ? 'Protected' : (p.networkWriteBytes ? p.networkWriteBytes.toLocaleString() : '0 B');
+                  const portsDisplay = isProtected ? 'Protected' : (p.openPorts || '-');
 
-      {/* DotNetDupe System UserPrincipals & Access Groups Section */}
-      <section style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(168, 85, 247, 0.4)', borderRadius: '8px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        <h3 style={{ color: '#c084fc', margin: 0, fontSize: '0.85rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
-          👥 Registered System User Accounts & Access Groups (DotNetDupe UserPrincipals API)
-        </h3>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.72rem' }}>
-            <thead>
-              <tr style={{ background: 'rgba(15, 23, 42, 0.9)', color: '#94a3b8', fontSize: '0.68rem' }}>
-                <th style={{ padding: '6px' }}>User Name</th>
-                <th style={{ padding: '6px' }}>Domain</th>
-                <th style={{ padding: '6px' }}>Security SID / UID</th>
-                <th style={{ padding: '6px' }}>Account Class</th>
-                <th style={{ padding: '6px' }}>Account Status</th>
-                <th style={{ padding: '6px' }}>Access Groups</th>
-                <th style={{ padding: '6px' }}>Permissions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(!metrics.systemUsers || metrics.systemUsers.length === 0) ? (
-                <tr>
-                  <td colSpan={7} style={{ padding: '10px', textAlign: 'center', color: '#94a3b8' }}>
-                    Loading System User Principals via DotNetDupe API...
-                  </td>
-                </tr>
-              ) : (
-                metrics.systemUsers.map((u, idx) => (
-                  <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                    <td style={{ padding: '5px', fontWeight: 700, color: '#f8fafc' }}>{u.username}</td>
-                    <td style={{ padding: '5px', color: '#94a3b8' }}>{u.domain || 'LOCAL'}</td>
-                    <td style={{ padding: '5px', fontFamily: 'monospace', fontSize: '0.68rem', color: '#38bdf8' }}>{u.sidOrUid}</td>
-                    <td style={{ padding: '5px' }}>
-                      <span style={{ padding: '1px 5px', borderRadius: '3px', fontSize: '0.62rem', fontWeight: 700, background: u.userClass === 'Admin' ? 'rgba(248,113,113,0.25)' : 'rgba(56,189,248,0.2)', color: u.userClass === 'Admin' ? '#f87171' : '#38bdf8' }}>
-                        {u.userClass}
-                      </span>
-                    </td>
-                    <td style={{ padding: '5px' }}>
-                      <span style={{ padding: '1px 5px', borderRadius: '3px', fontSize: '0.62rem', fontWeight: 700, background: u.isDisabled ? 'rgba(248,113,113,0.2)' : 'rgba(74,222,128,0.2)', color: u.isDisabled ? '#f87171' : '#4ade80' }}>
-                        {u.isDisabled ? 'Disabled' : 'Active'}
-                      </span>
-                    </td>
-                    <td style={{ padding: '5px' }}>
-                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                        {u.groups && u.groups.length > 0 ? (
-                          u.groups.map((g, gIdx) => (
-                            <span key={gIdx} style={{ background: 'rgba(168, 85, 247, 0.2)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.4)', borderRadius: '3px', padding: '1px 5px', fontSize: '0.62rem', fontWeight: 600 }}>
-                              {g}
-                            </span>
-                          ))
+                  return (
+                    <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                      <td style={{ padding: '5px', fontWeight: 700, color: '#38bdf8' }}>{p.processId}</td>
+                      <td style={{ padding: '5px', fontWeight: 600, color: '#f8fafc' }}>{p.name}</td>
+                      <td style={{ padding: '5px', color: cpuDisplay === 'Protected' ? '#94a3b8' : (p.cpuUsagePercent > 5 ? '#f87171' : '#e2e8f0'), fontWeight: 700, fontStyle: cpuDisplay === 'Protected' ? 'italic' : 'normal' }}>{cpuDisplay}</td>
+                      <td style={{ padding: '5px', color: ramDisplay === 'Protected' ? '#94a3b8' : '#c084fc', fontWeight: 600, fontStyle: ramDisplay === 'Protected' ? 'italic' : 'normal' }}>{ramDisplay}</td>
+                      <td style={{ padding: '5px', color: netReadDisplay === 'Protected' ? '#94a3b8' : '#38bdf8', fontStyle: netReadDisplay === 'Protected' ? 'italic' : 'normal' }}>{netReadDisplay}</td>
+                      <td style={{ padding: '5px', color: netWriteDisplay === 'Protected' ? '#94a3b8' : '#fbbf24', fontStyle: netWriteDisplay === 'Protected' ? 'italic' : 'normal' }}>{netWriteDisplay}</td>
+                      <td style={{ padding: '5px', color: portsDisplay === 'Protected' ? '#94a3b8' : '#38bdf8', fontWeight: 600, fontStyle: portsDisplay === 'Protected' ? 'italic' : 'normal' }}>{portsDisplay}</td>
+                      <td style={{ padding: '5px' }}>
+                        {isProtected ? (
+                          <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>Protected</span>
+                        ) : p.connectionEstablished ? (
+                          <span style={{ background: 'rgba(74,222,128,0.2)', color: '#4ade80', padding: '1px 6px', borderRadius: '3px', fontWeight: 700, fontSize: '0.62rem' }}>
+                            ESTABLISHED
+                          </span>
                         ) : (
-                          <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>None</span>
+                          <span style={{ background: 'rgba(148,163,184,0.15)', color: '#94a3b8', padding: '1px 6px', borderRadius: '3px', fontWeight: 600, fontSize: '0.62rem' }}>
+                            LISTEN / CLOSED
+                          </span>
                         )}
-                      </div>
-                    </td>
-                    <td style={{ padding: '5px', color: '#94a3b8', fontSize: '0.68rem' }}>
-                      {u.permissions && u.permissions.length > 0 ? u.permissions.join(', ') : 'Standard User Access'}
+                      </td>
+                      <td style={{ padding: '5px', fontFamily: 'monospace', fontSize: '0.65rem', color: isProtected ? '#f87171' : '#94a3b8', wordBreak: 'break-all', whiteSpace: 'normal', maxWidth: '200px' }}>{p.path}</td>
+                      <td style={{ padding: '5px', fontFamily: 'monospace', fontSize: '0.65rem', color: isProtected ? '#f87171' : '#cbd5e1', wordBreak: 'break-all', whiteSpace: 'normal', maxWidth: '240px' }}>{p.commandLine}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* Sub-Tab 3: RDP & USER SESSIONS */}
+      {activeDashboardTab === 'sessions' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {/* DotNetDupe TerminalSession API RDP Sessions Section */}
+          <section style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(56, 189, 248, 0.4)', borderRadius: '8px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <h3 style={{ color: '#38bdf8', margin: 0, fontSize: '0.85rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+              🖥️ Active Terminal / RDP Sessions (DotNetDupe TerminalSession API)
+            </h3>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.72rem' }}>
+                <thead>
+                  <tr style={{ background: 'rgba(15, 23, 42, 0.9)', color: '#94a3b8', fontSize: '0.68rem' }}>
+                    <th style={{ padding: '6px' }}>Session ID</th>
+                    <th style={{ padding: '6px' }}>Session Name</th>
+                    <th style={{ padding: '6px' }}>User Name</th>
+                    <th style={{ padding: '6px' }}>Domain</th>
+                    <th style={{ padding: '6px' }}>Client Workstation</th>
+                    <th style={{ padding: '6px' }}>Client IP Address</th>
+                    <th style={{ padding: '6px' }}>Session State</th>
+                    <th style={{ padding: '6px' }}>Protocol Type</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(!metrics.rdpSessions || metrics.rdpSessions.length === 0) ? (
+                    <tr>
+                      <td colSpan={8} style={{ padding: '10px', textAlign: 'center', color: '#94a3b8' }}>
+                        No active Terminal/RDP sessions enumerated via DotNetDupe API.
+                      </td>
+                    </tr>
+                  ) : (
+                    metrics.rdpSessions.map((r, idx) => (
+                      <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={{ padding: '5px', fontWeight: 700, color: '#38bdf8' }}>#{r.sessionId}</td>
+                        <td style={{ padding: '5px', fontWeight: 600, color: '#f8fafc' }}>{r.sessionName || 'Console'}</td>
+                        <td style={{ padding: '5px', color: r.userName ? '#4ade80' : '#94a3b8', fontWeight: r.userName ? 700 : 400 }}>{r.userName || '-'}</td>
+                        <td style={{ padding: '5px', color: '#94a3b8' }}>{r.domainName || '-'}</td>
+                        <td style={{ padding: '5px', color: '#cbd5e1' }}>{r.clientName || '-'}</td>
+                        <td style={{ padding: '5px', fontFamily: 'monospace', fontSize: '0.68rem', color: '#fbbf24' }}>{r.clientIpAddress || '-'}</td>
+                        <td style={{ padding: '5px' }}>
+                          <span
+                            style={{
+                              padding: '1px 6px',
+                              borderRadius: '3px',
+                              fontSize: '0.62rem',
+                              fontWeight: 700,
+                              background: r.state === 'Active' ? 'rgba(74,222,128,0.2)' : r.state === 'Connected' ? 'rgba(56,189,248,0.2)' : 'rgba(148,163,184,0.2)',
+                              color: r.state === 'Active' ? '#4ade80' : r.state === 'Connected' ? '#38bdf8' : '#94a3b8',
+                            }}
+                          >
+                            {r.state}
+                          </span>
+                        </td>
+                        <td style={{ padding: '5px' }}>
+                          <span style={{ padding: '1px 6px', borderRadius: '3px', fontSize: '0.62rem', fontWeight: 700, background: r.isRdpSession ? 'rgba(168,85,247,0.2)' : 'rgba(148,163,184,0.15)', color: r.isRdpSession ? '#c084fc' : '#94a3b8' }}>
+                            {r.isRdpSession ? '🌐 Remote RDP' : '💻 Local Console'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          {/* User Sessions Overview (Active & Expired) */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            {/* Realtime Active User Sessions */}
+            <section style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(74, 222, 128, 0.3)', borderRadius: '8px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <h3 style={{ color: '#4ade80', margin: 0, fontSize: '0.85rem', fontWeight: 700 }}>
+                👤 Realtime Active Logged In User Sessions
+              </h3>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.72rem' }}>
+                <thead>
+                  <tr style={{ background: 'rgba(15, 23, 42, 0.9)', color: '#94a3b8', fontSize: '0.68rem' }}>
+                    <th style={{ padding: '6px' }}>User Name</th>
+                    <th style={{ padding: '6px' }}>Privilege Level</th>
+                    <th style={{ padding: '6px' }}>Login Timestamp</th>
+                    <th style={{ padding: '6px' }}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {metrics.activeUserSessions.map((s, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                      <td style={{ padding: '5px', fontWeight: 700, color: '#f8fafc' }}>{s.username}</td>
+                      <td style={{ padding: '5px', color: '#fbbf24', fontWeight: 600 }}>{s.privilege}</td>
+                      <td style={{ padding: '5px' }}>{s.loginTimestamp}</td>
+                      <td style={{ padding: '5px' }}>
+                        <span style={{ background: 'rgba(74,222,128,0.2)', color: '#4ade80', padding: '1px 6px', borderRadius: '3px', fontWeight: 700, fontSize: '0.62rem' }}>
+                          ACTIVE
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+
+            {/* Expired User Sessions */}
+            <section style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(248, 113, 113, 0.3)', borderRadius: '8px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <h3 style={{ color: '#f87171', margin: 0, fontSize: '0.85rem', fontWeight: 700 }}>
+                🚪 Last Expired / Logged Out User Sessions
+              </h3>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.72rem' }}>
+                <thead>
+                  <tr style={{ background: 'rgba(15, 23, 42, 0.9)', color: '#94a3b8', fontSize: '0.68rem' }}>
+                    <th style={{ padding: '6px' }}>User Name</th>
+                    <th style={{ padding: '6px' }}>Privilege Level</th>
+                    <th style={{ padding: '6px' }}>Login Timestamp</th>
+                    <th style={{ padding: '6px' }}>Logout Timestamp</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {metrics.expiredUserSessions.map((s, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                      <td style={{ padding: '5px', fontWeight: 700, color: '#94a3b8' }}>{s.username}</td>
+                      <td style={{ padding: '5px', color: '#94a3b8' }}>{s.privilege}</td>
+                      <td style={{ padding: '5px' }}>{s.loginTimestamp}</td>
+                      <td style={{ padding: '5px', color: '#f87171', fontWeight: 600 }}>{s.logoutTimestamp}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          </div>
+        </div>
+      )}
+
+      {/* Sub-Tab 4: USER PRINCIPALS */}
+      {activeDashboardTab === 'users' && (
+        <section style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(168, 85, 247, 0.4)', borderRadius: '8px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <h3 style={{ color: '#c084fc', margin: 0, fontSize: '0.85rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+            👥 Registered System User Accounts & Access Groups (DotNetDupe UserPrincipals API)
+          </h3>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.72rem' }}>
+              <thead>
+                <tr style={{ background: 'rgba(15, 23, 42, 0.9)', color: '#94a3b8', fontSize: '0.68rem' }}>
+                  <th style={{ padding: '6px' }}>User Name</th>
+                  <th style={{ padding: '6px' }}>Domain</th>
+                  <th style={{ padding: '6px' }}>Security SID / UID</th>
+                  <th style={{ padding: '6px' }}>Account Class</th>
+                  <th style={{ padding: '6px' }}>Account Status</th>
+                  <th style={{ padding: '6px' }}>Access Groups</th>
+                  <th style={{ padding: '6px' }}>Permissions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(!metrics.systemUsers || metrics.systemUsers.length === 0) ? (
+                  <tr>
+                    <td colSpan={7} style={{ padding: '10px', textAlign: 'center', color: '#94a3b8' }}>
+                      Loading System User Principals via DotNetDupe API...
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+                ) : (
+                  metrics.systemUsers.map((u, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                      <td style={{ padding: '5px', fontWeight: 700, color: '#f8fafc' }}>{u.username}</td>
+                      <td style={{ padding: '5px', color: '#94a3b8' }}>{u.domain || 'LOCAL'}</td>
+                      <td style={{ padding: '5px', fontFamily: 'monospace', fontSize: '0.68rem', color: '#38bdf8' }}>{u.sidOrUid}</td>
+                      <td style={{ padding: '5px' }}>
+                        <span style={{ padding: '1px 5px', borderRadius: '3px', fontSize: '0.62rem', fontWeight: 700, background: u.userClass === 'Admin' ? 'rgba(248,113,113,0.25)' : 'rgba(56,189,248,0.2)', color: u.userClass === 'Admin' ? '#f87171' : '#38bdf8' }}>
+                          {u.userClass}
+                        </span>
+                      </td>
+                      <td style={{ padding: '5px' }}>
+                        <span style={{ padding: '1px 5px', borderRadius: '3px', fontSize: '0.62rem', fontWeight: 700, background: u.isDisabled ? 'rgba(248,113,113,0.2)' : 'rgba(74,222,128,0.2)', color: u.isDisabled ? '#f87171' : '#4ade80' }}>
+                          {u.isDisabled ? 'Disabled' : 'Active'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '5px' }}>
+                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                          {u.groups && u.groups.length > 0 ? (
+                            u.groups.map((g, gIdx) => (
+                              <span key={gIdx} style={{ background: 'rgba(168, 85, 247, 0.2)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.4)', borderRadius: '3px', padding: '1px 5px', fontSize: '0.62rem', fontWeight: 600 }}>
+                                {g}
+                              </span>
+                            ))
+                          ) : (
+                            <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>None</span>
+                          )}
+                        </div>
+                      </td>
+                      <td style={{ padding: '5px', color: '#94a3b8', fontSize: '0.68rem' }}>
+                        {u.permissions && u.permissions.length > 0 ? u.permissions.join(', ') : 'Standard User Access'}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       {/* Live Active Ingested Log Channels Section */}
       <section style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -490,11 +771,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
                           borderRadius: '3px',
                           fontSize: '0.62rem',
                           fontWeight: 700,
-                          background: evt.risk === 'Critical' || evt.level === 'Critical' ? 'rgba(248,113,113,0.25)' : 'rgba(74,222,128,0.2)',
-                          color: evt.risk === 'Critical' || evt.level === 'Critical' ? '#f87171' : '#4ade80',
+                          background: (evt.level === 'Critical' || evt.risk === 'Critical') ? 'rgba(248,113,113,0.25)' : ((evt.level === 'Error' || evt.risk === 'High') ? 'rgba(248,113,113,0.15)' : ((evt.level === 'Warning' || evt.risk === 'Medium') ? 'rgba(251,191,36,0.2)' : 'rgba(74,222,128,0.2)')),
+                          color: (evt.level === 'Critical' || evt.risk === 'Critical' || evt.level === 'Error' || evt.risk === 'High') ? '#f87171' : ((evt.level === 'Warning' || evt.risk === 'Medium') ? '#fbbf24' : '#4ade80'),
                         }}
                       >
-                        {evt.risk || evt.level}
+                        {evt.level !== 'Information' ? evt.level : evt.risk}
                       </span>
                     </td>
                     <td style={{ padding: '5px' }}>{evt.provider}</td>
@@ -568,6 +849,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
           </div>
         </div>
       )}
+
+      {/* Live Server & AI Model Diagnostics Log Viewer Section */}
+      <div style={{ marginTop: '24px' }}>
+        <ServerLogsViewer />
+      </div>
     </div>
   );
 };

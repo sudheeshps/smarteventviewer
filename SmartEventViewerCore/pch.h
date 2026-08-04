@@ -9,3 +9,5 @@
 #include <iphlpapi.h>
 
 #include "Common.h"
+#include "System/Collections/Generic/Dictionary.h"
+#include "System/Collections/Generic/List.h"

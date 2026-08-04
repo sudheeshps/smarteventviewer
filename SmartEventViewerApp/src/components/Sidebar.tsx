@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 
 interface SidebarProps {
-  activeTab: 'dashboard' | 'events' | 'riskcenter';
-  setActiveTab: (tab: 'dashboard' | 'events' | 'riskcenter') => void;
+  activeTab: 'dashboard' | 'events' | 'riskcenter' | 'serverlogs';
+  setActiveTab: (tab: 'dashboard' | 'events' | 'riskcenter' | 'serverlogs') => void;
   currentChannel: string;
   onSelectChannel: (channel: string) => void;
   windowsLogs: string[];
@@ -91,6 +91,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
           }}
         >
           🚨 SIEM Risk Center
+        </li>
+        <li
+          onClick={() => setActiveTab('serverlogs')}
+          style={{
+            padding: '8px 12px',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontWeight: 600,
+            background: activeTab === 'serverlogs' ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
+            color: activeTab === 'serverlogs' ? '#38bdf8' : '#94a3b8',
+          }}
+        >
+          📜 Server & Model Logs
         </li>
       </ul>
 
