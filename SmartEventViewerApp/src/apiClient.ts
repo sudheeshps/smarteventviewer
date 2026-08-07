@@ -2,6 +2,16 @@ export interface ChannelData {
   channels?: string[];
 }
 
+export interface EventSummaryData {
+  channel?: string;
+  totalCount?: number;
+  criticalCount?: number;
+  errorCount?: number;
+  warningCount?: number;
+  infoCount?: number;
+  verboseCount?: number;
+}
+
 export interface EventsData {
   channel?: string;
   totalCount?: number;
@@ -22,6 +32,24 @@ export interface EventsData {
     time: string;
     message: string;
   }>;
+}
+
+export async function fetchEventSummary(channel: string, baseUrl: string = ''): Promise<EventSummaryData> {
+  const urlPrefix = baseUrl ? baseUrl : (window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080');
+  const resp = await fetch(`${urlPrefix}/api/events/summary?channel=${encodeURIComponent(channel)}`);
+  if (!resp.ok) {
+    throw new Error(`HTTP Error: ${resp.status}`);
+  }
+  const data = await resp.json();
+  return {
+    channel: data.channel || data.Channel || channel,
+    totalCount: data.totalCount ?? data.TotalCount ?? 0,
+    criticalCount: data.criticalCount ?? data.CriticalCount ?? 0,
+    errorCount: data.errorCount ?? data.ErrorCount ?? 0,
+    warningCount: data.warningCount ?? data.WarningCount ?? 0,
+    infoCount: data.infoCount ?? data.InfoCount ?? 0,
+    verboseCount: data.verboseCount ?? data.VerboseCount ?? 0,
+  };
 }
 
 export interface AnalyzeData {
@@ -176,6 +204,94 @@ export async function fetchApiAnalyzeStatus(taskId: string, baseUrl: string = ''
     analysis: data.analysis || data.Analysis || '',
     eventsAnalyzed: data.eventsAnalyzed ?? data.EventsAnalyzed ?? 0
   };
+}
+
+export async function fetchMetricsSummary(baseUrl: string = ''): Promise<Partial<SystemMetricsData>> {
+  const urlPrefix = baseUrl ? baseUrl : (window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080');
+  const resp = await fetch(`${urlPrefix}/api/metrics/summary`);
+  if (!resp.ok) throw new Error(`HTTP Error: ${resp.status}`);
+  const data = await resp.json();
+  return {
+    cpuUsagePercent: (data.cpuUsagePercent ?? data.CpuUsagePercent ?? 0) as number,
+    memoryUsagePercent: (data.memoryUsagePercent ?? data.MemoryUsagePercent ?? 0) as number,
+    memoryUsedMB: (data.memoryUsedMB ?? data.MemoryUsedMB ?? 0) as number,
+    memoryTotalMB: (data.memoryTotalMB ?? data.MemoryTotalMB ?? 0) as number,
+    diskUsagePercent: (data.diskUsagePercent ?? data.DiskUsagePercent ?? 0) as number,
+    diskReadMBps: (data.diskReadMBps ?? data.DiskReadMBps ?? 0) as number,
+    diskWriteMBps: (data.diskWriteMBps ?? data.DiskWriteMBps ?? 0) as number,
+    networkUsageMbps: (data.networkUsageMbps ?? data.NetworkUsageMbps ?? 0) as number,
+  };
+}
+
+export async function fetchMetricsProcesses(baseUrl: string = ''): Promise<ProcessResourceData[]> {
+  const urlPrefix = baseUrl ? baseUrl : (window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080');
+  const resp = await fetch(`${urlPrefix}/api/metrics/processes`);
+  if (!resp.ok) throw new Error(`HTTP Error: ${resp.status}`);
+  const data = await resp.json();
+  const rawTopProcesses = data.topProcesses || data.TopProcesses || [];
+  return rawTopProcesses.map((p: Record<string, unknown>) => ({
+    processId: (p.processId ?? p.ProcessId ?? 0) as number,
+    name: (p.name ?? p.Name ?? '') as string,
+    path: (p.path ?? p.Path ?? '') as string,
+    commandLine: (p.commandLine ?? p.CommandLine ?? '') as string,
+    cpuUsagePercent: (p.cpuUsagePercent ?? p.CpuUsagePercent ?? 0) as number,
+    memoryUsageMB: (p.memoryUsageMB ?? p.MemoryUsageMB ?? 0) as number,
+    networkReadBytes: (p.networkReadBytes ?? p.NetworkReadBytes ?? 0) as number,
+    networkWriteBytes: (p.networkWriteBytes ?? p.NetworkWriteBytes ?? 0) as number,
+    openPorts: (p.openPorts ?? p.OpenPorts ?? '-') as string,
+    connectionEstablished: (p.connectionEstablished ?? p.ConnectionEstablished ?? false) as boolean,
+  }));
+}
+
+export async function fetchMetricsSessions(baseUrl: string = ''): Promise<{ activeUserSessions: UserSessionData[]; expiredUserSessions: UserSessionData[]; systemUsers: UserPrincipalData[]; rdpSessions: RdpSessionData[] }> {
+  const urlPrefix = baseUrl ? baseUrl : (window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080');
+  const resp = await fetch(`${urlPrefix}/api/metrics/sessions`);
+  if (!resp.ok) throw new Error(`HTTP Error: ${resp.status}`);
+  const data = await resp.json();
+
+  const rawActiveSessions = data.activeUserSessions || data.ActiveUserSessions || [];
+  const activeUserSessions = rawActiveSessions.map((s: Record<string, unknown>) => ({
+    username: (s.username ?? s.Username ?? '') as string,
+    privilege: (s.privilege ?? s.Privilege ?? '') as string,
+    loginTimestamp: (s.loginTimestamp ?? s.LoginTimestamp ?? '') as string,
+    logoutTimestamp: (s.logoutTimestamp ?? s.LogoutTimestamp ?? '') as string,
+    isActive: (s.isActive ?? s.IsActive ?? true) as boolean,
+  }));
+
+  const rawExpiredSessions = data.expiredUserSessions || data.ExpiredUserSessions || [];
+  const expiredUserSessions = rawExpiredSessions.map((s: Record<string, unknown>) => ({
+    username: (s.username ?? s.Username ?? '') as string,
+    privilege: (s.privilege ?? s.Privilege ?? '') as string,
+    loginTimestamp: (s.loginTimestamp ?? s.LoginTimestamp ?? '') as string,
+    logoutTimestamp: (s.logoutTimestamp ?? s.LogoutTimestamp ?? '') as string,
+    isActive: (s.isActive ?? s.IsActive ?? false) as boolean,
+  }));
+
+  const rawSystemUsers = data.systemUsers || data.SystemUsers || [];
+  const systemUsers = rawSystemUsers.map((u: Record<string, unknown>) => ({
+    username: (u.username ?? u.Username ?? '') as string,
+    domain: (u.domain ?? u.Domain ?? '') as string,
+    sidOrUid: (u.sidOrUid ?? u.SidOrUid ?? '') as string,
+    userClass: (u.userClass ?? u.UserClass ?? 'Normal') as string,
+    isDisabled: (u.isDisabled ?? u.IsDisabled ?? false) as boolean,
+    isAccountLocked: (u.isAccountLocked ?? u.IsAccountLocked ?? false) as boolean,
+    groups: (u.groups ?? u.Groups ?? []) as string[],
+    permissions: (u.permissions ?? u.Permissions ?? []) as string[],
+  }));
+
+  const rawRdpSessions = data.rdpSessions || data.RdpSessions || [];
+  const rdpSessions = rawRdpSessions.map((r: Record<string, unknown>) => ({
+    sessionId: (r.sessionId ?? r.SessionId ?? 0) as number,
+    sessionName: (r.sessionName ?? r.SessionName ?? '') as string,
+    userName: (r.userName ?? r.UserName ?? '') as string,
+    domainName: (r.domainName ?? r.DomainName ?? '') as string,
+    clientName: (r.clientName ?? r.ClientName ?? '') as string,
+    clientIpAddress: (r.clientIpAddress ?? r.ClientIpAddress ?? '') as string,
+    state: (r.state ?? r.State ?? 'Unknown') as string,
+    isRdpSession: (r.isRdpSession ?? r.IsRdpSession ?? false) as boolean,
+  }));
+
+  return { activeUserSessions, expiredUserSessions, systemUsers, rdpSessions };
 }
 
 export async function fetchApiMetrics(baseUrl: string = ''): Promise<SystemMetricsData> {

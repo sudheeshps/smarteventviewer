@@ -2,6 +2,8 @@
 #include "../Include/Platform/WinEventLogReader.h"
 #include "System/Console.h"
 #include "System/Diagnostics/EtwLogReader.h"
+#include "System/Threading/Mutex.h"
+#include "System/Threading/Lock.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -13,6 +15,16 @@ namespace SmartEventViewer
     using Console = DotNetDupe::System::Console;
     using EtwLogReader = DotNetDupe::System::Diagnostics::EtwLogReader;
     using EtwEvent = DotNetDupe::System::Diagnostics::EtwEvent;
+    using Mutex = DotNetDupe::System::Threading::Mutex;
+    using MutexLock = DotNetDupe::System::Threading::MutexLock;
+
+    static String FormatGlobalMutexName(const String& sChannelName)
+    {
+        String sCleanName = sChannelName;
+        sCleanName.Replace("/", "_");
+        sCleanName.Replace("\\", "_");
+        return String("Global\\SmartEventViewer_Channel_") + sCleanName;
+    }
 
     WinEventLogReader::WinEventLogReader() = default;
 
@@ -42,6 +54,9 @@ namespace SmartEventViewer
         m_sChannel = sChannelName;
         m_cachedEvents.clear();
         m_readIndex = 0;
+
+        Mutex channelMutex(FormatGlobalMutexName(sChannelName));
+        MutexLock lock(channelMutex);
 
         auto eventsList = EtwLogReader::ReadEvents(sChannelName, iMaxEvents, iStartIndex, true);
         for (int i = 0; i < eventsList.GetCount(); ++i)

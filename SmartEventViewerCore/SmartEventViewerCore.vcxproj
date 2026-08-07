@@ -105,11 +105,17 @@
     <ClInclude Include="..\Include\Ai\ILlamaModelProvider.h" />
     <ClInclude Include="..\Include\Ai\LocalLlmEngine.h" />
     <ClInclude Include="..\Include\Ai\RagVectorStore.h" />
-    <ClInclude Include="SystemTelemetryProvider.h" />
-    <ClInclude Include="EventsController.h" />
-    <ClInclude Include="TelemetryController.h" />
-    <ClInclude Include="LlmAnalysisController.h" />
-    <ClInclude Include="DiagnosticsController.h" />
+    <ClInclude Include="..\Include\Collections\LruCache.h" />
+    <ClInclude Include="..\Include\Logging\AppLoggerManager.h" />
+    <ClInclude Include="..\Include\Core\SystemTelemetryProvider.h" />
+    <ClInclude Include="..\Include\Core\EventsController.h" />
+    <ClInclude Include="..\Include\Core\EventLruCacheManager.h" />
+    <ClInclude Include="..\Include\Core\TelemetryController.h" />
+    <ClInclude Include="..\Include\Core\TelemetryCacheManager.h" />
+    <ClInclude Include="..\Include\Core\TelemetryWebSocketHandler.h" />
+    <ClInclude Include="..\Include\Core\TelemetryBackgroundWorker.h" />
+    <ClInclude Include="..\Include\Core\LlmAnalysisController.h" />
+    <ClInclude Include="..\Include\Core\DiagnosticsController.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
@@ -124,9 +130,14 @@
     <ClCompile Include="LinuxJournalReader.cpp" />
     <ClCompile Include="LocalLlmEngine.cpp" />
     <ClCompile Include="RagVectorStore.cpp" />
+    <ClCompile Include="AppLoggerManager.cpp" />
     <ClCompile Include="SystemTelemetryProvider.cpp" />
     <ClCompile Include="EventsController.cpp" />
+    <ClCompile Include="EventLruCacheManager.cpp" />
     <ClCompile Include="TelemetryController.cpp" />
+    <ClCompile Include="TelemetryCacheManager.cpp" />
+    <ClCompile Include="TelemetryWebSocketHandler.cpp" />
+    <ClCompile Include="TelemetryBackgroundWorker.cpp" />
     <ClCompile Include="LlmAnalysisController.cpp" />
     <ClCompile Include="DiagnosticsController.cpp" />
   </ItemGroup>
@@ -135,12 +146,12 @@
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
-    <Import Project="..\packages\DotNetDupe.3.0.2\build\native\DotNetDupe.targets" Condition="Exists('..\packages\DotNetDupe.3.0.2\build\native\DotNetDupe.targets')" />
+    <Import Project="..\packages\DotNetDupe.3.0.7\build\native\DotNetDupe.targets" Condition="Exists('..\packages\DotNetDupe.3.0.7\build\native\DotNetDupe.targets')" />
   </ImportGroup>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
       <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
     </PropertyGroup>
-    <Error Condition="!Exists('..\packages\DotNetDupe.3.0.2\build\native\DotNetDupe.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\DotNetDupe.3.0.2\build\native\DotNetDupe.targets'))" />
+    <Error Condition="!Exists('..\packages\DotNetDupe.3.0.7\build\native\DotNetDupe.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\DotNetDupe.3.0.7\build\native\DotNetDupe.targets'))" />
   </Target>
 </Project>

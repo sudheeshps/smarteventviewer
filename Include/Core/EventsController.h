@@ -4,7 +4,7 @@
 #include "WebAppCore/Controllers/ControllerBase.h"
 #include "WebAppCore/Controllers/ControllerRouteBuilder.h"
 #include "Platform/WinEventLogReader.h"
-#include "SystemTelemetryProvider.h"
+#include "Core/SystemTelemetryProvider.h"
 #include "System/Text/Json/JsonSerializer.h"
 
 namespace SmartEventViewer
@@ -33,7 +33,7 @@ namespace SmartEventViewer
         StringList Channels{};
     };
 
-    struct EventLogResponseDto
+    struct EventSummaryResponseDto
     {
         String Channel{};
         unsigned long long TotalCount{ 0 };
@@ -42,6 +42,12 @@ namespace SmartEventViewer
         unsigned long long WarningCount{ 0 };
         unsigned long long InfoCount{ 0 };
         unsigned long long VerboseCount{ 0 };
+    };
+
+    struct EventLogResponseDto
+    {
+        String Channel{};
+        unsigned long long TotalCount{ 0 };
         size_t Page{ 1 };
         size_t PageSize{ 20 };
         size_t TotalPages{ 0 };
@@ -98,8 +104,8 @@ namespace DotNetDupe {
                 };
 
                 template <typename Enable>
-                struct JsonConverter<SmartEventViewer::EventLogResponseDto, Enable> {
-                    static JsonElement Write(const SmartEventViewer::EventLogResponseDto& value) {
+                struct JsonConverter<SmartEventViewer::EventSummaryResponseDto, Enable> {
+                    static JsonElement Write(const SmartEventViewer::EventSummaryResponseDto& value) {
                         JsonElement obj(JsonValueKind::Object);
                         obj.SetProperty(String("channel"), JsonElement(value.Channel));
                         obj.SetProperty(String("totalCount"), JsonElement(static_cast<double>(value.TotalCount)));
@@ -108,6 +114,28 @@ namespace DotNetDupe {
                         obj.SetProperty(String("warningCount"), JsonElement(static_cast<double>(value.WarningCount)));
                         obj.SetProperty(String("infoCount"), JsonElement(static_cast<double>(value.InfoCount)));
                         obj.SetProperty(String("verboseCount"), JsonElement(static_cast<double>(value.VerboseCount)));
+                        return obj;
+                    }
+                    static SmartEventViewer::EventSummaryResponseDto Read(const JsonElement& element) {
+                        SmartEventViewer::EventSummaryResponseDto dto;
+                        JsonElement prop;
+                        if (element.TryGetProperty(String("channel"), prop)) dto.Channel = prop.GetString();
+                        if (element.TryGetProperty(String("totalCount"), prop)) dto.TotalCount = static_cast<unsigned long long>(prop.GetDouble());
+                        if (element.TryGetProperty(String("criticalCount"), prop)) dto.CriticalCount = static_cast<unsigned long long>(prop.GetDouble());
+                        if (element.TryGetProperty(String("errorCount"), prop)) dto.ErrorCount = static_cast<unsigned long long>(prop.GetDouble());
+                        if (element.TryGetProperty(String("warningCount"), prop)) dto.WarningCount = static_cast<unsigned long long>(prop.GetDouble());
+                        if (element.TryGetProperty(String("infoCount"), prop)) dto.InfoCount = static_cast<unsigned long long>(prop.GetDouble());
+                        if (element.TryGetProperty(String("verboseCount"), prop)) dto.VerboseCount = static_cast<unsigned long long>(prop.GetDouble());
+                        return dto;
+                    }
+                };
+
+                template <typename Enable>
+                struct JsonConverter<SmartEventViewer::EventLogResponseDto, Enable> {
+                    static JsonElement Write(const SmartEventViewer::EventLogResponseDto& value) {
+                        JsonElement obj(JsonValueKind::Object);
+                        obj.SetProperty(String("channel"), JsonElement(value.Channel));
+                        obj.SetProperty(String("totalCount"), JsonElement(static_cast<double>(value.TotalCount)));
                         obj.SetProperty(String("page"), JsonElement(static_cast<double>(value.Page)));
                         obj.SetProperty(String("pageSize"), JsonElement(static_cast<double>(value.PageSize)));
                         obj.SetProperty(String("totalPages"), JsonElement(static_cast<double>(value.TotalPages)));
@@ -119,11 +147,6 @@ namespace DotNetDupe {
                         JsonElement prop;
                         if (element.TryGetProperty(String("channel"), prop)) dto.Channel = prop.GetString();
                         if (element.TryGetProperty(String("totalCount"), prop)) dto.TotalCount = static_cast<unsigned long long>(prop.GetDouble());
-                        if (element.TryGetProperty(String("criticalCount"), prop)) dto.CriticalCount = static_cast<unsigned long long>(prop.GetDouble());
-                        if (element.TryGetProperty(String("errorCount"), prop)) dto.ErrorCount = static_cast<unsigned long long>(prop.GetDouble());
-                        if (element.TryGetProperty(String("warningCount"), prop)) dto.WarningCount = static_cast<unsigned long long>(prop.GetDouble());
-                        if (element.TryGetProperty(String("infoCount"), prop)) dto.InfoCount = static_cast<unsigned long long>(prop.GetDouble());
-                        if (element.TryGetProperty(String("verboseCount"), prop)) dto.VerboseCount = static_cast<unsigned long long>(prop.GetDouble());
                         if (element.TryGetProperty(String("page"), prop)) dto.Page = static_cast<size_t>(prop.GetDouble());
                         if (element.TryGetProperty(String("pageSize"), prop)) dto.PageSize = static_cast<size_t>(prop.GetDouble());
                         if (element.TryGetProperty(String("totalPages"), prop)) dto.TotalPages = static_cast<size_t>(prop.GetDouble());
@@ -152,20 +175,10 @@ using namespace DotNetDupe::WebAppCore::Controllers;
 
 namespace SmartEventViewer
 {
-    struct ChannelEventCache
-    {
-        unsigned long long LastEventCount{ 0 };
-        EventLogResponseDto CachedResponse{};
-    };
-
     class SMARTEVENTVIEWER_API EventsController : public ControllerBase
     {
     private:
         WinEventLogReader m_logReader{};
-
-        // Thread-safe event channel cache
-        static DotNetDupe::System::Threading::CriticalSection s_eventsCacheCs;
-        static Dictionary<String, ChannelEventCache> s_eventsCache;
 
         static DotNetDupe::System::Collections::Generic::List<String> s_serverLogs;
         static DotNetDupe::System::Threading::CriticalSection s_serverLogsCs;
@@ -179,6 +192,10 @@ namespace SmartEventViewer
 
         // Returns strongly typed ChannelsResponseDto payload
         ChannelsResponseDto GetChannels();
+
+        // Returns channel summary counts (critical, error, warning, info, verbose)
+        EventSummaryResponseDto GetEventSummary();
+        EventSummaryResponseDto GetEventSummary(const String& channelName);
 
         // Returns strongly typed EventLogResponseDto payload with pagination
         EventLogResponseDto GetEvents(const String& channelName, size_t page, size_t pageSize);

@@ -7,40 +7,50 @@
 #include "System/Convert.h"
 #include "System/Path.h"
 #include "System/IO/File.h"
+#include "System/IO/TextWriter.h"
+#include "System/IO/StringWriter.h"
 #include "WebAppCore/Builder/WebApplication.h"
 #include "WebAppCore/Builder/WebApplicationBuilder.h"
 #include "WebAppCore/Controllers/ControllerBase.h"
 #include "WebAppCore/Controllers/ControllerRouteBuilder.h"
 #include "WebAppCore/Server/WebAppServer.h"
-#include "EventsController.h"
-#include "TelemetryController.h"
-#include "LlmAnalysisController.h"
-#include "DiagnosticsController.h"
+#include "Extensions/Logging/LogManager.h"
+#include "Extensions/Logging/FileLoggerProvider.h"
+#include "Extensions/Logging/ConsoleLoggerProvider.h"
+#include "Extensions/Logging/LoggerConfiguration.h"
+#include "Extensions/Logging/LoggerTextWriter.h"
+#include "Core/EventsController.h"
+#include "Core/TelemetryController.h"
+#include "Core/LlmAnalysisController.h"
+#include "Core/DiagnosticsController.h"
+
+#include "Core/TelemetryWebSocketHandler.h"
+#include "Core/TelemetryBackgroundWorker.h"
 
 using namespace DotNetDupe::System;
 using namespace DotNetDupe::System::IO;
+using namespace DotNetDupe::Extensions::Logging;
 using namespace DotNetDupe::WebAppCore::Builder;
 using namespace DotNetDupe::WebAppCore::Http;
 using namespace DotNetDupe::WebAppCore::Controllers;
 using namespace DotNetDupe::WebAppCore::Server;
 
-static SmartPointer<WebApplication> g_app = nullptr;
-static SmartPointer<WebAppServer> g_webServer = nullptr;
+SmartPointer<WebApplication> g_app = nullptr;
+SmartPointer<WebAppServer> g_webServer = nullptr;
 
 void SignalHandler(int signal)
 {
-    (void)signal;
-    Console::WriteLine("\n[SERVER] Shutdown signal (SIGINT/SIGTERM) received. Stopping WebApplication...");
-    if (!g_webServer.IsNull())
+    if (signal == SIGINT || signal == SIGTERM)
     {
-        g_webServer->Stop();
+        Console::WriteLine("\n[SERVER] Shutdown signal received. Stopping WebAppServer...");
+        SmartEventViewer::TelemetryBackgroundWorker::Stop();
+        if (!g_webServer.IsNull())
+        {
+            g_webServer->Stop();
+        }
+        Console::WriteLine("[SERVER] Server gracefully stopped.");
+        exit(0);
     }
-    else if (!g_app.IsNull())
-    {
-        g_app->Stop();
-    }
-    Console::WriteLine("[SERVER] Server process stopped cleanly.");
-    exit(0);
 }
 
 int main(int argc, char* argv[])
@@ -48,18 +58,31 @@ int main(int argc, char* argv[])
     (void)argc;
     (void)argv;
 
-    signal(SIGINT, SignalHandler);
-    signal(SIGTERM, SignalHandler);
+    std::signal(SIGINT, SignalHandler);
+    std::signal(SIGTERM, SignalHandler);
 
     try
     {
-        Console::WriteLine("==========================================================");
-        Console::WriteLine("  SmartEventViewer SIEM Server (DotNetDupe Framework)");
-        Console::WriteLine("==========================================================");
-        Console::WriteLine("[SERVER] Initializing DotNetDupe WebApplicationBuilder...");
+        Console::WriteLine("=================================================");
+        Console::WriteLine("   SmartEventViewer Web Server Native Host (x64) ");
+        Console::WriteLine("=================================================");
+        Console::WriteLine("[SERVER] Initializing DotNetDupe WebApplication pipeline...");
 
-        // 1. Create Builder & Register Controllers in DI container
         WebApplicationBuilder builder;
+
+        LoggerConfiguration logConfig;
+        logConfig.FilePath = "logs/SmartEventViewerServer.log";
+        logConfig.MinLevel = LogLevel::Information;
+        logConfig.IsJsonFormat = true;
+        logConfig.Rollover.EnableRollover = true;
+        logConfig.Rollover.MaxFileSizeInBytes = 5 * 1024 * 1024;
+        logConfig.Rollover.MaxBackupFiles = 5;
+
+        LogManager::Configure(logConfig);
+        
+        Console::SetOut(SmartPointer<LoggerTextWriter>::NewShared("Console"));
+
+        Console::WriteLine("[SERVER] LogManager configured with JSON file logging & console redirection.");
 
         builder.GetServices().AddTransient<SmartEventViewer::EventsController, SmartEventViewer::EventsController>();
         builder.GetServices().AddTransient<SmartEventViewer::TelemetryController, SmartEventViewer::TelemetryController>();
@@ -70,10 +93,13 @@ int main(int argc, char* argv[])
         
         builder.AddController<SmartEventViewer::EventsController>("/api")
             .MapGet("/channels", &SmartEventViewer::EventsController::GetChannels)
+            .MapGet("/events/summary", static_cast<SmartEventViewer::EventSummaryResponseDto (SmartEventViewer::EventsController::*)()>(&SmartEventViewer::EventsController::GetEventSummary))
             .MapGet("/events", static_cast<SmartEventViewer::EventLogResponseDto (SmartEventViewer::EventsController::*)(const String&, size_t, size_t)>(&SmartEventViewer::EventsController::GetEvents));
 
         builder.AddController<SmartEventViewer::TelemetryController>("/api")
-            .MapGet("/metrics", &SmartEventViewer::TelemetryController::GetMetrics);
+            .MapGet("/metrics/summary", &SmartEventViewer::TelemetryController::GetSummary)
+            .MapGet("/metrics/processes", &SmartEventViewer::TelemetryController::GetProcesses)
+            .MapGet("/metrics/sessions", &SmartEventViewer::TelemetryController::GetSessions);
 
         builder.AddController<SmartEventViewer::DiagnosticsController>("/api")
             .MapGet("/logs", &SmartEventViewer::DiagnosticsController::GetServerLogs);
@@ -86,20 +112,9 @@ int main(int argc, char* argv[])
         Console::WriteLine("[SERVER] Building WebApplication pipeline...");
         g_app = builder.Build();
 
-        // 3. Setup Web API Controllers & Minimal API Endpoints
-        Console::WriteLine("[SERVER] Mapping Minimal API Endpoints...");
-
-        // Dynamic Route Parameter Minimal API Endpoint
-        g_app->MapGet("/api/events/{channelName}", [](SmartPointer<HttpContext> context) -> String {
-            String channelName;
-            if (context->GetRequest()->GetRouteValues().TryGetValue("channelName", channelName)) {
-                Console::WriteLine("[SERVER] HTTP GET /api/events/{0} -> Target Channel: {0}", channelName);
-                auto spController = g_app->GetServices()->GetRequiredService<SmartEventViewer::EventsController>();
-                auto eventsDto = spController->GetEvents(channelName);
-                return String::Format("{{\"channel\":\"{0}\",\"totalCount\":{1}}}", eventsDto.Channel, eventsDto.TotalCount);
-            }
-            return "{\"error\":\"Channel parameter missing in route path\"}";
-        });
+        // 3. Map WebSocket for Telemetry Push
+        g_app->MapWebSocket("/ws/telemetry", SmartEventViewer::TelemetryWebSocketHandler::GetInstance());
+        Console::WriteLine("[SERVER] Mapped WebSocket endpoint: /ws/telemetry");
 
         // 3c. Setup Web API Controllers
         Console::WriteLine("[SERVER] Finalizing Web API Controllers mapping...");
@@ -116,7 +131,10 @@ int main(int argc, char* argv[])
         g_webServer = SmartPointer<WebAppServer>::New(g_app, sWebRoot);
         g_webServer->EnableStaticFiles("index.html");
 
-        // 5. Start the server via DotNetDupe WebAppServer framework
+        // 5. Start Telemetry Background Worker Thread
+        SmartEventViewer::TelemetryBackgroundWorker::Start();
+
+        // 6. Start the server via DotNetDupe WebAppServer framework
         Console::WriteLine("[SERVER] Starting WebAppServer static + WebAPI listener on port 8080");
         Console::WriteLine("[SERVER] Server is actively running at http://127.0.0.1:8080/");
         Console::WriteLine("[SERVER] Press Ctrl+C to stop.\n");

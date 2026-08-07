@@ -1,6 +1,6 @@
 #include "pch.h"
-#include "DiagnosticsController.h"
-#include "EventsController.h"
+#include "Core/DiagnosticsController.h"
+#include "Core/EventsController.h"
 
 namespace SmartEventViewer
 {

@@ -24,6 +24,9 @@ namespace SmartEventViewer
         ~SystemTelemetryProvider() = default;
 
         SMARTEVENTVIEWER_API static SystemMetricsResponseDto QuerySystemMetrics();
+        SMARTEVENTVIEWER_API static SystemMetricsResponseDto QuerySummary();
+        SMARTEVENTVIEWER_API static SystemMetricsResponseDto QueryProcesses();
+        SMARTEVENTVIEWER_API static SystemMetricsResponseDto QuerySessions();
 
         // Helper methods for telemetry and process resource mapping
         SMARTEVENTVIEWER_API static void CalculateDiskRates(const DotNetDupe::System::Diagnostics::RealTimeSystemInfo& realInfo, double& outReadMb, double& outWriteMb);

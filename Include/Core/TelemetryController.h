@@ -260,7 +260,12 @@ namespace SmartEventViewer
         TelemetryController() = default;
         ~TelemetryController() override = default;
 
-        // System Telemetry Metrics Endpoint
+        // Specialized REST Endpoints
+        SMARTEVENTVIEWER_API SystemMetricsResponseDto GetSummary();
+        SMARTEVENTVIEWER_API SystemMetricsResponseDto GetProcesses();
+        SMARTEVENTVIEWER_API SystemMetricsResponseDto GetSessions();
+
+        // System Telemetry Metrics Endpoint (Full Legacy)
         SMARTEVENTVIEWER_API SystemMetricsResponseDto GetMetrics();
     };
 }

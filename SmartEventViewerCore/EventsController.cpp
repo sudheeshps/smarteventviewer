@@ -13,7 +13,8 @@
 #pragma comment(lib, "psapi.lib")
 #endif
 
-#include "EventsController.h"
+#include "Core/EventsController.h"
+#include "Core/EventLruCacheManager.h"
 #include "Core/EventRecord.h"
 #include "Core/AnomalyEngine.h"
 #include "System/Console.h"
@@ -29,9 +30,6 @@ namespace SmartEventViewer
     // =========================================================================
     // Static Member Definitions
     // =========================================================================
-    CriticalSection EventsController::s_eventsCacheCs{};
-    Dictionary<String, ChannelEventCache> EventsController::s_eventsCache{};
-
     DotNetDupe::System::Collections::Generic::List<String> EventsController::s_serverLogs{};
     CriticalSection EventsController::s_serverLogsCs{};
 
@@ -142,88 +140,45 @@ namespace SmartEventViewer
         return GetEvents(channelName, 1, 20);
     }
 
+    EventSummaryResponseDto EventsController::GetEventSummary()
+    {
+        String sRawChannel;
+        if (!m_httpContext.IsNull() && !Request().IsNull()) {
+            Request()->GetQuery().TryGetValue("channel", sRawChannel);
+        }
+        if (sRawChannel.IsEmpty()) sRawChannel = "Application";
+        return GetEventSummary(sRawChannel);
+    }
+
+    EventSummaryResponseDto EventsController::GetEventSummary(const String& channelName)
+    {
+        String sRawChannel = channelName;
+        if (sRawChannel.IsEmpty() && !m_httpContext.IsNull() && !Request().IsNull()) {
+            Request()->GetQuery().TryGetValue("channel", sRawChannel);
+        }
+        if (sRawChannel.IsEmpty()) sRawChannel = "Application";
+        String sTargetChannel = UrlDecodeChannel(sRawChannel);
+
+        Log(String::Format("[SERVER] Executing EventsController::GetEventSummary() for channel: {0}", sTargetChannel));
+        try {
+            return EventLruCacheManager::GetInstance().GetSummary(sTargetChannel);
+        } catch (const std::exception& ex) {
+            Log(String::Format("[ERROR] GetEventSummary std::exception for '{0}': {1}", sTargetChannel, ex.what()));
+        } catch (...) {
+            Log(String::Format("[ERROR] GetEventSummary unknown SEH / system exception for '{0}'", sTargetChannel));
+        }
+
+        EventSummaryResponseDto fallbackDto;
+        fallbackDto.Channel = sTargetChannel;
+        return fallbackDto;
+    }
+
     EventLogResponseDto EventsController::GetEvents(const String& channelName, size_t page, size_t pageSize)
     {
         String sRawChannel = channelName.IsEmpty() ? String("Application") : channelName;
         String sTargetChannel = UrlDecodeChannel(sRawChannel);
-        if (page < 1) page = 1;
-        if (pageSize < 1) pageSize = 20;
 
         Log(String::Format("[SERVER] Executing EventsController::GetEvents() for channel: {0} (Page: {1}, PageSize: {2})", sTargetChannel, page, pageSize));
-
-        unsigned long long uTotalCount = 0;
-        String sCacheKey = String::Format("{0}_p{1}_ps{2}", sTargetChannel, page, pageSize);
-
-        {
-            Lock<CriticalSection> lock(s_eventsCacheCs);
-            uTotalCount = m_logReader.GetChannelEventCount(sTargetChannel);
-
-            ChannelEventCache cachedEntry;
-            if (s_eventsCache.TryGetValue(sCacheKey, cachedEntry))
-            {
-                if (cachedEntry.LastEventCount == uTotalCount && uTotalCount > 0)
-                {
-                    Log(String::Format("[SERVER] [CACHE_HIT] Event count for '{0}' unchanged ({1} events). Returning cached response.", sTargetChannel, uTotalCount));
-                    return cachedEntry.CachedResponse;
-                }
-            }
-        }
-
-        Log(String::Format("[SERVER] [CACHE_MISS] Event count changed or new channel query for '{0}' ({1} total events). Reading channel logs...", sTargetChannel, uTotalCount));
-
-        auto levelCounts = DotNetDupe::System::Diagnostics::EtwLogReader::GetChannelEventLevelCounts(sTargetChannel);
-        size_t totalPages = (uTotalCount == 0) ? 0 : static_cast<size_t>((uTotalCount + pageSize - 1) / pageSize);
-
-        EventLogResponseDto responseDto;
-        responseDto.Channel = sTargetChannel;
-        responseDto.TotalCount = uTotalCount;
-        responseDto.CriticalCount = levelCounts.uCriticalCount;
-        responseDto.ErrorCount = levelCounts.uErrorCount;
-        responseDto.WarningCount = levelCounts.uWarningCount;
-        responseDto.InfoCount = levelCounts.uInfoCount;
-        responseDto.VerboseCount = levelCounts.uVerboseCount;
-        responseDto.Page = page;
-        responseDto.PageSize = pageSize;
-        responseDto.TotalPages = totalPages;
-
-        size_t startIndex = (page - 1) * pageSize;
-
-        if (m_logReader.OpenLogPaged(sTargetChannel, static_cast<int>(pageSize), static_cast<int>(startIndex)))
-        {
-            EventRecord evt;
-            size_t currentItemIdx = startIndex + 1;
-
-            while (m_logReader.ReadNextEvent(evt))
-            {
-                EventDto dto;
-                dto.Index = currentItemIdx++;
-                dto.Id = evt.GetEventId();
-                dto.Level = (evt.GetLevel() == EventLevel::Critical ? "Critical" : (evt.GetLevel() == EventLevel::Error ? "Error" : (evt.GetLevel() == EventLevel::Warning ? "Warning" : "Information")));
-                dto.Risk = (evt.GetRiskLevel() == RiskLevel::Critical ? "Critical" : (evt.GetRiskLevel() == RiskLevel::High ? "High" : (evt.GetRiskLevel() == RiskLevel::Medium ? "Medium" : "Low")));
-                dto.Provider = evt.GetProviderName();
-                dto.Time = evt.GetTimeCreated();
-                dto.Message = evt.GetEventMessage();
-                dto.RawXml = evt.GetRawXml();
-
-                responseDto.Events.Add(dto);
-            }
-            m_logReader.Close();
-            Log(String::Format("[SERVER] Streamed DTO response: {0} events for channel '{1}'", responseDto.Events.GetCount(), sTargetChannel));
-        }
-        else
-        {
-            Log(String::Format("[SERVER] [WARNING] Failed to open channel log: {0}", sTargetChannel));
-        }
-
-        // Cache the newly fetched response
-        {
-            Lock<CriticalSection> lock(s_eventsCacheCs);
-            ChannelEventCache newCacheEntry;
-            newCacheEntry.LastEventCount = uTotalCount;
-            newCacheEntry.CachedResponse = responseDto;
-            s_eventsCache[sCacheKey] = newCacheEntry;
-        }
-
-        return responseDto;
+        return EventLruCacheManager::GetInstance().GetEvents(sTargetChannel, page, pageSize);
     }
 }

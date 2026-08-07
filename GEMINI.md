@@ -47,6 +47,7 @@ After building, execute unit tests via the test runner:
   - **Private Members**: Prefixed with `m_` followed by type prefix (e.g., `m_nItems`, `m_hHandle`).
   - **Static Fields**: Prefixed with `s_` (e.g., `s_defaultInstance`).
 - **Headers**: Use `#pragma once` and include files relative to `Include/`.
+- **Brace Style Convention**: **Opening braces `{` for classes, functions, namespaces, control statements, and loops must always be placed on the SAME line** as the declaration (1TBS / K&R style), e.g. `class MyClass {`, `void MyMethod() {`, `if (condition) {`.
 - **Unit Test Naming**: Unit test names must strictly follow the `GivenWhenThen` naming convention format as established in DotNetDupe (e.g., `TEST(EventRecordTest, GivenValidRecord_WhenGetLevelCalled_ThenReturnsCorrectLevel)`).
 - **Test Coverage Rules**: Every feature or component must include unit tests covering positive scenarios (happy path), negative scenarios (invalid inputs, exception throwing), and edge cases (empty strings, zero bounds, null pointers, boundary limits).
 

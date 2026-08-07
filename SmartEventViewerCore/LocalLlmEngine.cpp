@@ -276,6 +276,15 @@ namespace SmartEventViewer
             m_requestQueue.CompleteAdding();
             m_responseQueue.CompleteAdding();
 
+            if (m_spWorkerThread && m_spWorkerThread->IsAlive())
+            {
+                m_spWorkerThread->Join();
+            }
+            if (m_spNotifierThread && m_spNotifierThread->IsAlive())
+            {
+                m_spNotifierThread->Join();
+            }
+
             if (m_spModelProvider)
             {
                 m_spModelProvider->FreeContextAndModel();

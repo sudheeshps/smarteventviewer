@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { EventDto } from '../types';
-import { fetchApiEvents, fetchApiAnalyze, fetchApiAnalyzeStatus } from '../apiClient';
+import { fetchApiEvents, fetchEventSummary, fetchApiAnalyze, fetchApiAnalyzeStatus } from '../apiClient';
 
 interface EventsExplorerProps {
   channelName: string;
@@ -45,18 +45,23 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onO
     const baseUrl = window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080';
     console.log(`[UI-APP DEBUG] Fetching paged events (Page ${page}) for channel '${channel}' from: ${baseUrl}`);
     try {
+      // 1. Fetch channel summary counts
+      const summaryData = await fetchEventSummary(channel, baseUrl).catch(() => null);
+      if (summaryData) {
+        setServerLevelCounts({
+          critical: summaryData.criticalCount || 0,
+          error: summaryData.errorCount || 0,
+          warning: summaryData.warningCount || 0,
+          info: summaryData.infoCount || 0,
+          verbose: summaryData.verboseCount || 0,
+        });
+      }
+
+      // 2. Fetch page event records list
       const data = await fetchApiEvents(channel, baseUrl, page, pageSize);
       console.log(`[UI-APP DEBUG] Received paged events payload:`, data);
       setTotalCount(data.totalCount || 0);
       setServerTotalPages(data.totalPages || Math.ceil((data.totalCount || 0) / pageSize) || 1);
-      
-      setServerLevelCounts({
-        critical: data.criticalCount || 0,
-        error: data.errorCount || 0,
-        warning: data.warningCount || 0,
-        info: data.infoCount || 0,
-        verbose: data.verboseCount || 0,
-      });
 
       const startIndex = (page - 1) * pageSize;
       const mappedEvents: EventDto[] = ((data.events as unknown as Array<Record<string, unknown>>) || []).map((e, i) => ({

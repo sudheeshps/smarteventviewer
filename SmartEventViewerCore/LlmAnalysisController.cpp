@@ -1,11 +1,11 @@
 #include "pch.h"
-#include "LlmAnalysisController.h"
+#include "Core/LlmAnalysisController.h"
 #include "Core/EventRecord.h"
 #include "Core/AnomalyEngine.h"
 #include "Platform/WinEventLogReader.h"
 #include "System/Console.h"
 #include "System/Convert.h"
-#include "EventsController.h"
+#include "Core/EventsController.h"
 
 using Console = DotNetDupe::System::Console;
 using Convert = DotNetDupe::System::Convert;
@@ -109,7 +109,28 @@ namespace SmartEventViewer
 
         for (int i = 0; i < channelsToScan.GetCount(); ++i)
         {
+            {
+                Lock<CriticalSection> lock(s_analysisResultsCs);
+                AnalyzeResponseDto currentStatus;
+                if (s_analysisResults.TryGetValue(sTaskId, currentStatus))
+                {
+                    currentStatus.Status = String("RUNNING");
+                    currentStatus.ProgressMessage = String::Format("Scanning channel [{0}/{1}] {2}...", i + 1, channelsToScan.GetCount(), channelsToScan[i]);
+                    s_analysisResults[sTaskId] = currentStatus;
+                }
+            }
             ScanChannelEvents(channelsToScan[i], aggregatedEvents);
+        }
+
+        {
+            Lock<CriticalSection> lock(s_analysisResultsCs);
+            AnalyzeResponseDto currentStatus;
+            if (s_analysisResults.TryGetValue(sTaskId, currentStatus))
+            {
+                currentStatus.Status = String("RUNNING");
+                currentStatus.ProgressMessage = String::Format("Evaluating {0} events via AI Threat Analysis engine...", aggregatedEvents.GetCount());
+                s_analysisResults[sTaskId] = currentStatus;
+            }
         }
 
         AnalyzeResponseDto responseDto;

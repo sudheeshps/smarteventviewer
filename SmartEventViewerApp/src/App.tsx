@@ -118,15 +118,16 @@ export function App() {
       />
 
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
-        {activeTab === 'dashboard' && (
+        <div style={{ display: activeTab === 'dashboard' ? 'flex' : 'none', flex: 1, flexDirection: 'column' }}>
           <Dashboard
             onSelectChannel={(ch) => {
               setCurrentChannel(ch);
               setActiveTab('events');
             }}
           />
-        )}
-        {activeTab === 'events' && (
+        </div>
+
+        <div style={{ display: activeTab === 'events' ? 'flex' : 'none', flex: 1, flexDirection: 'column' }}>
           <EventsExplorer
             channelName={currentChannel}
             onOpenChat={(initialQuery, responseText) => {
@@ -138,32 +139,38 @@ export function App() {
                 const cleanMsg = responseText.replace('⏳ ', '');
                 setChatProgressMessage(cleanMsg);
                 setChatHistory((prev) => {
-                  if (prev.length > 0 && prev[prev.length - 1].sender === 'user' && prev[prev.length - 1].text === initialQuery) {
-                    return prev;
+                  const hasUserMsg = prev.some((m) => m.sender === 'user' && m.text === initialQuery);
+                  if (hasUserMsg) {
+                    return [...prev]; // Return new array reference to guarantee React state re-render
                   }
-                  return [...prev, { sender: 'user', text: initialQuery, channel: currentChannel }];
+                  return [...prev, { sender: 'user' as const, text: initialQuery, channel: currentChannel }];
                 });
               } else {
                 setIsChatAnalyzing(false);
-                setChatHistory((prev) => [
-                  ...prev,
-                  { sender: 'assistant', text: responseText, channel: currentChannel },
-                ]);
+                setChatHistory((prev) => {
+                  const hasUserMsg = prev.some((m) => m.sender === 'user' && m.text === initialQuery);
+                  const userEntry = { sender: 'user' as const, text: initialQuery, channel: currentChannel };
+                  const assistantEntry = { sender: 'assistant' as const, text: responseText, channel: currentChannel };
+                  const newHistory = hasUserMsg ? prev : [...prev, userEntry];
+                  return [...newHistory, assistantEntry];
+                });
               }
             }}
           />
-        )}
-        {activeTab === 'riskcenter' && (
+        </div>
+
+        <div style={{ display: activeTab === 'riskcenter' ? 'flex' : 'none', flex: 1, flexDirection: 'column' }}>
           <RiskCenter
             onSelectChannel={(ch) => {
               setCurrentChannel(ch);
               setActiveTab('events');
             }}
           />
-        )}
-        {activeTab === 'serverlogs' && (
+        </div>
+
+        <div style={{ display: activeTab === 'serverlogs' ? 'flex' : 'none', flex: 1, flexDirection: 'column' }}>
           <ServerLogsViewer />
-        )}
+        </div>
 
         {/* Floating Chat Drawer Toggle Button when collapsed or hidden */}
         {(!showChatPanel || isChatCollapsed) && (
@@ -288,14 +295,19 @@ export function App() {
                       if (!taskId) {
                         setChatHistory((prev) => [...prev, { sender: 'assistant', text: enqueueRes.analysis || 'Error initiating task.' }]);
                       } else {
-                        const statusRes = await fetchApiAnalyzeStatus(taskId, baseUrl);
-                        if (statusRes.status === 'COMPLETED') {
-                          finalResult = (statusRes.analysis && statusRes.analysis.trim().length > 0) ? statusRes.analysis : 'Analysis complete (no anomalies flagged).';
-                        } else {
-                          await new Promise((resolve) => setTimeout(resolve, 1500));
-                          const checkRes = await fetchApiAnalyzeStatus(taskId, baseUrl);
-                          finalResult = (checkRes.analysis && checkRes.analysis.trim().length > 0) ? checkRes.analysis : (checkRes.progressMessage || 'Analysis task completed.');
+                        let isCompleted = false;
+                        let statusRes = enqueueRes;
+                        while (!isCompleted) {
+                          await new Promise((resolve) => setTimeout(resolve, 300));
+                          statusRes = await fetchApiAnalyzeStatus(taskId, baseUrl);
+                          if (statusRes.progressMessage) {
+                            setChatProgressMessage(statusRes.progressMessage);
+                          }
+                          if (statusRes.status === 'COMPLETED' || statusRes.status === 'FAILED' || (statusRes.analysis && statusRes.analysis.trim().length > 0)) {
+                            isCompleted = true;
+                          }
                         }
+                        finalResult = (statusRes.analysis && statusRes.analysis.trim().length > 0) ? statusRes.analysis : 'Analysis complete (no anomalies flagged).';
                         setChatHistory((prev) => [...prev, { sender: 'assistant', text: finalResult }]);
                       }
                     } catch (err) {

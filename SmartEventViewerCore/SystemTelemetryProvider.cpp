@@ -1,11 +1,13 @@
 #include "pch.h"
-#include "SystemTelemetryProvider.h"
-#include "TelemetryController.h"
+#include "Core/SystemTelemetryProvider.h"
+#include "Core/TelemetryController.h"
 #include "System/Console.h"
 #include "System/Diagnostics/SystemMetrics.h"
 #include "System/Diagnostics/ActiveUserSession.h"
 #include "System/Diagnostics/TerminalSession.h"
 #include "System/Security/Principal/UserPrincipal.h"
+#include "System/Threading/CriticalSection.h"
+#include "System/Threading/Lock.h"
 
 namespace SmartEventViewer
 {
@@ -16,6 +18,13 @@ namespace SmartEventViewer
     using RdpSessionState = DotNetDupe::System::Diagnostics::RdpSessionState;
     using UserPrincipal = DotNetDupe::System::Security::Principal::UserPrincipal;
     using UserClass = DotNetDupe::System::Security::Principal::UserClass;
+    using CriticalSection = DotNetDupe::System::Threading::CriticalSection;
+    using LockCS = DotNetDupe::System::Threading::Lock<CriticalSection>;
+
+    static SystemMetricsResponseDto s_cachedMetrics;
+    static ULONGLONG s_lastMetricsFetchTimeMs = 0;
+    static CriticalSection s_metricsCs;
+    static bool s_hasCachedMetrics = false;
 
     void SystemTelemetryProvider::CalculateDiskRates(const DotNetDupe::System::Diagnostics::RealTimeSystemInfo& realInfo, double& outReadMb, double& outWriteMb)
     {
@@ -179,9 +188,90 @@ namespace SmartEventViewer
         }
     }
 
+    SystemMetricsResponseDto SystemTelemetryProvider::QuerySummary() {
+        ULONGLONG curTimeMs = GetTickCount64();
+        {
+            LockCS lock(s_metricsCs);
+            if (s_hasCachedMetrics && (curTimeMs - s_lastMetricsFetchTimeMs < 2000)) {
+                return s_cachedMetrics;
+            }
+        }
+
+        SystemMetricsResponseDto metrics;
+        try {
+            auto realInfo = SystemMetrics::GetSystemMetrics();
+
+            double sysCpu = realInfo.dCpuUsagePercent;
+            if (sysCpu < 0.0) sysCpu = 0.0;
+            if (sysCpu > 100.0) sysCpu = 100.0;
+
+            metrics.CpuUsagePercent = sysCpu;
+            metrics.MemoryUsagePercent = realInfo.dMemoryUsagePercent;
+            metrics.MemoryTotalMB = realInfo.uMemoryTotalBytes / (1024 * 1024);
+            metrics.MemoryUsedMB = realInfo.uMemoryUsedBytes / (1024 * 1024);
+
+            double calculatedReadMb = 0.0, calculatedWriteMb = 0.0;
+            CalculateDiskRates(realInfo, calculatedReadMb, calculatedWriteMb);
+            metrics.DiskReadMBps = calculatedReadMb;
+            metrics.DiskWriteMBps = calculatedWriteMb;
+            metrics.NetworkUsageMbps = realInfo.dNetworkUsageMbps;
+
+            for (int i = 0; i < realInfo.lstTopProcesses.GetCount(); ++i) {
+                metrics.TopProcesses.Add(MapProcessResourceDto(realInfo.lstTopProcesses[i]));
+            }
+
+            {
+                LockCS lock(s_metricsCs);
+                s_cachedMetrics = metrics;
+                s_lastMetricsFetchTimeMs = curTimeMs;
+                s_hasCachedMetrics = true;
+            }
+            return metrics;
+        } catch (const DotNetDupe::System::BasicSystemException<char>& sysEx) {
+            Console::WriteLine(String::Format("[TELEMETRY_PROVIDER_ERROR] QuerySummary DotNetDupe SystemException: {0}", sysEx.What()));
+            LockCS lock(s_metricsCs);
+            return s_hasCachedMetrics ? s_cachedMetrics : metrics;
+        } catch (const DotNetDupe::System::BasicException<char>& ex) {
+            Console::WriteLine(String::Format("[TELEMETRY_PROVIDER_ERROR] QuerySummary DotNetDupe Exception: {0}", ex.What()));
+            LockCS lock(s_metricsCs);
+            return s_hasCachedMetrics ? s_cachedMetrics : metrics;
+        } catch (...) {
+            Console::WriteLine("[TELEMETRY_PROVIDER_ERROR] QuerySummary unknown exception.");
+            LockCS lock(s_metricsCs);
+            return s_hasCachedMetrics ? s_cachedMetrics : metrics;
+        }
+    }
+
+    SystemMetricsResponseDto SystemTelemetryProvider::QueryProcesses() {
+        SystemMetricsResponseDto metrics;
+        auto realInfo = SystemMetrics::GetSystemMetrics();
+
+        for (int i = 0; i < realInfo.lstTopProcesses.GetCount(); ++i) {
+            metrics.TopProcesses.Add(MapProcessResourceDto(realInfo.lstTopProcesses[i]));
+        }
+
+        return metrics;
+    }
+
+    SystemMetricsResponseDto SystemTelemetryProvider::QuerySessions() {
+        SystemMetricsResponseDto metrics;
+        PopulateUserSessions(metrics);
+        return metrics;
+    }
+
     SystemMetricsResponseDto SystemTelemetryProvider::QuerySystemMetrics()
     {
-        Console::WriteLine("[TELEMETRY] Querying SystemMetrics & ActiveUserSession...");
+        ULONGLONG curTimeMs = GetTickCount64();
+
+        {
+            LockCS lock(s_metricsCs);
+            if (s_hasCachedMetrics && (curTimeMs - s_lastMetricsFetchTimeMs < 2000))
+            {
+                return s_cachedMetrics;
+            }
+        }
+
+        Console::WriteLine("[TELEMETRY] Refreshing SystemMetrics & ActiveUserSessions cache...");
         SystemMetricsResponseDto metrics;
 
         auto realInfo = SystemMetrics::GetSystemMetrics();
@@ -211,6 +301,14 @@ namespace SmartEventViewer
         metrics.NetworkUsageMbps = realInfo.dNetworkUsageMbps;
 
         PopulateUserSessions(metrics);
+
+        {
+            LockCS lock(s_metricsCs);
+            s_cachedMetrics = metrics;
+            s_lastMetricsFetchTimeMs = curTimeMs;
+            s_hasCachedMetrics = true;
+        }
+
         return metrics;
     }
 }

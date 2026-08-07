@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { fetchApiChannels, fetchApiEvents, fetchApiMetrics } from '../apiClient';
+import { fetchApiChannels, fetchApiEvents, fetchEventSummary } from '../apiClient';
+import type { EventSummaryData } from '../apiClient';
 import { ServerLogsViewer } from './ServerLogsViewer';
 import type { SystemMetricsData, EventsData } from '../apiClient';
 import type { EventDto } from '../types';
@@ -13,6 +14,8 @@ interface ChannelSummaryInfo {
   totalCount: number;
   criticalCount: number;
   errorCount: number;
+  warningCount: number;
+  infoCount: number;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
@@ -37,13 +40,70 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
   // System Hardware Telemetry & User Sessions State
   const [metrics, setMetrics] = useState<SystemMetricsData | null>(null);
 
+  const workerRef = React.useRef<Worker | null>(null);
+
   useEffect(() => {
-    loadDashboardData(true);
-    const intervalId = setInterval(() => {
-      loadDashboardData(false);
-    }, 1000);
-    return () => clearInterval(intervalId);
+    fetchDashboardChannelsAndEvents(window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080');
+    setIsLoading(false);
+
+    const baseUrl = window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080';
+    const worker = new Worker(new URL('../telemetry.worker.ts', import.meta.url), { type: 'module' });
+    workerRef.current = worker;
+
+    worker.onmessage = (event: MessageEvent) => {
+      const { type, payload } = event.data;
+      const initialMetrics = {
+        cpuUsagePercent: 0,
+        memoryUsagePercent: 0,
+        memoryUsedMB: 0,
+        memoryTotalMB: 0,
+        diskUsagePercent: 0,
+        diskReadMBps: 0,
+        diskWriteMBps: 0,
+        networkUsageMbps: 0,
+        topProcesses: [],
+        activeUserSessions: [],
+        expiredUserSessions: [],
+        systemUsers: [],
+        rdpSessions: [],
+      };
+
+      if (type === 'METRICS_SUMMARY_UPDATED') {
+        setMetrics((prev) => ({
+          ...(prev || initialMetrics),
+          ...payload,
+          topProcesses: payload.topProcesses && payload.topProcesses.length > 0 ? payload.topProcesses : (prev ? prev.topProcesses : []),
+          activeUserSessions: payload.activeUserSessions && payload.activeUserSessions.length > 0 ? payload.activeUserSessions : (prev ? prev.activeUserSessions : []),
+          systemUsers: payload.systemUsers && payload.systemUsers.length > 0 ? payload.systemUsers : (prev ? prev.systemUsers : []),
+          rdpSessions: payload.rdpSessions && payload.rdpSessions.length > 0 ? payload.rdpSessions : (prev ? prev.rdpSessions : []),
+        }));
+      } else if (type === 'METRICS_PROCESSES_UPDATED') {
+        setMetrics((prev) => ({
+          ...(prev || initialMetrics),
+          topProcesses: payload,
+        }));
+      } else if (type === 'METRICS_SESSIONS_UPDATED') {
+        setMetrics((prev) => ({
+          ...(prev || initialMetrics),
+          ...payload,
+        }));
+      }
+    };
+
+    worker.postMessage({ type: 'START_POLLING', baseUrl, subTab: activeDashboardTab });
+
+    return () => {
+      worker.postMessage({ type: 'STOP_POLLING' });
+      worker.terminate();
+      workerRef.current = null;
+    };
   }, []);
+
+  useEffect(() => {
+    if (workerRef.current) {
+      workerRef.current.postMessage({ type: 'CHANGE_SUBTAB', subTab: activeDashboardTab });
+    }
+  }, [activeDashboardTab]);
 
   const fetchDashboardChannelsAndEvents = async (baseUrl: string) => {
     try {
@@ -52,24 +112,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
       const channelList = channelsData.channels || (Array.isArray(channelsData) ? (channelsData as unknown as string[]) : []);
       setTotalChannels(channelList.length || 18);
 
-      // 2. Fetch top channels (Security, System, Application) to aggregate real ingested counts and events
+      // 2. Fetch channel summaries via dedicated summary endpoint
       const targetChannels = ['Security', 'System', 'Application'];
-      const eventPromises = targetChannels.map((ch) =>
-        fetchApiEvents(ch, baseUrl, 1, 20).catch((): EventsData => ({ totalCount: 0, criticalCount: 0, errorCount: 0, warningCount: 0, infoCount: 0, verboseCount: 0, events: [] }))
+      const summaryPromises = targetChannels.map((ch) =>
+        fetchEventSummary(ch, baseUrl).catch((): EventSummaryData => ({ totalCount: 0, criticalCount: 0, errorCount: 0, warningCount: 0, infoCount: 0, verboseCount: 0 }))
       );
 
-      const results = await Promise.all(eventPromises);
+      const summaryResults = await Promise.all(summaryPromises);
 
       let aggregatedTotal = 0;
       let aggregatedCriticals = 0;
-      let combinedEvents: EventDto[] = [];
       const summaries: ChannelSummaryInfo[] = [];
 
-      results.forEach((res, i) => {
+      summaryResults.forEach((res, i) => {
         const channelName = targetChannels[i];
         const count = res.totalCount || 0;
         const crit = res.criticalCount || 0;
         const err = res.errorCount || 0;
+        const warn = res.warningCount || 0;
+        const info = res.infoCount || 0;
         aggregatedTotal += count;
         aggregatedCriticals += crit + err;
 
@@ -78,46 +139,29 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
           totalCount: count,
           criticalCount: crit,
           errorCount: err,
+          warningCount: warn,
+          infoCount: info,
         });
-
-        const mapped = ((res.events as unknown as Array<Record<string, unknown>>) || []).map((e, idx) => ({
-          idx: (e.index as number) || idx + 1,
-          id: (e.id as number) || 0,
-          level: ((e.level as string) || 'Information') as EventDto['level'],
-          risk: ((e.risk as string) || 'Low') as EventDto['risk'],
-          provider: (e.provider as string) || channelName,
-          time: (e.time as string) || '',
-          desc: (e.message as string) || `Event #${e.id} in ${channelName}`,
-        }));
-        combinedEvents = [...combinedEvents, ...mapped];
       });
 
       setChannelSummaries(summaries);
       setTotalEvents(aggregatedTotal);
-      setRecentEvents(combinedEvents.slice(0, 10));
+      setCriticalRisks(aggregatedCriticals);
 
-      const pageCriticals = combinedEvents.filter(
-        (e) => e.risk === 'Critical' || e.level === 'Critical' || e.level === 'Error' || e.id === 4625
-      ).length;
-      setCriticalRisks(aggregatedCriticals > 0 ? aggregatedCriticals : pageCriticals);
+      // 3. Fetch recent events for main channel
+      const eventsData = await fetchApiEvents('Security', baseUrl, 1, 10).catch((): EventsData => ({ events: [] }));
+      const mappedEvents = ((eventsData.events as unknown as Array<Record<string, unknown>>) || []).map((e, idx) => ({
+        idx: (e.index as number) || idx + 1,
+        id: (e.id as number) || 0,
+        level: ((e.level as string) || 'Information') as EventDto['level'],
+        risk: ((e.risk as string) || 'Low') as EventDto['risk'],
+        provider: (e.provider as string) || 'Security',
+        time: (e.time as string) || '',
+        desc: (e.message as string) || `Event #${e.id} in Security`,
+      }));
+      setRecentEvents(mappedEvents);
     } catch (err) {
       console.error('[DASHBOARD DEBUG] Error fetching dashboard channels and events:', err);
-    }
-  };
-
-  const loadDashboardData = async (isInitial: boolean = false) => {
-    if (isInitial) setIsLoading(true);
-    const baseUrl = window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080';
-    try {
-      const metricsData = await fetchApiMetrics(baseUrl).catch(() => null);
-      if (metricsData) {
-        setMetrics(metricsData);
-      }
-      await fetchDashboardChannelsAndEvents(baseUrl);
-    } catch (err) {
-      console.error('[DASHBOARD DEBUG] Error fetching real backend metrics:', err);
-    } finally {
-      if (isInitial) setIsLoading(false);
     }
   };
 
@@ -340,9 +384,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
                   </div>
                   <div style={{ marginTop: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                     <span style={{ fontSize: '1.2rem', fontWeight: 700, color: '#38bdf8' }}>{ch.totalCount.toLocaleString()}</span>
-                    <span style={{ fontSize: '0.65rem', color: (ch.criticalCount + ch.errorCount) > 0 ? '#f87171' : '#4ade80', fontWeight: 600 }}>
-                      {(ch.criticalCount + ch.errorCount) > 0 ? `🚨 ${ch.criticalCount + ch.errorCount} Critical/Errors` : '✓ Healthy'}
-                    </span>
+                    <div style={{ display: 'flex', gap: '6px', fontSize: '0.65rem', fontWeight: 600 }}>
+                      {ch.criticalCount > 0 && <span style={{ color: '#f87171' }}>🚨 {ch.criticalCount} Crit</span>}
+                      {ch.errorCount > 0 && <span style={{ color: '#fb7185' }}>❌ {ch.errorCount} Err</span>}
+                      {ch.warningCount > 0 && <span style={{ color: '#fbbf24' }}>⚠️ {ch.warningCount.toLocaleString()} Warn</span>}
+                      {ch.criticalCount === 0 && ch.errorCount === 0 && ch.warningCount === 0 && <span style={{ color: '#4ade80' }}>✓ {ch.infoCount.toLocaleString()} Info</span>}
+                    </div>
                   </div>
                 </div>
               ))}
