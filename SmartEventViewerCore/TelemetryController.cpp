@@ -27,6 +27,42 @@ namespace SmartEventViewer
         }
     }
 
+    SystemMetricsResponseDto TelemetryController::GetCpuUsage()
+    {
+        try {
+            return TelemetryCacheManager::GetInstance().GetCpuUsage();
+        } catch (...) {
+            return SystemMetricsResponseDto{};
+        }
+    }
+
+    SystemMetricsResponseDto TelemetryController::GetMemoryUsage()
+    {
+        try {
+            return TelemetryCacheManager::GetInstance().GetMemoryUsage();
+        } catch (...) {
+            return SystemMetricsResponseDto{};
+        }
+    }
+
+    SystemMetricsResponseDto TelemetryController::GetDiskUsage()
+    {
+        try {
+            return TelemetryCacheManager::GetInstance().GetDiskUsage();
+        } catch (...) {
+            return SystemMetricsResponseDto{};
+        }
+    }
+
+    SystemMetricsResponseDto TelemetryController::GetNetworkUsage()
+    {
+        try {
+            return TelemetryCacheManager::GetInstance().GetNetworkUsage();
+        } catch (...) {
+            return SystemMetricsResponseDto{};
+        }
+    }
+
     SystemMetricsResponseDto TelemetryController::GetProcesses()
     {
         try {
@@ -56,6 +92,15 @@ namespace SmartEventViewer
         } catch (...) {
             Console::WriteLine("[TELEMETRY_CTRL_ERROR] GetSessions unknown exception.");
             return SystemMetricsResponseDto{};
+        }
+    }
+
+    ServicesResponseDto TelemetryController::GetServices()
+    {
+        try {
+            return TelemetryCacheManager::GetInstance().GetServices();
+        } catch (...) {
+            return ServicesResponseDto{};
         }
     }
 

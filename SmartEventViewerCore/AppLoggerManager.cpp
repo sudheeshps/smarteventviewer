@@ -36,6 +36,8 @@ namespace SmartEventViewer {
             LoggerConfiguration config;
             config.MinLevel = minLevel;
             config.IsJsonFormat = false;
+            config.PlainTextFormat = "{Timestamp} [PID:{ProcessId}] [TID:{ThreadId}] [{Level}] [{Category}] {Message}";
+            config.TimestampFormat = "%Y-%m-%d %H:%M:%S";
             config.FilePath = s_logFilePath;
             config.Rollover.EnableRollover = true;
             config.Rollover.MaxFileSizeInBytes = 5 * 1024 * 1024;

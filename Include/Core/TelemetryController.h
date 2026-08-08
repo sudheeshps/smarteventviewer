@@ -72,6 +72,24 @@ namespace SmartEventViewer
         UserPrincipalDto& operator=(const UserPrincipalDto&) = default;
     };
 
+    struct ServiceInfoDto
+    {
+        String ServiceName{};
+        String DisplayName{};
+        String Status{};
+        String StartType{};
+        int ProcessId{ 0 };
+
+        ServiceInfoDto() = default;
+        ServiceInfoDto(const String& name, const String& display, const String& status, const String& startType, int pid)
+            : ServiceName(name), DisplayName(display), Status(status), StartType(startType), ProcessId(pid) {}
+    };
+
+    struct ServicesResponseDto
+    {
+        DotNetDupe::System::Collections::Generic::List<ServiceInfoDto> Services{};
+    };
+
     struct SystemMetricsResponseDto
     {
         double CpuUsagePercent{ 0.0 };
@@ -247,6 +265,43 @@ namespace DotNetDupe {
                         return dto;
                     }
                 };
+                template <typename Enable>
+                struct JsonConverter<SmartEventViewer::ServiceInfoDto, Enable> {
+                    static JsonElement Write(const SmartEventViewer::ServiceInfoDto& value) {
+                        JsonElement obj(JsonValueKind::Object);
+                        obj.SetProperty(String("serviceName"), JsonElement(value.ServiceName));
+                        obj.SetProperty(String("displayName"), JsonElement(value.DisplayName));
+                        obj.SetProperty(String("status"), JsonElement(value.Status));
+                        obj.SetProperty(String("startType"), JsonElement(value.StartType));
+                        obj.SetProperty(String("processId"), JsonElement(static_cast<double>(value.ProcessId)));
+                        return obj;
+                    }
+                    static SmartEventViewer::ServiceInfoDto Read(const JsonElement& element) {
+                        SmartEventViewer::ServiceInfoDto dto;
+                        JsonElement prop;
+                        if (element.TryGetProperty(String("serviceName"), prop)) dto.ServiceName = prop.GetString();
+                        if (element.TryGetProperty(String("displayName"), prop)) dto.DisplayName = prop.GetString();
+                        if (element.TryGetProperty(String("status"), prop)) dto.Status = prop.GetString();
+                        if (element.TryGetProperty(String("startType"), prop)) dto.StartType = prop.GetString();
+                        if (element.TryGetProperty(String("processId"), prop)) dto.ProcessId = static_cast<int>(prop.GetDouble());
+                        return dto;
+                    }
+                };
+
+                template <typename Enable>
+                struct JsonConverter<SmartEventViewer::ServicesResponseDto, Enable> {
+                    static JsonElement Write(const SmartEventViewer::ServicesResponseDto& value) {
+                        JsonElement obj(JsonValueKind::Object);
+                        obj.SetProperty(String("services"), JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::ServiceInfoDto>>::Write(value.Services));
+                        return obj;
+                    }
+                    static SmartEventViewer::ServicesResponseDto Read(const JsonElement& element) {
+                        SmartEventViewer::ServicesResponseDto dto;
+                        JsonElement prop;
+                        if (element.TryGetProperty(String("services"), prop)) dto.Services = JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::ServiceInfoDto>>::Read(prop);
+                        return dto;
+                    }
+                };
             }
         }
     }
@@ -262,8 +317,13 @@ namespace SmartEventViewer
 
         // Specialized REST Endpoints
         SMARTEVENTVIEWER_API SystemMetricsResponseDto GetSummary();
+        SMARTEVENTVIEWER_API SystemMetricsResponseDto GetCpuUsage();
+        SMARTEVENTVIEWER_API SystemMetricsResponseDto GetMemoryUsage();
+        SMARTEVENTVIEWER_API SystemMetricsResponseDto GetDiskUsage();
+        SMARTEVENTVIEWER_API SystemMetricsResponseDto GetNetworkUsage();
         SMARTEVENTVIEWER_API SystemMetricsResponseDto GetProcesses();
         SMARTEVENTVIEWER_API SystemMetricsResponseDto GetSessions();
+        SMARTEVENTVIEWER_API ServicesResponseDto GetServices();
 
         // System Telemetry Metrics Endpoint (Full Legacy)
         SMARTEVENTVIEWER_API SystemMetricsResponseDto GetMetrics();

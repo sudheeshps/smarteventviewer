@@ -27,8 +27,9 @@ namespace SmartEventViewer
     struct AnalyzeResponseDto
     {
         String TaskId{};
-        String Status{}; // "PENDING", "PROCESSING", "COMPLETED", "FAILED"
+        String Status{}; // "PENDING", "PROCESSING", "DOWNLOADING", "COMPLETED", "FAILED"
         String ProgressMessage{};
+        double DownloadProgress{ 0.0 }; // 0.0 to 100.0
         String Channel{};
         String Query{};
         String Analysis{};
@@ -103,6 +104,7 @@ namespace DotNetDupe {
                         obj.SetProperty(String("taskId"), JsonElement(value.TaskId));
                         obj.SetProperty(String("status"), JsonElement(value.Status));
                         obj.SetProperty(String("progressMessage"), JsonElement(value.ProgressMessage));
+                        obj.SetProperty(String("downloadProgress"), JsonElement(value.DownloadProgress));
                         obj.SetProperty(String("channel"), JsonElement(value.Channel));
                         obj.SetProperty(String("query"), JsonElement(value.Query));
                         obj.SetProperty(String("analysis"), JsonElement(value.Analysis));
@@ -115,6 +117,7 @@ namespace DotNetDupe {
                         if (element.TryGetProperty(String("taskId"), prop)) dto.TaskId = prop.GetString();
                         if (element.TryGetProperty(String("status"), prop)) dto.Status = prop.GetString();
                         if (element.TryGetProperty(String("progressMessage"), prop)) dto.ProgressMessage = prop.GetString();
+                        if (element.TryGetProperty(String("downloadProgress"), prop)) dto.DownloadProgress = prop.GetDouble();
                         if (element.TryGetProperty(String("channel"), prop)) dto.Channel = prop.GetString();
                         if (element.TryGetProperty(String("query"), prop)) dto.Query = prop.GetString();
                         if (element.TryGetProperty(String("analysis"), prop)) dto.Analysis = prop.GetString();

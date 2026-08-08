@@ -29,7 +29,7 @@ namespace SmartEventViewer
 
         {
             LockCS lock(m_cacheCs);
-            if (m_cache.TryGet(String("summary"), entry) && (curTimeMs - entry.FetchTimeMs < 1000))
+            if (m_cache.TryGet("summary", entry) && (curTimeMs - entry.FetchTimeMs < 1000))
             {
                 sw.Stop();
                 Console::WriteLine(String::Format("[TELEMETRY_CACHE] GetSummary Cache HIT (Elapsed: {0} ms)", static_cast<double>(sw.ElapsedMilliseconds())));
@@ -43,11 +43,123 @@ namespace SmartEventViewer
 
         {
             LockCS lock(m_cacheCs);
-            m_cache.Put(String("summary"), entry);
+            m_cache.Put("summary", entry);
         }
 
         sw.Stop();
         Console::WriteLine(String::Format("[TELEMETRY_CACHE] GetSummary Cache MISS (Queried SystemMetrics) (Elapsed: {0} ms)", static_cast<double>(sw.ElapsedMilliseconds())));
+        return entry.MetricsDto;
+    }
+
+    SystemMetricsResponseDto TelemetryCacheManager::GetCpuUsage()
+    {
+        Stopwatch sw = Stopwatch::StartNew();
+        ULONGLONG curTimeMs = GetTickCount64();
+        TelemetryCacheEntry entry;
+
+        {
+            LockCS lock(m_cacheCs);
+            if (m_cache.TryGet("cpu", entry) && (curTimeMs - entry.FetchTimeMs < 1000))
+            {
+                sw.Stop();
+                return entry.MetricsDto;
+            }
+        }
+
+        entry.FetchTimeMs = curTimeMs;
+        entry.TtlMs = 1000;
+        entry.MetricsDto = SystemTelemetryProvider::QueryCpuUsage();
+
+        {
+            LockCS lock(m_cacheCs);
+            m_cache.Put("cpu", entry);
+        }
+
+        sw.Stop();
+        return entry.MetricsDto;
+    }
+
+    SystemMetricsResponseDto TelemetryCacheManager::GetMemoryUsage()
+    {
+        Stopwatch sw = Stopwatch::StartNew();
+        ULONGLONG curTimeMs = GetTickCount64();
+        TelemetryCacheEntry entry;
+
+        {
+            LockCS lock(m_cacheCs);
+            if (m_cache.TryGet("memory", entry) && (curTimeMs - entry.FetchTimeMs < 1000))
+            {
+                sw.Stop();
+                return entry.MetricsDto;
+            }
+        }
+
+        entry.FetchTimeMs = curTimeMs;
+        entry.TtlMs = 1000;
+        entry.MetricsDto = SystemTelemetryProvider::QueryMemoryUsage();
+
+        {
+            LockCS lock(m_cacheCs);
+            m_cache.Put("memory", entry);
+        }
+
+        sw.Stop();
+        return entry.MetricsDto;
+    }
+
+    SystemMetricsResponseDto TelemetryCacheManager::GetDiskUsage()
+    {
+        Stopwatch sw = Stopwatch::StartNew();
+        ULONGLONG curTimeMs = GetTickCount64();
+        TelemetryCacheEntry entry;
+
+        {
+            LockCS lock(m_cacheCs);
+            if (m_cache.TryGet("disk", entry) && (curTimeMs - entry.FetchTimeMs < 1000))
+            {
+                sw.Stop();
+                return entry.MetricsDto;
+            }
+        }
+
+        entry.FetchTimeMs = curTimeMs;
+        entry.TtlMs = 1000;
+        entry.MetricsDto = SystemTelemetryProvider::QueryDiskUsage();
+
+        {
+            LockCS lock(m_cacheCs);
+            m_cache.Put("disk", entry);
+        }
+
+        sw.Stop();
+        return entry.MetricsDto;
+    }
+
+    SystemMetricsResponseDto TelemetryCacheManager::GetNetworkUsage()
+    {
+        Stopwatch sw = Stopwatch::StartNew();
+        ULONGLONG curTimeMs = GetTickCount64();
+        TelemetryCacheEntry entry;
+
+        {
+            LockCS lock(m_cacheCs);
+            if (m_cache.TryGet("network", entry) && (curTimeMs - entry.FetchTimeMs < 1000))
+            {
+                sw.Stop();
+                return entry.MetricsDto;
+            }
+        }
+
+        entry.FetchTimeMs = curTimeMs;
+        entry.TtlMs = 1000;
+        entry.MetricsDto = SystemTelemetryProvider::QueryNetworkUsage();
+
+        {
+            LockCS lock(m_cacheCs);
+            m_cache.Put("network", entry);
+        }
+
+        sw.Stop();
         return entry.MetricsDto;
     }
 
@@ -59,7 +171,7 @@ namespace SmartEventViewer
 
         {
             LockCS lock(m_cacheCs);
-            if (m_cache.TryGet(String("processes"), entry) && (curTimeMs - entry.FetchTimeMs < 1000))
+            if (m_cache.TryGet("processes", entry) && (curTimeMs - entry.FetchTimeMs < 1000))
             {
                 sw.Stop();
                 Console::WriteLine(String::Format("[TELEMETRY_CACHE] GetProcesses Cache HIT (Elapsed: {0} ms)", static_cast<double>(sw.ElapsedMilliseconds())));
@@ -73,7 +185,7 @@ namespace SmartEventViewer
 
         {
             LockCS lock(m_cacheCs);
-            m_cache.Put(String("processes"), entry);
+            m_cache.Put("processes", entry);
         }
 
         sw.Stop();
@@ -89,7 +201,7 @@ namespace SmartEventViewer
 
         {
             LockCS lock(m_cacheCs);
-            if (m_cache.TryGet(String("sessions"), entry) && (curTimeMs - entry.FetchTimeMs < 15000))
+            if (m_cache.TryGet("sessions", entry) && (curTimeMs - entry.FetchTimeMs < 15000))
             {
                 sw.Stop();
                 Console::WriteLine(String::Format("[TELEMETRY_CACHE] GetSessions Cache HIT (Elapsed: {0} ms)", static_cast<double>(sw.ElapsedMilliseconds())));
@@ -103,12 +215,17 @@ namespace SmartEventViewer
 
         {
             LockCS lock(m_cacheCs);
-            m_cache.Put(String("sessions"), entry);
+            m_cache.Put("sessions", entry);
         }
 
         sw.Stop();
         Console::WriteLine(String::Format("[TELEMETRY_CACHE] GetSessions Cache MISS (Queried User/RDP Sessions) (Elapsed: {0} ms)", static_cast<double>(sw.ElapsedMilliseconds())));
         return entry.MetricsDto;
+    }
+
+    ServicesResponseDto TelemetryCacheManager::GetServices()
+    {
+        return SystemTelemetryProvider::QueryServices();
     }
 
     SystemMetricsResponseDto TelemetryCacheManager::GetFullMetrics()
@@ -119,7 +236,7 @@ namespace SmartEventViewer
 
         {
             LockCS lock(m_cacheCs);
-            if (m_cache.TryGet(String("full"), entry) && (curTimeMs - entry.FetchTimeMs < 2000))
+            if (m_cache.TryGet("full", entry) && (curTimeMs - entry.FetchTimeMs < 2000))
             {
                 sw.Stop();
                 Console::WriteLine(String::Format("[TELEMETRY_CACHE] GetFullMetrics Cache HIT (Elapsed: {0} ms)", static_cast<double>(sw.ElapsedMilliseconds())));
@@ -133,7 +250,7 @@ namespace SmartEventViewer
 
         {
             LockCS lock(m_cacheCs);
-            m_cache.Put(String("full"), entry);
+            m_cache.Put("full", entry);
         }
 
         sw.Stop();

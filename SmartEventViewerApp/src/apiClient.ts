@@ -56,6 +56,7 @@ export interface AnalyzeData {
   taskId?: string;
   status?: string;
   progressMessage?: string;
+  downloadProgress?: number;
   channel?: string;
   query?: string;
   analysis?: string;
@@ -105,6 +106,14 @@ export interface RdpSessionData {
   isRdpSession: boolean;
 }
 
+export interface ServiceInfoData {
+  serviceName: string;
+  displayName: string;
+  status: string;
+  startType: string;
+  processId: number;
+}
+
 export interface SystemMetricsData {
   cpuUsagePercent: number;
   memoryUsagePercent: number;
@@ -119,6 +128,7 @@ export interface SystemMetricsData {
   expiredUserSessions: UserSessionData[];
   systemUsers?: UserPrincipalData[];
   rdpSessions?: RdpSessionData[];
+  systemServices?: ServiceInfoData[];
 }
 
 export async function fetchApiChannels(baseUrl: string = ''): Promise<ChannelData> {
@@ -181,6 +191,7 @@ export async function fetchApiAnalyze(channel: string, query: string, baseUrl: s
     taskId: data.taskId || data.TaskId || '',
     status: data.status || data.Status || '',
     progressMessage: data.progressMessage || data.ProgressMessage || '',
+    downloadProgress: data.downloadProgress ?? data.DownloadProgress ?? 0,
     channel: data.channel || data.Channel || channel,
     query: data.query || data.Query || query,
     analysis: data.analysis || data.Analysis || '',
@@ -199,6 +210,7 @@ export async function fetchApiAnalyzeStatus(taskId: string, baseUrl: string = ''
     taskId: data.taskId || data.TaskId || taskId,
     status: data.status || data.Status || '',
     progressMessage: data.progressMessage || data.ProgressMessage || '',
+    downloadProgress: data.downloadProgress ?? data.DownloadProgress ?? 0,
     channel: data.channel || data.Channel || '',
     query: data.query || data.Query || '',
     analysis: data.analysis || data.Analysis || '',
@@ -221,6 +233,45 @@ export async function fetchMetricsSummary(baseUrl: string = ''): Promise<Partial
     diskWriteMBps: (data.diskWriteMBps ?? data.DiskWriteMBps ?? 0) as number,
     networkUsageMbps: (data.networkUsageMbps ?? data.NetworkUsageMbps ?? 0) as number,
   };
+}
+
+export async function fetchMetricsCpu(baseUrl: string = ''): Promise<number> {
+  const urlPrefix = baseUrl ? baseUrl : (window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080');
+  const resp = await fetch(`${urlPrefix}/api/metrics/cpu`);
+  if (!resp.ok) throw new Error(`HTTP Error: ${resp.status}`);
+  const data = await resp.json();
+  return (data.cpuUsagePercent ?? data.CpuUsagePercent ?? 0) as number;
+}
+
+export async function fetchMetricsMemory(baseUrl: string = ''): Promise<{ memoryUsagePercent: number; memoryTotalMB: number; memoryUsedMB: number }> {
+  const urlPrefix = baseUrl ? baseUrl : (window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080');
+  const resp = await fetch(`${urlPrefix}/api/metrics/memory`);
+  if (!resp.ok) throw new Error(`HTTP Error: ${resp.status}`);
+  const data = await resp.json();
+  return {
+    memoryUsagePercent: (data.memoryUsagePercent ?? data.MemoryUsagePercent ?? 0) as number,
+    memoryTotalMB: (data.memoryTotalMB ?? data.MemoryTotalMB ?? 0) as number,
+    memoryUsedMB: (data.memoryUsedMB ?? data.MemoryUsedMB ?? 0) as number,
+  };
+}
+
+export async function fetchMetricsDisk(baseUrl: string = ''): Promise<{ diskReadMBps: number; diskWriteMBps: number }> {
+  const urlPrefix = baseUrl ? baseUrl : (window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080');
+  const resp = await fetch(`${urlPrefix}/api/metrics/disk`);
+  if (!resp.ok) throw new Error(`HTTP Error: ${resp.status}`);
+  const data = await resp.json();
+  return {
+    diskReadMBps: (data.diskReadMBps ?? data.DiskReadMBps ?? 0) as number,
+    diskWriteMBps: (data.diskWriteMBps ?? data.DiskWriteMBps ?? 0) as number,
+  };
+}
+
+export async function fetchMetricsNetwork(baseUrl: string = ''): Promise<number> {
+  const urlPrefix = baseUrl ? baseUrl : (window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080');
+  const resp = await fetch(`${urlPrefix}/api/metrics/network`);
+  if (!resp.ok) throw new Error(`HTTP Error: ${resp.status}`);
+  const data = await resp.json();
+  return (data.networkUsageMbps ?? data.NetworkUsageMbps ?? 0) as number;
 }
 
 export async function fetchMetricsProcesses(baseUrl: string = ''): Promise<ProcessResourceData[]> {
@@ -375,8 +426,62 @@ export async function fetchApiMetrics(baseUrl: string = ''): Promise<SystemMetri
   };
 }
 
+export async function fetchMetricsServices(baseUrl: string = ''): Promise<ServiceInfoData[]> {
+  const urlPrefix = baseUrl ? baseUrl : (window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080');
+  const resp = await fetch(`${urlPrefix}/api/metrics/services`);
+  if (!resp.ok) throw new Error(`HTTP Error: ${resp.status}`);
+  const data = await resp.json();
+  const rawServices = data.services || data.Services || [];
+  return rawServices.map((s: Record<string, unknown>) => ({
+    serviceName: (s.serviceName ?? s.ServiceName ?? '') as string,
+    displayName: (s.displayName ?? s.DisplayName ?? '') as string,
+    status: (s.status ?? s.Status ?? 'Stopped') as string,
+    startType: (s.startType ?? s.StartType ?? 'Manual') as string,
+    processId: (s.processId ?? s.ProcessId ?? 0) as number,
+  }));
+}
+
+export interface LogColumnFormat {
+  key: string;
+  headerName: string;
+  type: string;
+  widthPx: number;
+}
+
+export interface LogFormatData {
+  columns: LogColumnFormat[];
+}
+
+export interface LogRecordData {
+  timestamp: string;
+  level: string;
+  processId?: string;
+  threadId?: string;
+  category: string;
+  message: string;
+}
+
 export interface ServerLogsData {
+  records: LogRecordData[];
   logs?: string[];
+}
+
+export async function fetchApiLogFormat(baseUrl: string = ''): Promise<LogFormatData> {
+  const urlPrefix = baseUrl ? baseUrl : (window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080');
+  const resp = await fetch(`${urlPrefix}/api/logs/format`);
+  if (!resp.ok) {
+    throw new Error(`HTTP Error: ${resp.status}`);
+  }
+  const data = await resp.json();
+  const rawCols = data.columns || data.Columns || [];
+  return {
+    columns: rawCols.map((c: Record<string, unknown>) => ({
+      key: (c.key ?? c.Key ?? '') as string,
+      headerName: (c.headerName ?? c.HeaderName ?? '') as string,
+      type: (c.type ?? c.Type ?? 'string') as string,
+      widthPx: (c.widthPx ?? c.WidthPx ?? 150) as number,
+    }))
+  };
 }
 
 export async function fetchApiServerLogs(baseUrl: string = ''): Promise<ServerLogsData> {
@@ -386,9 +491,64 @@ export async function fetchApiServerLogs(baseUrl: string = ''): Promise<ServerLo
     throw new Error(`HTTP Error: ${resp.status}`);
   }
   const data = await resp.json();
-  return {
-    logs: data.logs || data.Logs || []
-  };
+  const rawRecords = data.records || data.Records || [];
+
+  if (Array.isArray(rawRecords) && rawRecords.length > 0) {
+    const records = rawRecords.map((r: Record<string, unknown>) => ({
+      timestamp: (r.timestamp ?? r.Timestamp ?? '') as string,
+      level: (r.level ?? r.Level ?? 'INFO') as string,
+      processId: (r.processId ?? r.ProcessId ?? '-') as string,
+      threadId: (r.threadId ?? r.ThreadId ?? '-') as string,
+      category: (r.category ?? r.Category ?? 'SERVER') as string,
+      message: (r.message ?? r.Message ?? '') as string,
+    }));
+    return { records };
+  }
+
+  // Fallback if backend returns plain string array in logs / Logs
+  const rawLogs = data.logs || data.Logs || (Array.isArray(data) ? data : []);
+  const records = rawLogs.map((line: string) => {
+    let ts = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    let level = 'INFO';
+    let processId = '-';
+    let threadId = '-';
+    let category = 'SERVER';
+    let message = line;
+
+    if (typeof line === 'string') {
+      const match = line.match(/^(\d{4}[-/]\d{2}[-/]\d{2}\s\d{2}:\d{2}:\d{2})\s*(?:\[(.*?)\])?\s*(.*)$/);
+      if (match) {
+        ts = match[1] || ts;
+        category = match[2] || 'SERVER';
+        message = match[3] || line;
+      } else {
+        const bracketMatch = line.match(/^\[(.*?)\]\s*(.*)$/);
+        if (bracketMatch) {
+          category = bracketMatch[1] || 'SERVER';
+          message = bracketMatch[2] || line;
+        }
+      }
+
+      const pidMatch = line.match(/\[PID:(\d+)\]/i);
+      if (pidMatch) {
+        processId = pidMatch[1];
+      }
+
+      const tidMatch = line.match(/\[TID:(\d+)\]/i);
+      if (tidMatch) {
+        threadId = tidMatch[1];
+      }
+
+      const upper = line.toUpperCase();
+      if (upper.includes('ERROR') || upper.includes('FAIL')) level = 'ERROR';
+      else if (upper.includes('WARN')) level = 'WARN';
+      else if (upper.includes('AI_ENGINE') || upper.includes('LLM')) level = 'DEBUG';
+    }
+
+    return { timestamp: ts, level, processId, threadId, category, message };
+  });
+
+  return { records };
 }
 
 export function subscribeTelemetryPushStream(

@@ -111,10 +111,15 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onO
     fetchEvents(channelName, newPage);
   };
 
+  const [analyzeProgressMsg, setAnalyzeProgressMsg] = useState<string>('');
+  const [downloadPct, setDownloadPct] = useState<number>(0);
+
   const handleAnalyze = async () => {
     if (!chatQuery.trim()) return;
     const queryText = chatQuery.trim();
     setIsAnalyzing(true);
+    setAnalyzeProgressMsg('Enqueued for analysis...');
+    setDownloadPct(0);
 
     if (onOpenChat) {
       onOpenChat(queryText, '⏳ Enqueued for analysis...');
@@ -140,11 +145,15 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onO
         await new Promise((resolve) => setTimeout(resolve, 300));
         statusRes = await fetchApiAnalyzeStatus(taskId, baseUrl);
         
-        if (statusRes.progressMessage && onOpenChat) {
-          onOpenChat(queryText, `⏳ ${statusRes.progressMessage}`);
+        if (statusRes.progressMessage) {
+          setAnalyzeProgressMsg(statusRes.progressMessage);
+          if (onOpenChat) onOpenChat(queryText, `⏳ ${statusRes.progressMessage}`);
+        }
+        if (statusRes.downloadProgress !== undefined) {
+          setDownloadPct(statusRes.downloadProgress);
         }
 
-        if (statusRes.status === 'COMPLETED' || statusRes.status === 'FAILED' || (statusRes.analysis && statusRes.analysis.trim().length > 0)) {
+        if (statusRes.status === 'COMPLETED' || statusRes.status === 'FAILED') {
           isCompleted = true;
         }
       }
@@ -159,6 +168,7 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onO
       console.error('[UI-APP DEBUG] Error calling backend analyze endpoint:', err);
     } finally {
       setIsAnalyzing(false);
+      setDownloadPct(0);
     }
   };
 
@@ -272,7 +282,65 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onO
               {isAnalyzing ? 'Analyzing...' : 'Analyze Events'}
             </button>
           </div>
-          {aiResponse && (
+          {isAnalyzing && (
+            <div
+              style={{
+                background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.95))',
+                border: '1px solid #38bdf8',
+                borderRadius: '6px',
+                padding: '10px',
+                fontSize: '0.72rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                animation: 'pulseGlow 2s ease-in-out infinite',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div
+                  style={{
+                    width: '18px',
+                    height: '18px',
+                    border: '2px solid rgba(56, 189, 248, 0.2)',
+                    borderTop: '2px solid #38bdf8',
+                    borderRight: '2px solid #38bdf8',
+                    borderRadius: '50%',
+                    animation: 'spin 0.7s cubic-bezier(0.4, 0, 0.2, 1) infinite',
+                    flexShrink: 0,
+                  }}
+                />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <div style={{ fontWeight: 700, color: '#38bdf8' }}>
+                    {downloadPct > 0 ? '📥 Downloading AI Model Weights...' : '⚡ AI Engine Analyzing Event Logs...'}
+                  </div>
+                  <div style={{ fontSize: '0.68rem', color: '#94a3b8', fontStyle: 'italic' }}>
+                    {analyzeProgressMsg || 'Processing vector embeddings & evaluating anomalies...'}
+                  </div>
+                </div>
+              </div>
+
+              {downloadPct > 0 && downloadPct <= 100 && (
+                <div style={{ width: '100%', marginTop: '4px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#38bdf8', marginBottom: '3px', fontWeight: 600 }}>
+                    <span>📥 Downloading GGUF Model Weights</span>
+                    <span>{Math.round(downloadPct)}%</span>
+                  </div>
+                  <div style={{ width: '100%', height: '6px', background: 'rgba(15, 23, 42, 0.8)', borderRadius: '3px', overflow: 'hidden', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
+                    <div
+                      style={{
+                        width: `${Math.min(100, Math.max(0, downloadPct))}%`,
+                        height: '100%',
+                        background: 'linear-gradient(90deg, #38bdf8, #818cf8)',
+                        borderRadius: '3px',
+                        transition: 'width 0.2s ease-out',
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {aiResponse && !isAnalyzing && (
             <div style={{ background: 'rgba(15, 23, 42, 0.9)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', padding: '8px', fontSize: '0.72rem', whiteSpace: 'pre-wrap' }}>
               {aiResponse}
             </div>

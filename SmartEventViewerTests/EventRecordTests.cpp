@@ -251,18 +251,33 @@ void GivenSystemTelemetryProvider_WhenMetricsRequested_ThenPopulatesCpuAndMemory
     auto metrics = SmartEventViewer::SystemTelemetryProvider::QuerySystemMetrics();
     assert(metrics.MemoryTotalMB >= 0);
 
+    // Test individual SystemTelemetryProvider query methods
+    auto cpuMetrics = SmartEventViewer::SystemTelemetryProvider::QueryCpuUsage();
+    assert(cpuMetrics.CpuUsagePercent >= 0.0 && cpuMetrics.CpuUsagePercent <= 100.0);
+
+    auto memMetrics = SmartEventViewer::SystemTelemetryProvider::QueryMemoryUsage();
+    assert(memMetrics.MemoryTotalMB >= 0);
+    assert(memMetrics.MemoryUsagePercent >= 0.0);
+
+    auto diskMetrics = SmartEventViewer::SystemTelemetryProvider::QueryDiskUsage();
+    assert(diskMetrics.DiskReadMBps >= 0.0);
+    assert(diskMetrics.DiskWriteMBps >= 0.0);
+
+    auto netMetrics = SmartEventViewer::SystemTelemetryProvider::QueryNetworkUsage();
+    assert(netMetrics.NetworkUsageMbps >= 0.0);
+
     // Test FormatCommandLine static helper method
     String sCmd = SmartEventViewer::SystemTelemetryProvider::FormatCommandLine("C:\\Windows\\System32\\svchost.exe", "C:\\Windows\\System32\\svchost.exe -k DcomLaunch");
     assert(sCmd == "-k DcomLaunch");
 
     // Test MapProcessResourceDto static helper method
-    DotNetDupe::System::Diagnostics::ProcessResourceInfo proc;
+    DotNetDupe::System::Diagnostics::ProcessInfo proc;
     proc.iProcessId = 1234;
     proc.sName = "test.exe";
     proc.sPath = "C:\\test.exe";
     proc.sCommandLine = "C:\\test.exe --arg";
     proc.dCpuUsagePercent = 15.5;
-    proc.lMemoryUsageBytes = 104857600; // 100 MB
+    proc.memory.lPhysicalMemoryBytes = 104857600; // 100 MB
     auto dto = SmartEventViewer::SystemTelemetryProvider::MapProcessResourceDto(proc);
     assert(dto.ProcessId == 1234);
     assert(dto.MemoryUsageMB == 100);
@@ -278,22 +293,17 @@ void GivenRdpSessionsAndUserSessions_WhenMetricsQueried_ThenPopulatesRdpSessions
     assert(metrics.RdpSessions.GetCount() >= 0);
 
     // Check process resource dto mapping for open ports and inbound connections
-    DotNetDupe::System::Diagnostics::ProcessResourceInfo proc;
+    DotNetDupe::System::Diagnostics::ProcessInfo proc;
     proc.iProcessId = 5678;
     proc.sName = "net_test.exe";
     proc.sPath = "C:\\net_test.exe";
-    proc.lNetworkReadBytes = 2048;
-    proc.lNetworkWriteBytes = 4096;
-    proc.lstOpenPorts.Add(80);
-    proc.lstOpenPorts.Add(443);
-    proc.bHasEstablishedInboundConnection = true;
+    proc.network.lNetworkReadBytes = 2048;
+    proc.network.lNetworkWriteBytes = 4096;
 
     auto dto = SmartEventViewer::SystemTelemetryProvider::MapProcessResourceDto(proc);
     assert(dto.ProcessId == 5678);
     assert(dto.NetworkReadBytes == 2048);
     assert(dto.NetworkWriteBytes == 4096);
-    assert(dto.OpenPorts == "80, 443");
-    assert(dto.ConnectionEstablished == true);
 
     Console::WriteLine("[PASS] GivenRdpSessionsAndUserSessions_WhenMetricsQueried_ThenPopulatesRdpSessionsAndSystemUsers");
 }

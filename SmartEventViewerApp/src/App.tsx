@@ -89,7 +89,8 @@ export function App() {
   const [chatHistory, setChatHistory] = useState<Array<{ sender: 'user' | 'assistant'; text: string; channel?: string }>>([]);
 
   const [isChatAnalyzing, setIsChatAnalyzing] = useState<boolean>(false);
-  const [chatProgressMessage, setChatProgressMessage] = useState<string>('Analyzing RAG event stream & system metrics...');
+  const [chatProgressMessage, setChatProgressMessage] = useState<string>('Initializing RAG analysis...');
+  const [chatDownloadProgress, setChatDownloadProgress] = useState<number>(0);
 
   return (
     <div style={{ display: 'flex', height: '100vh', width: '100vw', backgroundColor: '#0f172a', color: '#f8fafc', overflow: 'hidden', userSelect: isResizing ? 'none' : 'auto' }}>
@@ -117,8 +118,8 @@ export function App() {
         title="Drag to resize channel tree panel"
       />
 
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
-        <div style={{ display: activeTab === 'dashboard' ? 'flex' : 'none', flex: 1, flexDirection: 'column' }}>
+      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, position: 'relative' }}>
+        <div style={{ display: activeTab === 'dashboard' ? 'flex' : 'none', flex: 1, flexDirection: 'column', minHeight: 0 }}>
           <Dashboard
             onSelectChannel={(ch) => {
               setCurrentChannel(ch);
@@ -127,7 +128,7 @@ export function App() {
           />
         </div>
 
-        <div style={{ display: activeTab === 'events' ? 'flex' : 'none', flex: 1, flexDirection: 'column' }}>
+        <div style={{ display: activeTab === 'events' ? 'flex' : 'none', flex: 1, flexDirection: 'column', minHeight: 0 }}>
           <EventsExplorer
             channelName={currentChannel}
             onOpenChat={(initialQuery, responseText) => {
@@ -159,7 +160,7 @@ export function App() {
           />
         </div>
 
-        <div style={{ display: activeTab === 'riskcenter' ? 'flex' : 'none', flex: 1, flexDirection: 'column' }}>
+        <div style={{ display: activeTab === 'riskcenter' ? 'flex' : 'none', flex: 1, flexDirection: 'column', minHeight: 0 }}>
           <RiskCenter
             onSelectChannel={(ch) => {
               setCurrentChannel(ch);
@@ -168,7 +169,7 @@ export function App() {
           />
         </div>
 
-        <div style={{ display: activeTab === 'serverlogs' ? 'flex' : 'none', flex: 1, flexDirection: 'column' }}>
+        <div style={{ display: activeTab === 'serverlogs' ? 'flex' : 'none', flex: 1, flexDirection: 'column', minHeight: 0 }}>
           <ServerLogsViewer />
         </div>
 
@@ -265,9 +266,65 @@ export function App() {
               ))
             )}
             {isChatAnalyzing && (
-              <div style={{ alignSelf: 'flex-start', background: 'rgba(30, 41, 59, 0.9)', color: '#38bdf8', borderRadius: '8px', padding: '8px 12px', fontSize: '0.75rem', border: '1px solid #38bdf8', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <div style={{ width: '14px', height: '14px', border: '2px solid rgba(56,189,248,0.3)', borderTop: '2px solid #38bdf8', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-                <span style={{ fontWeight: 600 }}>{chatProgressMessage}</span>
+              <div
+                style={{
+                  alignSelf: 'flex-start',
+                  background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95))',
+                  color: '#38bdf8',
+                  borderRadius: '10px',
+                  padding: '10px 14px',
+                  fontSize: '0.75rem',
+                  border: '1px solid #38bdf8',
+                  boxShadow: '0 4px 14px rgba(56, 189, 248, 0.25)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                  minWidth: '260px',
+                  animation: 'pulseGlow 2s ease-in-out infinite',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div
+                    style={{
+                      width: '18px',
+                      height: '18px',
+                      border: '2px solid rgba(56, 189, 248, 0.2)',
+                      borderTop: '2px solid #38bdf8',
+                      borderRight: '2px solid #38bdf8',
+                      borderRadius: '50%',
+                      animation: 'spin 0.7s cubic-bezier(0.4, 0, 0.2, 1) infinite',
+                      flexShrink: 0,
+                    }}
+                  />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.78rem', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span>{chatDownloadProgress > 0 ? '📥 Downloading AI Model Weights...' : '⚡ RAG AI Engine Analyzing Logs...'}</span>
+                    </div>
+                    <div style={{ fontSize: '0.68rem', color: '#94a3b8', fontStyle: 'italic' }}>
+                      {chatProgressMessage === 'Task enqueued for processing.' ? 'Evaluating event logs & scanning vectors...' : chatProgressMessage}
+                    </div>
+                  </div>
+                </div>
+
+                {chatDownloadProgress > 0 && chatDownloadProgress <= 100 && (
+                  <div style={{ width: '100%', marginTop: '4px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#38bdf8', marginBottom: '3px', fontWeight: 600 }}>
+                      <span>📥 Downloading GGUF Model Weights</span>
+                      <span>{Math.round(chatDownloadProgress)}%</span>
+                    </div>
+                    <div style={{ width: '100%', height: '6px', background: 'rgba(15, 23, 42, 0.8)', borderRadius: '3px', overflow: 'hidden', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
+                      <div
+                        style={{
+                          width: `${Math.min(100, Math.max(0, chatDownloadProgress))}%`,
+                          height: '100%',
+                          background: 'linear-gradient(90deg, #38bdf8, #818cf8)',
+                          borderRadius: '3px',
+                          transition: 'width 0.2s ease-out',
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -286,6 +343,7 @@ export function App() {
                   setChatHistory((prev) => [...prev, { sender: 'user', text: queryText }]);
                   setIsChatAnalyzing(true);
                   setChatProgressMessage('Enqueued for analysis...');
+                  setChatDownloadProgress(0);
                   
                   setTimeout(async () => {
                     const baseUrl = window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080';
@@ -303,7 +361,10 @@ export function App() {
                           if (statusRes.progressMessage) {
                             setChatProgressMessage(statusRes.progressMessage);
                           }
-                          if (statusRes.status === 'COMPLETED' || statusRes.status === 'FAILED' || (statusRes.analysis && statusRes.analysis.trim().length > 0)) {
+                          if (statusRes.downloadProgress !== undefined) {
+                            setChatDownloadProgress(statusRes.downloadProgress);
+                          }
+                          if (statusRes.status === 'COMPLETED' || statusRes.status === 'FAILED') {
                             isCompleted = true;
                           }
                         }
@@ -314,6 +375,7 @@ export function App() {
                       setChatHistory((prev) => [...prev, { sender: 'assistant', text: 'Error connecting to RAG engine.' }]);
                     } finally {
                       setIsChatAnalyzing(false);
+                      setChatDownloadProgress(0);
                     }
                   }, 0);
                 }

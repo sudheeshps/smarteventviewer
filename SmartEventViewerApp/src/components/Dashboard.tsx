@@ -19,7 +19,7 @@ interface ChannelSummaryInfo {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
-  const [activeDashboardTab, setActiveDashboardTab] = useState<'overview' | 'processes' | 'sessions' | 'users'>('overview');
+  const [activeDashboardTab, setActiveDashboardTab] = useState<'overview' | 'processes' | 'sessions' | 'users' | 'services'>('overview');
   const [totalChannels, setTotalChannels] = useState<number>(0);
   const [totalEvents, setTotalEvents] = useState<number>(0);
   const [criticalRisks, setCriticalRisks] = useState<number>(0);
@@ -39,6 +39,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
 
   // System Hardware Telemetry & User Sessions State
   const [metrics, setMetrics] = useState<SystemMetricsData | null>(null);
+  const [serviceSearchQuery, setServiceSearchQuery] = useState<string>('');
 
   const workerRef = React.useRef<Worker | null>(null);
 
@@ -66,26 +67,54 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
         expiredUserSessions: [],
         systemUsers: [],
         rdpSessions: [],
+        systemServices: [],
       };
 
-      if (type === 'METRICS_SUMMARY_UPDATED') {
+      if (type === 'METRICS_CPU_UPDATED') {
+        setMetrics((prev) => ({
+          ...(prev || initialMetrics),
+          cpuUsagePercent: payload,
+        }));
+      } else if (type === 'METRICS_MEMORY_UPDATED') {
         setMetrics((prev) => ({
           ...(prev || initialMetrics),
           ...payload,
-          topProcesses: payload.topProcesses && payload.topProcesses.length > 0 ? payload.topProcesses : (prev ? prev.topProcesses : []),
-          activeUserSessions: payload.activeUserSessions && payload.activeUserSessions.length > 0 ? payload.activeUserSessions : (prev ? prev.activeUserSessions : []),
-          systemUsers: payload.systemUsers && payload.systemUsers.length > 0 ? payload.systemUsers : (prev ? prev.systemUsers : []),
-          rdpSessions: payload.rdpSessions && payload.rdpSessions.length > 0 ? payload.rdpSessions : (prev ? prev.rdpSessions : []),
+        }));
+      } else if (type === 'METRICS_DISK_UPDATED') {
+        setMetrics((prev) => ({
+          ...(prev || initialMetrics),
+          ...payload,
+        }));
+      } else if (type === 'METRICS_NETWORK_UPDATED') {
+        setMetrics((prev) => ({
+          ...(prev || initialMetrics),
+          networkUsageMbps: payload,
+        }));
+      } else if (type === 'METRICS_SUMMARY_UPDATED') {
+        setMetrics((prev) => ({
+          ...(prev || initialMetrics),
+          ...payload,
+          topProcesses: (payload.topProcesses && payload.topProcesses.length > 0) ? payload.topProcesses : (prev?.topProcesses || []),
+          activeUserSessions: (payload.activeUserSessions && payload.activeUserSessions.length > 0) ? payload.activeUserSessions : (prev?.activeUserSessions || []),
+          systemUsers: (payload.systemUsers && payload.systemUsers.length > 0) ? payload.systemUsers : (prev?.systemUsers || []),
+          rdpSessions: (payload.rdpSessions && payload.rdpSessions.length > 0) ? payload.rdpSessions : (prev?.rdpSessions || []),
+          systemServices: (payload.systemServices && payload.systemServices.length > 0) ? payload.systemServices : (prev?.systemServices || []),
         }));
       } else if (type === 'METRICS_PROCESSES_UPDATED') {
         setMetrics((prev) => ({
           ...(prev || initialMetrics),
-          topProcesses: payload,
+          topProcesses: Array.isArray(payload) && payload.length > 0 ? payload : (prev?.topProcesses || []),
         }));
       } else if (type === 'METRICS_SESSIONS_UPDATED') {
         setMetrics((prev) => ({
           ...(prev || initialMetrics),
           ...payload,
+          topProcesses: prev?.topProcesses || [],
+        }));
+      } else if (type === 'METRICS_SERVICES_UPDATED') {
+        setMetrics((prev) => ({
+          ...(prev || initialMetrics),
+          systemServices: payload,
         }));
       }
     };
@@ -175,7 +204,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
   }
 
   return (
-    <div style={{ flex: 1, padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto', fontSize: '0.78rem' }}>
+    <div style={{ flex: 1, minHeight: 0, padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto', fontSize: '0.78rem' }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(30, 41, 59, 0.7)', padding: '10px 16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
         <div>
           <h1 style={{ fontSize: '1.2rem', color: '#f8fafc', margin: 0, fontWeight: 700 }}>
@@ -192,7 +221,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
       </header>
 
       {/* Dashboard Section Sub-Navigation Tabs */}
-      <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '8px' }}>
+      <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '8px', overflowX: 'auto', flexShrink: 0, whiteSpace: 'nowrap' }}>
         <button
           onClick={() => setActiveDashboardTab('overview')}
           style={{
@@ -204,6 +233,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
             fontSize: '0.76rem',
             fontWeight: 700,
             cursor: 'pointer',
+            flexShrink: 0,
             transition: 'all 0.15s',
           }}
         >
@@ -221,10 +251,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
             fontSize: '0.76rem',
             fontWeight: 700,
             cursor: 'pointer',
+            flexShrink: 0,
             transition: 'all 0.15s',
           }}
         >
-          🔥 Process Activity ({metrics.topProcesses ? metrics.topProcesses.length : 0})
+          🔥 Process Activity ({metrics?.topProcesses ? metrics.topProcesses.length : 0})
         </button>
 
         <button
@@ -238,10 +269,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
             fontSize: '0.76rem',
             fontWeight: 700,
             cursor: 'pointer',
+            flexShrink: 0,
             transition: 'all 0.15s',
           }}
         >
-          🖥️ RDP & User Sessions ({metrics.rdpSessions ? metrics.rdpSessions.length : 0})
+          🖥️ RDP & User Sessions ({metrics?.rdpSessions ? metrics.rdpSessions.length : 0})
         </button>
 
         <button
@@ -255,10 +287,29 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
             fontSize: '0.76rem',
             fontWeight: 700,
             cursor: 'pointer',
+            flexShrink: 0,
             transition: 'all 0.15s',
           }}
         >
-          👥 User Principals ({metrics.systemUsers ? metrics.systemUsers.length : 0})
+          👥 User Principals ({metrics?.systemUsers ? metrics.systemUsers.length : 0})
+        </button>
+
+        <button
+          onClick={() => setActiveDashboardTab('services')}
+          style={{
+            background: activeDashboardTab === 'services' ? 'rgba(34, 197, 94, 0.2)' : 'transparent',
+            color: activeDashboardTab === 'services' ? '#4ade80' : '#94a3b8',
+            border: activeDashboardTab === 'services' ? '1px solid #4ade80' : '1px solid transparent',
+            borderRadius: '6px',
+            padding: '6px 14px',
+            fontSize: '0.76rem',
+            fontWeight: 700,
+            cursor: 'pointer',
+            flexShrink: 0,
+            transition: 'all 0.15s',
+          }}
+        >
+          ⚙️ Services ({metrics?.systemServices ? metrics.systemServices.length : 0})
         </button>
       </div>
 
@@ -738,6 +789,114 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
                       </td>
                     </tr>
                   ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* Sub-Tab 5: SYSTEM SERVICES */}
+      {activeDashboardTab === 'services' && (
+        <section style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+            <h3 style={{ color: '#4ade80', margin: 0, fontSize: '0.85rem', fontWeight: 700 }}>
+              ⚙️ System Services Overview
+            </h3>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type="text"
+                  placeholder="Filter by name, status, start type..."
+                  value={serviceSearchQuery}
+                  onChange={(e) => setServiceSearchQuery(e.target.value)}
+                  style={{
+                    background: 'rgba(15, 23, 42, 0.8)',
+                    color: '#e2e8f0',
+                    border: '1px solid rgba(74, 222, 128, 0.4)',
+                    borderRadius: '6px',
+                    padding: '4px 10px 4px 26px',
+                    fontSize: '0.72rem',
+                    outline: 'none',
+                    width: '240px',
+                  }}
+                />
+                <span style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', fontSize: '0.7rem', color: '#94a3b8' }}>
+                  🔍
+                </span>
+                {serviceSearchQuery && (
+                  <button
+                    onClick={() => setServiceSearchQuery('')}
+                    style={{ position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.7rem' }}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                Total Services: <strong style={{ color: '#4ade80' }}>{metrics?.systemServices ? metrics.systemServices.length : 0}</strong>
+              </span>
+            </div>
+          </div>
+
+          <div style={{ overflowY: 'auto', maxHeight: '500px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.72rem' }}>
+              <thead>
+                <tr style={{ background: 'rgba(15, 23, 42, 0.9)', color: '#94a3b8', fontSize: '0.68rem', position: 'sticky', top: 0 }}>
+                  <th style={{ padding: '6px' }}>Service Name</th>
+                  <th style={{ padding: '6px' }}>Display Name</th>
+                  <th style={{ padding: '6px' }}>Status</th>
+                  <th style={{ padding: '6px' }}>Start Type</th>
+                  <th style={{ padding: '6px' }}>Process ID</th>
+                </tr>
+              </thead>
+              <tbody>
+                {!metrics?.systemServices || metrics.systemServices.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} style={{ padding: '12px', textAlign: 'center', color: '#94a3b8' }}>
+                      Querying system services...
+                    </td>
+                  </tr>
+                ) : (
+                  metrics.systemServices
+                    .filter((svc) => {
+                      if (!serviceSearchQuery.trim()) return true;
+                      const q = serviceSearchQuery.toLowerCase().trim();
+                      return (
+                        svc.serviceName.toLowerCase().includes(q) ||
+                        svc.displayName.toLowerCase().includes(q) ||
+                        svc.status.toLowerCase().includes(q) ||
+                        svc.startType.toLowerCase().includes(q) ||
+                        String(svc.processId).includes(q)
+                      );
+                    })
+                    .map((svc, sIdx) => (
+                      <tr key={sIdx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={{ padding: '5px', fontWeight: 700, color: '#38bdf8' }}>{svc.serviceName}</td>
+                        <td style={{ padding: '5px', color: '#e2e8f0' }}>{svc.displayName || svc.serviceName}</td>
+                        <td style={{ padding: '5px' }}>
+                          <span
+                            style={{
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              fontSize: '0.65rem',
+                              fontWeight: 700,
+                              background: svc.status === 'Running' ? 'rgba(74, 222, 128, 0.2)' : 'rgba(148, 163, 184, 0.2)',
+                              color: svc.status === 'Running' ? '#4ade80' : '#94a3b8',
+                              border: svc.status === 'Running' ? '1px solid rgba(74, 222, 128, 0.4)' : '1px solid rgba(148, 163, 184, 0.3)',
+                            }}
+                          >
+                            {svc.status}
+                          </span>
+                        </td>
+                        <td style={{ padding: '5px', color: '#cbd5e1' }}>{svc.startType}</td>
+                        <td style={{ padding: '5px', fontFamily: 'monospace', color: svc.processId > 0 ? '#38bdf8' : '#64748b' }}>
+                          {svc.processId > 0 ? svc.processId : '-'}
+                        </td>
+                      </tr>
+                    ))
                 )}
               </tbody>
             </table>

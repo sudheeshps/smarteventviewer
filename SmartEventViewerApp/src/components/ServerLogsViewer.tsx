@@ -1,22 +1,52 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { fetchApiServerLogs } from '../apiClient';
+import { fetchApiServerLogs, fetchApiLogFormat } from '../apiClient';
+import type { LogColumnFormat, LogRecordData } from '../apiClient';
 
 interface ServerLogsViewerProps {
   onClose?: () => void;
 }
 
 export const ServerLogsViewer: React.FC<ServerLogsViewerProps> = ({ onClose }) => {
-  const [logs, setLogs] = useState<string[]>([]);
+  const [columns, setColumns] = useState<LogColumnFormat[]>([]);
+  const [records, setRecords] = useState<LogRecordData[]>([]);
   const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
   const [filterText, setFilterText] = useState<string>('');
   const logContainerRef = useRef<HTMLDivElement>(null);
+
+  const fetchFormat = async () => {
+    try {
+      const baseUrl = window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080';
+      const data = await fetchApiLogFormat(baseUrl);
+      if (data.columns && data.columns.length > 0) {
+        setColumns(data.columns);
+      } else {
+        setColumns([
+          { key: 'timestamp', headerName: 'Timestamp', type: 'timestamp', widthPx: 180 },
+          { key: 'level', headerName: 'Level', type: 'level', widthPx: 80 },
+          { key: 'processId', headerName: 'Process ID', type: 'number', widthPx: 90 },
+          { key: 'threadId', headerName: 'Thread ID', type: 'number', widthPx: 90 },
+          { key: 'category', headerName: 'Category', type: 'string', widthPx: 140 },
+          { key: 'message', headerName: 'Message', type: 'string', widthPx: 450 }
+        ]);
+      }
+    } catch {
+      setColumns([
+        { key: 'timestamp', headerName: 'Timestamp', type: 'timestamp', widthPx: 180 },
+        { key: 'level', headerName: 'Level', type: 'level', widthPx: 80 },
+        { key: 'processId', headerName: 'Process ID', type: 'number', widthPx: 90 },
+        { key: 'threadId', headerName: 'Thread ID', type: 'number', widthPx: 90 },
+        { key: 'category', headerName: 'Category', type: 'string', widthPx: 140 },
+        { key: 'message', headerName: 'Message', type: 'string', widthPx: 450 }
+      ]);
+    }
+  };
 
   const fetchLogs = async () => {
     try {
       const baseUrl = window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080';
       const data = await fetchApiServerLogs(baseUrl);
-      if (data.logs) {
-        setLogs(data.logs);
+      if (data.records) {
+        setRecords(data.records);
       }
     } catch (e) {
       console.error('Error fetching server logs:', e);
@@ -24,6 +54,7 @@ export const ServerLogsViewer: React.FC<ServerLogsViewerProps> = ({ onClose }) =
   };
 
   useEffect(() => {
+    fetchFormat();
     fetchLogs();
     if (!autoRefresh) return;
     const interval = setInterval(fetchLogs, 2000);
@@ -34,9 +65,13 @@ export const ServerLogsViewer: React.FC<ServerLogsViewerProps> = ({ onClose }) =
     if (logContainerRef.current) {
       logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
     }
-  }, [logs]);
+  }, [records]);
 
-  const filteredLogs = logs.filter(line => line.toLowerCase().includes(filterText.toLowerCase()));
+  const filteredRecords = records.filter(rec =>
+    rec.message.toLowerCase().includes(filterText.toLowerCase()) ||
+    rec.category.toLowerCase().includes(filterText.toLowerCase()) ||
+    rec.level.toLowerCase().includes(filterText.toLowerCase())
+  );
 
   return (
     <div style={{
@@ -50,20 +85,20 @@ export const ServerLogsViewer: React.FC<ServerLogsViewerProps> = ({ onClose }) =
       height: '100%',
       minHeight: '400px',
       color: '#f8fafc',
-      fontFamily: 'Consolas, Monaco, "Andale Mono", "Ubuntu Mono", monospace'
+      fontFamily: 'Inter, system-ui, sans-serif'
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #334155', paddingBottom: '10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '1.2rem' }}>📜</span>
           <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#38bdf8' }}>Server Diagnostics & Model Logs</h3>
           <span style={{ fontSize: '0.75rem', background: '#1e293b', padding: '2px 8px', borderRadius: '12px', color: '#94a3b8' }}>
-            {logs.length} entries
+            {records.length} entries
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <input
             type="text"
-            placeholder="Filter logs..."
+            placeholder="Filter log records..."
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
             style={{
@@ -125,30 +160,55 @@ export const ServerLogsViewer: React.FC<ServerLogsViewerProps> = ({ onClose }) =
           border: '1px solid #1e293b',
           padding: '12px',
           overflowY: 'auto',
-          maxHeight: '600px',
-          fontSize: '0.82rem',
-          lineHeight: '1.5'
+          fontSize: '0.78rem',
         }}
       >
-        {filteredLogs.length === 0 ? (
-          <div style={{ color: '#64748b', fontStyle: 'italic' }}>
-            No server log entries recorded yet.
-          </div>
-        ) : (
-          filteredLogs.map((logLine, idx) => {
-            let color = '#cbd5e1';
-            if (logLine.includes('[AI_ENGINE]') || logLine.includes('LLAMA')) color = '#38bdf8';
-            else if (logLine.includes('[WARNING]') || logLine.includes('WARN')) color = '#fbbf24';
-            else if (logLine.includes('[ERROR]') || logLine.includes('FAIL')) color = '#f87171';
-            else if (logLine.includes('[SERVER]')) color = '#a7f3d0';
+        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+          <thead>
+            <tr style={{ background: 'rgba(15, 23, 42, 0.9)', color: '#94a3b8', borderBottom: '1px solid #334155' }}>
+              {columns.map((col) => (
+                <th key={col.key} style={{ padding: '8px', minWidth: `${col.widthPx}px` }}>
+                  {col.headerName}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filteredRecords.length === 0 ? (
+              <tr>
+                <td colSpan={columns.length || 4} style={{ padding: '16px', color: '#64748b', fontStyle: 'italic', textAlign: 'center' }}>
+                  No server log entries recorded yet.
+                </td>
+              </tr>
+            ) : (
+              filteredRecords.map((rec, idx) => {
+                const lvlColor =
+                  rec.level === 'ERROR' ? '#f87171' :
+                  rec.level === 'WARN' ? '#fbbf24' :
+                  rec.level === 'DEBUG' ? '#a7f3d0' : '#38bdf8';
 
-            return (
-              <div key={idx} style={{ color, whiteSpace: 'pre-wrap', wordBreak: 'break-word', borderBottom: '1px solid rgba(255,255,255,0.03)', padding: '2px 0' }}>
-                {logLine}
-              </div>
-            );
-          })
-        )}
+                return (
+                  <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                    {columns.map((col) => {
+                      const recObj = rec as unknown as Record<string, unknown>;
+                      const rawVal = recObj[col.key] ?? recObj[col.key.toLowerCase()] ?? recObj[col.key.toUpperCase()];
+                      let cellVal = (rawVal !== undefined && rawVal !== null && rawVal !== '') ? String(rawVal) : '-';
+                      if (col.key === 'timestamp' && (!rawVal || rawVal === '')) {
+                        cellVal = '-';
+                      }
+
+                      return (
+                        <td key={col.key} style={{ padding: '6px 8px', color: col.key === 'level' ? lvlColor : '#e2e8f0', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                          {cellVal}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );

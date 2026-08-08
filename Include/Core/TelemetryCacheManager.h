@@ -36,8 +36,13 @@ namespace SmartEventViewer
         static TelemetryCacheManager& GetInstance();
 
         SystemMetricsResponseDto GetSummary();
+        SystemMetricsResponseDto GetCpuUsage();
+        SystemMetricsResponseDto GetMemoryUsage();
+        SystemMetricsResponseDto GetDiskUsage();
+        SystemMetricsResponseDto GetNetworkUsage();
         SystemMetricsResponseDto GetProcesses();
         SystemMetricsResponseDto GetSessions();
+        ServicesResponseDto GetServices();
         SystemMetricsResponseDto GetFullMetrics();
 
         void Clear();

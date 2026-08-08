@@ -103,7 +103,7 @@ namespace SmartEventViewer
 
     AnalyzeResponseDto LlmAnalysisController::ProcessAnalysisTask(const String& sTaskId, const AnalyzeRequestDto& request)
     {
-        EventsController::Log(String::Format("[LLM_CONTROLLER] Processing AI threat analysis for Task #{0}...", sTaskId));
+        EventsController::Log(String::Format("[LLM_ANALYZER] Analysis triggered for Task #{0} | Channel: {1} | Query: '{2}'", sTaskId, request.Channel, request.Query));
         List<String> channelsToScan = GetTargetChannelsList(request.Channel);
         List<EventRecord> aggregatedEvents;
 
@@ -119,8 +119,11 @@ namespace SmartEventViewer
                     s_analysisResults[sTaskId] = currentStatus;
                 }
             }
+            EventsController::Log(String::Format("[LLM_ANALYZER] Scanning channel [{0}/{1}]: {2}", i + 1, channelsToScan.GetCount(), channelsToScan[i]));
             ScanChannelEvents(channelsToScan[i], aggregatedEvents);
         }
+
+        EventsController::Log(String::Format("[LLM_ANALYZER] Aggregated {0} security event records for analysis", aggregatedEvents.GetCount()));
 
         {
             Lock<CriticalSection> lock(s_analysisResultsCs);
@@ -145,18 +148,37 @@ namespace SmartEventViewer
             eventArray[i] = aggregatedEvents[i];
         }
 
-        if (LocalLlmEngine::GetInstance().IsModelLoaded() || aggregatedEvents.GetCount() > 0)
+        if (aggregatedEvents.GetCount() > 0)
         {
-            String llmResponse = LocalLlmEngine::GetInstance().ProcessQuery(request.Query, eventArray.GetData(), static_cast<unsigned int>(eventArray.GetLength()));
+            EventsController::Log(String::Format("[LLM_ANALYZER] Invoking LocalLlmEngine ProcessQuery for Task #{0}...", sTaskId));
+            String llmResponse = LocalLlmEngine::GetInstance().ProcessQuery(
+                request.Query,
+                eventArray.GetData(),
+                static_cast<unsigned int>(eventArray.GetLength()),
+                [sTaskId](double progressPct) {
+                    Lock<CriticalSection> lock(s_analysisResultsCs);
+                    AnalyzeResponseDto currentStatus;
+                    if (s_analysisResults.TryGetValue(sTaskId, currentStatus))
+                    {
+                        currentStatus.Status = String("DOWNLOADING");
+                        currentStatus.DownloadProgress = progressPct;
+                        currentStatus.ProgressMessage = String::Format("Downloading AI GGUF model weights ({0:F0}%)...", progressPct);
+                        s_analysisResults[sTaskId] = currentStatus;
+                    }
+                    EventsController::Log(String::Format("[LLM_ANALYZER] Model weights download progress: {0:F0}% for Task #{1}", progressPct, sTaskId));
+                }
+            );
             responseDto.Analysis = llmResponse;
             responseDto.Status = String("COMPLETED");
             responseDto.ProgressMessage = String::Format("Analysis complete. Analyzed {0} security events.", aggregatedEvents.GetCount());
+            EventsController::Log(String::Format("[LLM_ANALYZER] Analysis Task #{0} completed successfully. Analyzed {1} events.", sTaskId, aggregatedEvents.GetCount()));
         }
         else
         {
             responseDto.Analysis = String("No relevant security event records found in specified channels to perform AI analysis.");
             responseDto.Status = String("COMPLETED");
             responseDto.ProgressMessage = String("Analysis complete (0 events evaluated).");
+            EventsController::Log(String::Format("[LLM_ANALYZER] Task #{0} finished: 0 security events evaluated.", sTaskId));
         }
 
         return responseDto;
@@ -205,7 +227,7 @@ namespace SmartEventViewer
         pendingResponse.ProgressMessage = String("Enqueued for analysis...");
         pendingResponse.Channel = request.Channel;
         pendingResponse.Query = request.Query;
-        pendingResponse.Analysis = String("Task enqueued for processing.");
+        pendingResponse.Analysis = String("");
         pendingResponse.EventsAnalyzed = 0;
 
         s_analysisQueue.Add(taskItem);

@@ -26,13 +26,13 @@ namespace SmartEventViewer
     static CriticalSection s_metricsCs;
     static bool s_hasCachedMetrics = false;
 
-    void SystemTelemetryProvider::CalculateDiskRates(const DotNetDupe::System::Diagnostics::RealTimeSystemInfo& realInfo, double& outReadMb, double& outWriteMb)
+    void SystemTelemetryProvider::CalculateDiskRates(const DotNetDupe::System::Diagnostics::DiskInfo& diskInfo, double& outReadMb, double& outWriteMb)
     {
         static uint64_t s_lastDiskReadBytes = 0;
         static uint64_t s_lastDiskWriteBytes = 0;
 
-        uint64_t curRead = realInfo.uDiskReadBytes;
-        uint64_t curWrite = realInfo.uDiskWriteBytes;
+        uint64_t curRead = static_cast<uint64_t>(diskInfo.lDiskReadBytes > 0 ? diskInfo.lDiskReadBytes : 0);
+        uint64_t curWrite = static_cast<uint64_t>(diskInfo.lDiskWriteBytes > 0 ? diskInfo.lDiskWriteBytes : 0);
 
         if (s_lastDiskReadBytes == 0 && s_lastDiskWriteBytes == 0)
         {
@@ -73,7 +73,7 @@ namespace SmartEventViewer
         return sResult.IsEmpty() ? String("-") : sResult;
     }
 
-    ProcessResourceDto SystemTelemetryProvider::MapProcessResourceDto(const DotNetDupe::System::Diagnostics::ProcessResourceInfo& proc)
+    ProcessResourceDto SystemTelemetryProvider::MapProcessResourceDto(const DotNetDupe::System::Diagnostics::ProcessInfo& proc)
     {
         ProcessResourceDto procDto;
         procDto.ProcessId = static_cast<unsigned long>(proc.iProcessId);
@@ -86,28 +86,14 @@ namespace SmartEventViewer
         if (procCpu > 100.0) procCpu = 100.0;
         procDto.CpuUsagePercent = procCpu;
 
-        long long rawRamBytes = proc.lMemoryUsageBytes;
+        long long rawRamBytes = proc.memory.lPhysicalMemoryBytes > 0 ? proc.memory.lPhysicalMemoryBytes : proc.memory.lPrivateBytes;
         procDto.MemoryUsageMB = static_cast<unsigned long long>(rawRamBytes > 0 ? (rawRamBytes / (1024 * 1024)) : 0);
 
-        procDto.NetworkReadBytes = static_cast<unsigned long long>(proc.lNetworkReadBytes > 0 ? proc.lNetworkReadBytes : 0);
-        procDto.NetworkWriteBytes = static_cast<unsigned long long>(proc.lNetworkWriteBytes > 0 ? proc.lNetworkWriteBytes : 0);
+        procDto.NetworkReadBytes = static_cast<unsigned long long>(proc.network.lNetworkReadBytes > 0 ? proc.network.lNetworkReadBytes : 0);
+        procDto.NetworkWriteBytes = static_cast<unsigned long long>(proc.network.lNetworkWriteBytes > 0 ? proc.network.lNetworkWriteBytes : 0);
 
-        if (proc.lstOpenPorts.GetCount() > 0)
-        {
-            String portsStr = "";
-            for (int i = 0; i < proc.lstOpenPorts.GetCount(); ++i)
-            {
-                if (i > 0) portsStr = portsStr + ", ";
-                portsStr = portsStr + String::FromInt(proc.lstOpenPorts[i]);
-            }
-            procDto.OpenPorts = portsStr;
-        }
-        else
-        {
-            procDto.OpenPorts = String("-");
-        }
-
-        procDto.ConnectionEstablished = proc.bHasEstablishedInboundConnection;
+        procDto.OpenPorts = String("-");
+        procDto.ConnectionEstablished = false;
         return procDto;
     }
 
@@ -199,25 +185,26 @@ namespace SmartEventViewer
 
         SystemMetricsResponseDto metrics;
         try {
-            auto realInfo = SystemMetrics::GetSystemMetrics();
-
-            double sysCpu = realInfo.dCpuUsagePercent;
+            double sysCpu = SystemMetrics::GetSystemCpuUsage();
             if (sysCpu < 0.0) sysCpu = 0.0;
             if (sysCpu > 100.0) sysCpu = 100.0;
-
             metrics.CpuUsagePercent = sysCpu;
-            metrics.MemoryUsagePercent = realInfo.dMemoryUsagePercent;
-            metrics.MemoryTotalMB = realInfo.uMemoryTotalBytes / (1024 * 1024);
-            metrics.MemoryUsedMB = realInfo.uMemoryUsedBytes / (1024 * 1024);
 
+            auto memInfo = SystemMetrics::GetSystemMemoryUsage();
+            metrics.MemoryUsagePercent = memInfo.dMemoryUsagePercent;
+            metrics.MemoryTotalMB = memInfo.uMemoryTotalBytes / (1024 * 1024);
+            metrics.MemoryUsedMB = memInfo.uMemoryUsedBytes / (1024 * 1024);
+
+            auto diskInfo = SystemMetrics::GetSystemDiskUsage();
             double calculatedReadMb = 0.0, calculatedWriteMb = 0.0;
-            CalculateDiskRates(realInfo, calculatedReadMb, calculatedWriteMb);
+            CalculateDiskRates(diskInfo, calculatedReadMb, calculatedWriteMb);
             metrics.DiskReadMBps = calculatedReadMb;
             metrics.DiskWriteMBps = calculatedWriteMb;
-            metrics.NetworkUsageMbps = realInfo.dNetworkUsageMbps;
+            metrics.NetworkUsageMbps = SystemMetrics::GetSystemNetworkUsage();
 
-            for (int i = 0; i < realInfo.lstTopProcesses.GetCount(); ++i) {
-                metrics.TopProcesses.Add(MapProcessResourceDto(realInfo.lstTopProcesses[i]));
+            auto topProcs = SystemMetrics::GetTopProcesses(DotNetDupe::System::Diagnostics::SystemResource::Cpu, 10);
+            for (int i = 0; i < topProcs.GetCount(); ++i) {
+                metrics.TopProcesses.Add(MapProcessResourceDto(topProcs[i]));
             }
 
             {
@@ -242,14 +229,46 @@ namespace SmartEventViewer
         }
     }
 
+    SystemMetricsResponseDto SystemTelemetryProvider::QueryCpuUsage() {
+        SystemMetricsResponseDto metrics;
+        double sysCpu = SystemMetrics::GetSystemCpuUsage();
+        if (sysCpu < 0.0) sysCpu = 0.0;
+        if (sysCpu > 100.0) sysCpu = 100.0;
+        metrics.CpuUsagePercent = sysCpu;
+        return metrics;
+    }
+
+    SystemMetricsResponseDto SystemTelemetryProvider::QueryMemoryUsage() {
+        SystemMetricsResponseDto metrics;
+        auto memInfo = SystemMetrics::GetSystemMemoryUsage();
+        metrics.MemoryUsagePercent = memInfo.dMemoryUsagePercent;
+        metrics.MemoryTotalMB = memInfo.uMemoryTotalBytes / (1024 * 1024);
+        metrics.MemoryUsedMB = memInfo.uMemoryUsedBytes / (1024 * 1024);
+        return metrics;
+    }
+
+    SystemMetricsResponseDto SystemTelemetryProvider::QueryDiskUsage() {
+        SystemMetricsResponseDto metrics;
+        auto diskInfo = SystemMetrics::GetSystemDiskUsage();
+        double calculatedReadMb = 0.0, calculatedWriteMb = 0.0;
+        CalculateDiskRates(diskInfo, calculatedReadMb, calculatedWriteMb);
+        metrics.DiskReadMBps = calculatedReadMb;
+        metrics.DiskWriteMBps = calculatedWriteMb;
+        return metrics;
+    }
+
+    SystemMetricsResponseDto SystemTelemetryProvider::QueryNetworkUsage() {
+        SystemMetricsResponseDto metrics;
+        metrics.NetworkUsageMbps = SystemMetrics::GetSystemNetworkUsage();
+        return metrics;
+    }
+
     SystemMetricsResponseDto SystemTelemetryProvider::QueryProcesses() {
         SystemMetricsResponseDto metrics;
-        auto realInfo = SystemMetrics::GetSystemMetrics();
-
-        for (int i = 0; i < realInfo.lstTopProcesses.GetCount(); ++i) {
-            metrics.TopProcesses.Add(MapProcessResourceDto(realInfo.lstTopProcesses[i]));
+        auto topProcs = SystemMetrics::GetTopProcesses(DotNetDupe::System::Diagnostics::SystemResource::Cpu, 20);
+        for (int i = 0; i < topProcs.GetCount(); ++i) {
+            metrics.TopProcesses.Add(MapProcessResourceDto(topProcs[i]));
         }
-
         return metrics;
     }
 
@@ -274,31 +293,33 @@ namespace SmartEventViewer
         Console::WriteLine("[TELEMETRY] Refreshing SystemMetrics & ActiveUserSessions cache...");
         SystemMetricsResponseDto metrics;
 
-        auto realInfo = SystemMetrics::GetSystemMetrics();
-        double sysCpu = realInfo.dCpuUsagePercent;
+        double sysCpu = SystemMetrics::GetSystemCpuUsage();
         if (sysCpu < 0.0) sysCpu = 0.0;
         if (sysCpu > 100.0) sysCpu = 100.0;
-
         metrics.CpuUsagePercent = sysCpu;
-        metrics.MemoryUsagePercent = realInfo.dMemoryUsagePercent;
-        metrics.MemoryTotalMB = realInfo.uMemoryTotalBytes / (1024 * 1024);
-        metrics.MemoryUsedMB = realInfo.uMemoryUsedBytes / (1024 * 1024);
 
+        auto memInfo = SystemMetrics::GetSystemMemoryUsage();
+        metrics.MemoryUsagePercent = memInfo.dMemoryUsagePercent;
+        metrics.MemoryTotalMB = memInfo.uMemoryTotalBytes / (1024 * 1024);
+        metrics.MemoryUsedMB = memInfo.uMemoryUsedBytes / (1024 * 1024);
+
+        auto diskInfo = SystemMetrics::GetSystemDiskUsage();
         double calculatedReadMb = 0.0, calculatedWriteMb = 0.0;
-        CalculateDiskRates(realInfo, calculatedReadMb, calculatedWriteMb);
+        CalculateDiskRates(diskInfo, calculatedReadMb, calculatedWriteMb);
 
+        auto topProcs = SystemMetrics::GetTopProcesses(DotNetDupe::System::Diagnostics::SystemResource::Cpu, 20);
         double processReadMbSum = 0.0, processWriteMbSum = 0.0;
-        for (int i = 0; i < realInfo.lstTopProcesses.GetCount(); ++i)
+        for (int i = 0; i < topProcs.GetCount(); ++i)
         {
-            const auto& proc = realInfo.lstTopProcesses[i];
-            processReadMbSum += static_cast<double>(proc.lDiskReadBytes > 0 ? (proc.lDiskReadBytes / (1024.0 * 1024.0)) : 0.0);
-            processWriteMbSum += static_cast<double>(proc.lDiskWriteBytes > 0 ? (proc.lDiskWriteBytes / (1024.0 * 1024.0)) : 0.0);
+            const auto& proc = topProcs[i];
+            processReadMbSum += static_cast<double>(proc.disk.lDiskReadBytes > 0 ? (proc.disk.lDiskReadBytes / (1024.0 * 1024.0)) : 0.0);
+            processWriteMbSum += static_cast<double>(proc.disk.lDiskWriteBytes > 0 ? (proc.disk.lDiskWriteBytes / (1024.0 * 1024.0)) : 0.0);
             metrics.TopProcesses.Add(MapProcessResourceDto(proc));
         }
 
         metrics.DiskReadMBps = (calculatedReadMb > 0.0) ? calculatedReadMb : processReadMbSum;
         metrics.DiskWriteMBps = (calculatedWriteMb > 0.0) ? calculatedWriteMb : processWriteMbSum;
-        metrics.NetworkUsageMbps = realInfo.dNetworkUsageMbps;
+        metrics.NetworkUsageMbps = SystemMetrics::GetSystemNetworkUsage();
 
         PopulateUserSessions(metrics);
 
@@ -310,5 +331,17 @@ namespace SmartEventViewer
         }
 
         return metrics;
+    }
+
+    ServicesResponseDto SystemTelemetryProvider::QueryServices()
+    {
+        ServicesResponseDto dto;
+        auto rawServices = SystemMetrics::GetAllServices();
+        for (int i = 0; i < rawServices.GetCount(); ++i)
+        {
+            const auto& svc = rawServices[i];
+            dto.Services.Add(ServiceInfoDto(svc.sServiceName, svc.sDisplayName, svc.sStatus, svc.sStartType, svc.iProcessId));
+        }
+        return dto;
     }
 }

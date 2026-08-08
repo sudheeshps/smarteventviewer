@@ -98,10 +98,16 @@ int main(int argc, char* argv[])
 
         builder.AddController<SmartEventViewer::TelemetryController>("/api")
             .MapGet("/metrics/summary", &SmartEventViewer::TelemetryController::GetSummary)
+            .MapGet("/metrics/cpu", &SmartEventViewer::TelemetryController::GetCpuUsage)
+            .MapGet("/metrics/memory", &SmartEventViewer::TelemetryController::GetMemoryUsage)
+            .MapGet("/metrics/disk", &SmartEventViewer::TelemetryController::GetDiskUsage)
+            .MapGet("/metrics/network", &SmartEventViewer::TelemetryController::GetNetworkUsage)
             .MapGet("/metrics/processes", &SmartEventViewer::TelemetryController::GetProcesses)
-            .MapGet("/metrics/sessions", &SmartEventViewer::TelemetryController::GetSessions);
+            .MapGet("/metrics/sessions", &SmartEventViewer::TelemetryController::GetSessions)
+            .MapGet("/metrics/services", &SmartEventViewer::TelemetryController::GetServices);
 
         builder.AddController<SmartEventViewer::DiagnosticsController>("/api")
+            .MapGet("/logs/format", &SmartEventViewer::DiagnosticsController::GetLogFormat)
             .MapGet("/logs", &SmartEventViewer::DiagnosticsController::GetServerLogs);
 
         builder.AddController<SmartEventViewer::LlmAnalysisController>("/api")
