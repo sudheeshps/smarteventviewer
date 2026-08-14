@@ -81,7 +81,9 @@ function connectWebSocket() {
 }
 
 function handleServerPush(updatedCategory: string) {
-  if (updatedCategory === 'summary' && currentActiveSubTab === 'overview') {
+  if (updatedCategory === 'llm_analysis') {
+    self.postMessage({ type: 'LLM_ANALYSIS_UPDATED' });
+  } else if (updatedCategory === 'summary' && currentActiveSubTab === 'overview') {
     fetchActiveSubTab();
   } else if (updatedCategory === 'processes' && currentActiveSubTab === 'processes') {
     fetchActiveSubTab();

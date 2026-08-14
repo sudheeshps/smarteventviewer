@@ -8,6 +8,6 @@
 #include <psapi.h>
 #include <iphlpapi.h>
 
-#include "Common.h"
+#include "ViewerCommon.h"
 #include "System/Collections/Generic/Dictionary.h"
 #include "System/Collections/Generic/List.h"

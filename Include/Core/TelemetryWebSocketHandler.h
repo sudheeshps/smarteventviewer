@@ -8,16 +8,14 @@
 #include "System/Threading/Lock.h"
 #include "WebAppCore/WebSockets/WebSocketContext.h"
 
-namespace SmartEventViewer
-{
+namespace SmartEventViewer {
     using String = DotNetDupe::System::String;
     using CriticalSection = DotNetDupe::System::Threading::CriticalSection;
     using LockCS = DotNetDupe::System::Threading::Lock<CriticalSection>;
     using WebSocketContext = DotNetDupe::WebAppCore::WebSockets::WebSocketContext;
     using IWebSocketHandler = DotNetDupe::WebAppCore::WebSockets::IWebSocketHandler;
 
-    class SMARTEVENTVIEWER_API TelemetryWebSocketHandler : public IWebSocketHandler
-    {
+    class SMARTEVENTVIEWER_API TelemetryWebSocketHandler : public IWebSocketHandler {
     private:
         DotNetDupe::System::Collections::Generic::List<DotNetDupe::System::SmartPointer<WebSocketContext>> m_clients{};
         CriticalSection m_csLock{};

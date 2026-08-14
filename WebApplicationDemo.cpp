@@ -1,4 +1,4 @@
-#include "System/Console.h"
+﻿#include "System/Console.h"
 #include "System/SmartPointer.h"
 #include "System/Func.h"
 #include "System/Convert.h"
@@ -340,7 +340,7 @@ void DemonstrateWebApplication() {
         Console::Write("[Client] (Invalid Secret Token) Status: ");
         Console::WriteLine((int)authResp3->GetStatusCode());
 
-    } catch (const BasicException<char>& ex) {
+    } catch (const DotNetDupe::System::Exception& ex) {
         Console::Write("[Client Exception] Error: ");
         Console::WriteLine(ex.What());
     }

@@ -9,14 +9,12 @@
 #include "Extensions/Logging/FileLoggerProvider.h"
 #include "Extensions/Logging/ConsoleLoggerProvider.h"
 
-namespace SmartEventViewer
-{
+namespace SmartEventViewer {
     using String = DotNetDupe::System::String;
     using ILogger = DotNetDupe::Extensions::Logging::ILogger;
     using LogLevel = DotNetDupe::Extensions::Logging::LogLevel;
 
-    class SMARTEVENTVIEWER_API AppLoggerManager
-    {
+    class SMARTEVENTVIEWER_API AppLoggerManager {
     private:
         static DotNetDupe::System::SmartPointer<DotNetDupe::Extensions::Logging::LoggerFactory> s_loggerFactory;
         static String s_logFilePath;

@@ -10,10 +10,8 @@
     #define SMARTEVENTVIEWER_API __attribute__((visibility("default")))
 #endif
 
-namespace SmartEventViewer
-{
-    enum class EventLevel
-    {
+namespace SmartEventViewer {
+    enum class EventLevel {
         LogAlways = 0,
         Critical = 1,
         Error = 2,
@@ -22,8 +20,7 @@ namespace SmartEventViewer
         Verbose = 5
     };
 
-    enum class RiskLevel
-    {
+    enum class RiskLevel {
         Low = 0,
         Medium = 1,
         High = 2,

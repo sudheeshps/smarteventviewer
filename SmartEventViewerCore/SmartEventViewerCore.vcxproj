@@ -60,14 +60,14 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(SolutionDir)Include;$(ProjectDir);$(SolutionDir)packages\DotNetDupe.3.0.2\include;$(SolutionDir)external\llama.cpp\include;$(SolutionDir)external\llama.cpp\ggml\include;$(SolutionDir)external\llama.cpp\common;$(SolutionDir)external\llama.cpp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Include;$(ProjectDir);$(SolutionDir)packages\DotNetDupe.3.0.2\include;$(SolutionDir)external\llama.cpp\include;$(SolutionDir)external\llama.cpp\ggml\include;$(SolutionDir)external\llama.cpp\common;$(SolutionDir)external\llama.cpp;$(SolutionDir)vcpkg_installed\x64-windows\x64-windows\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
-      <AdditionalLibraryDirectories>$(SolutionDir)DotNetDupe.3.0.2\runtimes\win-x64\native;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>DotNetDupe.lib;wevtapi.lib;wtsapi32.lib;iphlpapi.lib;psapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)DotNetDupe.3.0.2\runtimes\win-x64\native;$(SolutionDir)vcpkg_installed\x64-windows\x64-windows\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>DotNetDupe.lib;wevtapi.lib;wtsapi32.lib;iphlpapi.lib;psapi.lib;llama.lib;ggml.lib;ggml-base.lib;ggml-cpu.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -82,7 +82,7 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(SolutionDir)Include;$(ProjectDir);$(SolutionDir)packages\DotNetDupe.3.0.2\include;$(SolutionDir)external\llama.cpp\include;$(SolutionDir)external\llama.cpp\ggml\include;$(SolutionDir)external\llama.cpp\common;$(SolutionDir)external\llama.cpp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Include;$(ProjectDir);$(SolutionDir)packages\DotNetDupe.3.0.2\include;$(SolutionDir)external\llama.cpp\include;$(SolutionDir)external\llama.cpp\ggml\include;$(SolutionDir)external\llama.cpp\common;$(SolutionDir)external\llama.cpp;$(SolutionDir)vcpkg_installed\x64-windows\x64-windows\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -90,8 +90,8 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
-      <AdditionalLibraryDirectories>$(SolutionDir)DotNetDupe.3.0.2\runtimes\win-x64\native;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>DotNetDupe.lib;wevtapi.lib;wtsapi32.lib;iphlpapi.lib;psapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)DotNetDupe.3.0.2\runtimes\win-x64\native;$(SolutionDir)vcpkg_installed\x64-windows\x64-windows\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>DotNetDupe.lib;wevtapi.lib;wtsapi32.lib;iphlpapi.lib;psapi.lib;llama.lib;ggml.lib;ggml-base.lib;ggml-cpu.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -100,7 +100,6 @@
     <ClInclude Include="..\Include\Core\EventRecord.h" />
     <ClInclude Include="..\Include\Core\IEventLogReader.h" />
     <ClInclude Include="..\Include\Core\AnomalyEngine.h" />
-    <ClInclude Include="..\Include\Platform\WinEventLogReader.h" />
     <ClInclude Include="..\Include\Platform\LinuxJournalReader.h" />
     <ClInclude Include="..\Include\Ai\ILlamaModelProvider.h" />
     <ClInclude Include="..\Include\Ai\LocalLlmEngine.h" />
@@ -126,7 +125,6 @@
     </ClCompile>
     <ClCompile Include="EventRecord.cpp" />
     <ClCompile Include="AnomalyEngine.cpp" />
-    <ClCompile Include="WinEventLogReader.cpp" />
     <ClCompile Include="LinuxJournalReader.cpp" />
     <ClCompile Include="LocalLlmEngine.cpp" />
     <ClCompile Include="RagVectorStore.cpp" />
@@ -146,12 +144,12 @@
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
-    <Import Project="..\packages\DotNetDupe.3.0.7\build\native\DotNetDupe.targets" Condition="Exists('..\packages\DotNetDupe.3.0.7\build\native\DotNetDupe.targets')" />
+    <Import Project="..\packages\DotNetDupe.4.0.0\build\native\DotNetDupe.targets" Condition="Exists('..\packages\DotNetDupe.4.0.0\build\native\DotNetDupe.targets')" />
   </ImportGroup>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
       <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
     </PropertyGroup>
-    <Error Condition="!Exists('..\packages\DotNetDupe.3.0.7\build\native\DotNetDupe.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\DotNetDupe.3.0.7\build\native\DotNetDupe.targets'))" />
+    <Error Condition="!Exists('..\packages\DotNetDupe.4.0.0\build\native\DotNetDupe.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\DotNetDupe.4.0.0\build\native\DotNetDupe.targets'))" />
   </Target>
 </Project>

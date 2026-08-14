@@ -8,8 +8,8 @@ echo ===================================================
 set BUILD_TYPE=Release
 set ACTION=build
 set MODEL_DIR=models
-set MODEL_FILE=%MODEL_DIR%\Llama-3-8B-Instruct.Q4_K_M.gguf
-set MODEL_URL=https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf
+set MODEL_FILE=%MODEL_DIR%\Qwen1.5-4B-Chat-Q4_K_M.gguf
+set MODEL_URL=https://huggingface.co/Qwen/Qwen1.5-4B-Chat-GGUF/resolve/main/qwen1_5-4b-chat-q4_k_m.gguf?download=true
 
 :parse_args
 if "%~1"=="" goto end_parse
@@ -73,7 +73,7 @@ goto :eof
 
 :do_build
 echo [INFO] Configuring CMake (%BUILD_TYPE% build)...
-cmake -B %BUILD_DIR% -DCMAKE_BUILD_TYPE=%BUILD_TYPE%
+cmake -B %BUILD_DIR% -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=%BUILD_TYPE%
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] CMake configuration failed.
     exit /b %ERRORLEVEL%
@@ -90,6 +90,12 @@ echo [INFO] Copying latest React apiClient.ts to common output binary directory.
 if exist SmartEventViewerApp\src\apiClient.ts (
     if not exist bin\x64\%BUILD_TYPE% mkdir bin\x64\%BUILD_TYPE%
     copy /y SmartEventViewerApp\src\apiClient.ts bin\x64\%BUILD_TYPE%\apiClient.ts
+)
+
+echo [INFO] Copying llama.cpp dependencies to output binary directory...
+if exist vcpkg_installed\x64-windows\x64-windows\bin\llama.dll (
+    if not exist bin\x64\%BUILD_TYPE% mkdir bin\x64\%BUILD_TYPE%
+    copy /y vcpkg_installed\x64-windows\x64-windows\bin\*.dll bin\x64\%BUILD_TYPE%\
 )
 
 echo [INFO] Running Unit & Integration Test Suites...

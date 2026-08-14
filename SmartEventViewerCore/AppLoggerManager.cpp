@@ -1,4 +1,4 @@
-#include "pch.h"
+﻿#include "pch.h"
 #include "Logging/AppLoggerManager.h"
 #include "System/IO/File.h"
 #include "System/IO/Path.h"
@@ -25,6 +25,8 @@ namespace SmartEventViewer {
                 if (!Directory::Exists(directory)) {
                     Directory::CreateDirectory(directory);
                 }
+            } catch (const DotNetDupe::System::Exception&) {
+            } catch (const std::exception&) {
             } catch (...) {
             }
         }
@@ -35,7 +37,7 @@ namespace SmartEventViewer {
         try {
             LoggerConfiguration config;
             config.MinLevel = minLevel;
-            config.IsJsonFormat = false;
+            config.IsJsonFormat = true;
             config.PlainTextFormat = "{Timestamp} [PID:{ProcessId}] [TID:{ThreadId}] [{Level}] [{Category}] {Message}";
             config.TimestampFormat = "%Y-%m-%d %H:%M:%S";
             config.FilePath = s_logFilePath;
@@ -45,6 +47,8 @@ namespace SmartEventViewer {
 
             auto fileProvider = DotNetDupe::System::SmartPointer<FileLoggerProvider>::NewShared(config);
             s_loggerFactory->AddProvider(fileProvider);
+        } catch (const DotNetDupe::System::Exception&) {
+        } catch (const std::exception&) {
         } catch (...) {
         }
 
@@ -101,6 +105,8 @@ namespace SmartEventViewer {
             for (int i = startIndex; i < totalCount; ++i) {
                 result.Add(allLines[i]);
             }
+        } catch (const DotNetDupe::System::Exception&) {
+        } catch (const std::exception&) {
         } catch (...) {
         }
         return result;

@@ -131,9 +131,12 @@ export function App() {
         <div style={{ display: activeTab === 'events' ? 'flex' : 'none', flex: 1, flexDirection: 'column', minHeight: 0 }}>
           <EventsExplorer
             channelName={currentChannel}
-            onOpenChat={(initialQuery, responseText) => {
+            onOpenChat={(initialQuery, responseText, downloadProgress) => {
               setShowChatPanel(true);
               setIsChatCollapsed(false);
+              if (downloadProgress !== undefined) {
+                setChatDownloadProgress(downloadProgress);
+              }
               const isProgressUpdate = responseText.startsWith('⏳ ');
               if (isProgressUpdate) {
                 setIsChatAnalyzing(true);
@@ -342,7 +345,7 @@ export function App() {
                   let finalResult = 'Analysis complete.';
                   setChatHistory((prev) => [...prev, { sender: 'user', text: queryText }]);
                   setIsChatAnalyzing(true);
-                  setChatProgressMessage('Enqueued for analysis...');
+                  setChatProgressMessage('Initializing analysis...');
                   setChatDownloadProgress(0);
                   
                   setTimeout(async () => {
@@ -355,6 +358,14 @@ export function App() {
                       } else {
                         let isCompleted = false;
                         let statusRes = enqueueRes;
+                        
+                        if (statusRes.progressMessage) {
+                          setChatProgressMessage(statusRes.progressMessage);
+                        }
+                        if (statusRes.downloadProgress !== undefined) {
+                          setChatDownloadProgress(statusRes.downloadProgress);
+                        }
+
                         while (!isCompleted) {
                           await new Promise((resolve) => setTimeout(resolve, 300));
                           statusRes = await fetchApiAnalyzeStatus(taskId, baseUrl);

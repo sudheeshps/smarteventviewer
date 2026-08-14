@@ -4,7 +4,7 @@ import { fetchApiEvents, fetchEventSummary, fetchApiAnalyze, fetchApiAnalyzeStat
 
 interface EventsExplorerProps {
   channelName: string;
-  onOpenChat?: (query: string, response: string) => void;
+  onOpenChat?: (query: string, response: string, downloadProgress?: number) => void;
 }
 
 export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onOpenChat }) => {
@@ -29,8 +29,15 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onO
 
   useEffect(() => {
     setCurrentPage(1);
-    fetchEvents(channelName, 1);
+    setFilterSeverity('ALL');
+    fetchEvents(channelName, 1, 'ALL');
   }, [channelName]);
+
+  const handleFilterChange = (newSeverity: string) => {
+    setFilterSeverity(newSeverity);
+    setCurrentPage(1);
+    fetchEvents(channelName, 1, newSeverity);
+  };
 
   const [serverLevelCounts, setServerLevelCounts] = useState<{ critical: number; error: number; warning: number; info: number; verbose: number }>({
     critical: 0,
@@ -40,7 +47,7 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onO
     verbose: 0,
   });
 
-  const fetchEvents = async (channel: string, page: number) => {
+  const fetchEvents = async (channel: string, page: number, severity: string = filterSeverity) => {
     setIsLoadingEvents(true);
     const baseUrl = window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080';
     console.log(`[UI-APP DEBUG] Fetching paged events (Page ${page}) for channel '${channel}' from: ${baseUrl}`);
@@ -58,7 +65,7 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onO
       }
 
       // 2. Fetch page event records list
-      const data = await fetchApiEvents(channel, baseUrl, page, pageSize);
+      const data = await fetchApiEvents(channel, baseUrl, page, pageSize, severity);
       console.log(`[UI-APP DEBUG] Received paged events payload:`, data);
       setTotalCount(data.totalCount || 0);
       setServerTotalPages(data.totalPages || Math.ceil((data.totalCount || 0) / pageSize) || 1);
@@ -108,7 +115,7 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onO
 
   const handlePageChange = (newPage: number) => {
     setCurrentPage(newPage);
-    fetchEvents(channelName, newPage);
+    fetchEvents(channelName, newPage, filterSeverity);
   };
 
   const [analyzeProgressMsg, setAnalyzeProgressMsg] = useState<string>('');
@@ -118,11 +125,11 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onO
     if (!chatQuery.trim()) return;
     const queryText = chatQuery.trim();
     setIsAnalyzing(true);
-    setAnalyzeProgressMsg('Enqueued for analysis...');
+    setAnalyzeProgressMsg('Initializing analysis...');
     setDownloadPct(0);
 
     if (onOpenChat) {
-      onOpenChat(queryText, '⏳ Enqueued for analysis...');
+      onOpenChat(queryText, '⏳ Initializing analysis...');
     }
 
     const baseUrl = window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080';
@@ -141,20 +148,29 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onO
       let isCompleted = false;
       let statusRes = enqueueRes;
 
+      if (statusRes.progressMessage) {
+        setAnalyzeProgressMsg(statusRes.progressMessage);
+        if (onOpenChat) onOpenChat(queryText, `⏳ ${statusRes.progressMessage}`, statusRes.downloadProgress);
+      }
+      if (statusRes.downloadProgress !== undefined) {
+        setDownloadPct(statusRes.downloadProgress);
+      }
+
       while (!isCompleted) {
-        await new Promise((resolve) => setTimeout(resolve, 300));
+        if (statusRes.status === 'COMPLETED' || statusRes.status === 'FAILED') {
+          isCompleted = true;
+          break;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 200));
         statusRes = await fetchApiAnalyzeStatus(taskId, baseUrl);
         
         if (statusRes.progressMessage) {
           setAnalyzeProgressMsg(statusRes.progressMessage);
-          if (onOpenChat) onOpenChat(queryText, `⏳ ${statusRes.progressMessage}`);
+          if (onOpenChat) onOpenChat(queryText, `⏳ ${statusRes.progressMessage}`, statusRes.downloadProgress);
         }
         if (statusRes.downloadProgress !== undefined) {
           setDownloadPct(statusRes.downloadProgress);
-        }
-
-        if (statusRes.status === 'COMPLETED' || statusRes.status === 'FAILED') {
-          isCompleted = true;
         }
       }
 
@@ -173,7 +189,8 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onO
   };
 
   const filteredEvents = events.filter((e) => {
-    const matchesSev = filterSeverity === 'ALL' || e.level === filterSeverity || e.risk === filterSeverity;
+    const filterLower = filterSeverity.toLowerCase();
+    const matchesSev = filterSeverity === 'ALL' || e.level.toLowerCase() === filterLower || e.risk.toLowerCase() === filterLower;
     const matchesSearch = !searchQuery || e.id.toString().includes(searchQuery) || e.provider.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesSev && matchesSearch;
   });
@@ -224,35 +241,35 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onO
       {showSummary && (
         <section style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px' }}>
           <div
-            onClick={() => setFilterSeverity('ALL')}
+            onClick={() => handleFilterChange('ALL')}
             style={{ background: 'rgba(30, 41, 59, 0.7)', border: filterSeverity === 'ALL' ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer' }}
           >
             <span style={{ fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase' }}>Total Ingested</span>
             <div style={{ fontSize: '1.05rem', fontWeight: 700 }}>{totalCount.toLocaleString()}</div>
           </div>
           <div
-            onClick={() => setFilterSeverity('Critical')}
+            onClick={() => handleFilterChange('Critical')}
             style={{ background: 'rgba(30, 41, 59, 0.7)', border: filterSeverity === 'Critical' ? '1px solid #f87171' : '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer' }}
           >
             <span style={{ fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase' }}>Critical</span>
             <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#f87171' }}>{counts.critical}</div>
           </div>
           <div
-            onClick={() => setFilterSeverity('Error')}
+            onClick={() => handleFilterChange('Error')}
             style={{ background: 'rgba(30, 41, 59, 0.7)', border: filterSeverity === 'Error' ? '1px solid #f87171' : '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer' }}
           >
             <span style={{ fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase' }}>Errors</span>
             <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#f87171' }}>{counts.error}</div>
           </div>
           <div
-            onClick={() => setFilterSeverity('Warning')}
+            onClick={() => handleFilterChange('Warning')}
             style={{ background: 'rgba(30, 41, 59, 0.7)', border: filterSeverity === 'Warning' ? '1px solid #fbbf24' : '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer' }}
           >
             <span style={{ fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase' }}>Warnings</span>
             <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#fbbf24' }}>{counts.warning}</div>
           </div>
           <div
-            onClick={() => setFilterSeverity('Information')}
+            onClick={() => handleFilterChange('Information')}
             style={{ background: 'rgba(30, 41, 59, 0.7)', border: filterSeverity === 'Information' ? '1px solid #4ade80' : '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer' }}
           >
             <span style={{ fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase' }}>Information</span>
@@ -354,7 +371,7 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onO
           <label style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Filter Severity:</label>
           <select
             value={filterSeverity}
-            onChange={(e) => setFilterSeverity(e.target.value)}
+            onChange={(e) => handleFilterChange(e.target.value)}
             style={{ background: '#1e293b', color: '#f8fafc', border: '1px solid rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.7rem' }}
           >
             <option value="ALL">All Events</option>

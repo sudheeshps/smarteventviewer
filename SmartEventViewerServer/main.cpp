@@ -23,6 +23,7 @@
 #include "Core/TelemetryController.h"
 #include "Core/LlmAnalysisController.h"
 #include "Core/DiagnosticsController.h"
+#include "Logging/AppLoggerManager.h"
 
 #include "Core/TelemetryWebSocketHandler.h"
 #include "Core/TelemetryBackgroundWorker.h"
@@ -38,14 +39,11 @@ using namespace DotNetDupe::WebAppCore::Server;
 SmartPointer<WebApplication> g_app = nullptr;
 SmartPointer<WebAppServer> g_webServer = nullptr;
 
-void SignalHandler(int signal)
-{
-    if (signal == SIGINT || signal == SIGTERM)
-    {
+void SignalHandler(int signal) {
+    if (signal == SIGINT || signal == SIGTERM) {
         Console::WriteLine("\n[SERVER] Shutdown signal received. Stopping WebAppServer...");
         SmartEventViewer::TelemetryBackgroundWorker::Stop();
-        if (!g_webServer.IsNull())
-        {
+        if (!g_webServer.IsNull()) {
             g_webServer->Stop();
         }
         Console::WriteLine("[SERVER] Server gracefully stopped.");
@@ -53,16 +51,14 @@ void SignalHandler(int signal)
     }
 }
 
-int main(int argc, char* argv[])
-{
+int main(int argc, char* argv[]) {
     (void)argc;
     (void)argv;
 
     std::signal(SIGINT, SignalHandler);
     std::signal(SIGTERM, SignalHandler);
 
-    try
-    {
+    try {
         Console::WriteLine("=================================================");
         Console::WriteLine("   SmartEventViewer Web Server Native Host (x64) ");
         Console::WriteLine("=================================================");
@@ -82,14 +78,13 @@ int main(int argc, char* argv[])
         
         Console::SetOut(SmartPointer<LoggerTextWriter>::NewShared("Console"));
 
-        Console::WriteLine("[SERVER] LogManager configured with JSON file logging & console redirection.");
-
+        builder.GetServices().AddSingleton<SmartEventViewer::LocalLlmEngine, SmartEventViewer::LocalLlmEngine>();
         builder.GetServices().AddTransient<SmartEventViewer::EventsController, SmartEventViewer::EventsController>();
         builder.GetServices().AddTransient<SmartEventViewer::TelemetryController, SmartEventViewer::TelemetryController>();
-        builder.GetServices().AddTransient<SmartEventViewer::LlmAnalysisController, SmartEventViewer::LlmAnalysisController>();
+        builder.GetServices().AddTransient<SmartEventViewer::LlmAnalysisController, SmartEventViewer::LlmAnalysisController, SmartEventViewer::LocalLlmEngine>();
         builder.GetServices().AddTransient<SmartEventViewer::DiagnosticsController, SmartEventViewer::DiagnosticsController>();
 
-        Console::WriteLine("[SERVER] Registering Domain Controllers: EventsController, TelemetryController, LlmAnalysisController, DiagnosticsController");
+        Console::WriteLine("[SERVER] Registering Domain Controllers: EventsController, TelemetryController, LlmAnalysisController (DI), DiagnosticsController");
         
         builder.AddController<SmartEventViewer::EventsController>("/api")
             .MapGet("/channels", &SmartEventViewer::EventsController::GetChannels)
@@ -128,8 +123,7 @@ int main(int argc, char* argv[])
 
         // 4. Configure WebAppServer for static file serving
         String sWebRoot = Path::Combine({ Path::GetFullPath("."), "UI" });
-        if (!File::Exists(Path::Combine({ sWebRoot, "index.html" })))
-        {
+        if (!File::Exists(Path::Combine({ sWebRoot, "index.html" }))) {
             sWebRoot = "SmartEventViewerApp";
         }
 
@@ -149,20 +143,17 @@ int main(int argc, char* argv[])
 
         Console::Read();
     }
-    catch (const BasicException<char>& ex)
-    {
+    catch (const DotNetDupe::System::Exception& ex) {
         Console::WriteLine("\n[SERVER_CRASH_FATAL] DotNetDupe Exception Caught: {0}", ex.What());
-        SmartEventViewer::EventsController::Log(String::Format("[FATAL_EXCEPTION] {0}", ex.What()));
+        SmartEventViewer::AppLoggerManager::Error("SERVER", String::Format("[FATAL_EXCEPTION] {0}", ex.What()));
     }
-    catch (const std::exception& ex)
-    {
+    catch (const std::exception& ex) {
         Console::WriteLine("\n[SERVER_CRASH_FATAL] Standard C++ Exception Caught: {0}", ex.what());
-        SmartEventViewer::EventsController::Log(String::Format("[FATAL_EXCEPTION] {0}", ex.what()));
+        SmartEventViewer::AppLoggerManager::Error("SERVER", String::Format("[FATAL_EXCEPTION] {0}", ex.what()));
     }
-    catch (...)
-    {
+    catch (...) {
         Console::WriteLine("\n[SERVER_CRASH_FATAL] Unknown Unhandled Exception Caught in main().");
-        SmartEventViewer::EventsController::Log(String("[FATAL_EXCEPTION] Unknown Unhandled Exception in main()"));
+        SmartEventViewer::AppLoggerManager::Error("SERVER", "[FATAL_EXCEPTION] Unknown Unhandled Exception in main()");
     }
 
     return 0;

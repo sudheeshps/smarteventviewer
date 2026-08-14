@@ -6,13 +6,11 @@
 #include "System/String.h"
 #include "System/Collections/Generic/List.h"
 
-namespace SmartEventViewer
-{
+namespace SmartEventViewer {
     using String = System::String;
     using EventRecordList = System::Collections::Generic::List<EventRecord>;
 
-    class SMARTEVENTVIEWER_API ForensicExporter
-    {
+    class SMARTEVENTVIEWER_API ForensicExporter {
     public:
         ForensicExporter() = default;
 

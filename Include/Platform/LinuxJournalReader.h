@@ -2,12 +2,10 @@
 
 #include "Core/IEventLogReader.h"
 
-namespace SmartEventViewer
-{
+namespace SmartEventViewer {
     using String = DotNetDupe::System::String;
 
-    class LinuxJournalReader : public IEventLogReader
-    {
+    class LinuxJournalReader : public IEventLogReader {
     private:
         String m_sJournalPath{};
         bool m_bIsOpen{ false };

@@ -2,20 +2,18 @@
 
 #include "Common.h"
 #include "Core/EventsController.h"
-#include "Platform/WinEventLogReader.h"
+#include "System/Diagnostics/EtwLogReader.h"
 #include "Collections/LruCache.h"
 
 #include "System/Threading/CriticalSection.h"
 #include "System/Threading/Lock.h"
 
-namespace SmartEventViewer
-{
+namespace SmartEventViewer {
     using String = DotNetDupe::System::String;
     using CriticalSection = DotNetDupe::System::Threading::CriticalSection;
     using LockCS = DotNetDupe::System::Threading::Lock<CriticalSection>;
 
-    struct ChannelCacheEntry
-    {
+    struct ChannelCacheEntry {
         String ChannelName;
         unsigned long long LastEventCount{ 0 };
         EventSummaryResponseDto SummaryDto{};
@@ -24,11 +22,9 @@ namespace SmartEventViewer
         DotNetDupe::System::Collections::Generic::Dictionary<String, EventLogResponseDto> CachedPages{};
     };
 
-    class SMARTEVENTVIEWER_API EventLruCacheManager
-    {
+    class SMARTEVENTVIEWER_API EventLruCacheManager {
     private:
         LruCache<String, ChannelCacheEntry> m_cache{ 10 };
-        WinEventLogReader m_logReader{};
         CriticalSection m_cacheCs;
 
         EventLruCacheManager() = default;
@@ -41,7 +37,7 @@ namespace SmartEventViewer
         static EventLruCacheManager& GetInstance();
 
         EventSummaryResponseDto GetSummary(const String& channelName);
-        EventLogResponseDto GetEvents(const String& channelName, size_t page, size_t pageSize);
+        EventLogResponseDto GetEvents(const String& channelName, size_t page, size_t pageSize, const String& sLevelFilter = "ALL");
         void Clear();
     };
 }

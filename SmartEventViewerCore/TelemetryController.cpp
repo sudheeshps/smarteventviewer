@@ -1,18 +1,16 @@
-#include "pch.h"
+﻿#include "pch.h"
 #include "Core/TelemetryController.h"
 #include "Core/TelemetryCacheManager.h"
 #include "System/Console.h"
-#include "System/BasicException.h"
-#include "System/BasicSystemException.h"
+#include "System/Exception.h"
+#include "System/SystemException.h"
 
 using Console = DotNetDupe::System::Console;
-using BasicCharException = DotNetDupe::System::BasicException<char>;
-using BasicCharSystemException = DotNetDupe::System::BasicSystemException<char>;
+using BasicCharException = DotNetDupe::System::Exception;
+using BasicCharSystemException = DotNetDupe::System::SystemException;
 
-namespace SmartEventViewer
-{
-    SystemMetricsResponseDto TelemetryController::GetSummary()
-    {
+namespace SmartEventViewer {
+    SystemMetricsResponseDto TelemetryController::GetSummary() {
         try {
             return TelemetryCacheManager::GetInstance().GetSummary();
         } catch (const BasicCharSystemException& sysEx) {
@@ -27,8 +25,7 @@ namespace SmartEventViewer
         }
     }
 
-    SystemMetricsResponseDto TelemetryController::GetCpuUsage()
-    {
+    SystemMetricsResponseDto TelemetryController::GetCpuUsage() {
         try {
             return TelemetryCacheManager::GetInstance().GetCpuUsage();
         } catch (...) {
@@ -36,8 +33,7 @@ namespace SmartEventViewer
         }
     }
 
-    SystemMetricsResponseDto TelemetryController::GetMemoryUsage()
-    {
+    SystemMetricsResponseDto TelemetryController::GetMemoryUsage() {
         try {
             return TelemetryCacheManager::GetInstance().GetMemoryUsage();
         } catch (...) {
@@ -45,8 +41,7 @@ namespace SmartEventViewer
         }
     }
 
-    SystemMetricsResponseDto TelemetryController::GetDiskUsage()
-    {
+    SystemMetricsResponseDto TelemetryController::GetDiskUsage() {
         try {
             return TelemetryCacheManager::GetInstance().GetDiskUsage();
         } catch (...) {
@@ -54,8 +49,7 @@ namespace SmartEventViewer
         }
     }
 
-    SystemMetricsResponseDto TelemetryController::GetNetworkUsage()
-    {
+    SystemMetricsResponseDto TelemetryController::GetNetworkUsage() {
         try {
             return TelemetryCacheManager::GetInstance().GetNetworkUsage();
         } catch (...) {
@@ -63,8 +57,7 @@ namespace SmartEventViewer
         }
     }
 
-    SystemMetricsResponseDto TelemetryController::GetProcesses()
-    {
+    SystemMetricsResponseDto TelemetryController::GetProcesses() {
         try {
             return TelemetryCacheManager::GetInstance().GetProcesses();
         } catch (const BasicCharSystemException& sysEx) {
@@ -79,8 +72,7 @@ namespace SmartEventViewer
         }
     }
 
-    SystemMetricsResponseDto TelemetryController::GetSessions()
-    {
+    SystemMetricsResponseDto TelemetryController::GetSessions() {
         try {
             return TelemetryCacheManager::GetInstance().GetSessions();
         } catch (const BasicCharSystemException& sysEx) {
@@ -95,8 +87,7 @@ namespace SmartEventViewer
         }
     }
 
-    ServicesResponseDto TelemetryController::GetServices()
-    {
+    ServicesResponseDto TelemetryController::GetServices() {
         try {
             return TelemetryCacheManager::GetInstance().GetServices();
         } catch (...) {
@@ -104,8 +95,7 @@ namespace SmartEventViewer
         }
     }
 
-    SystemMetricsResponseDto TelemetryController::GetMetrics()
-    {
+    SystemMetricsResponseDto TelemetryController::GetMetrics() {
         try {
             return TelemetryCacheManager::GetInstance().GetFullMetrics();
         } catch (const BasicCharSystemException& sysEx) {

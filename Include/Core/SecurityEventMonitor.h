@@ -6,14 +6,12 @@
 #include "System/String.h"
 #include "System/Collections/Generic/List.h"
 
-namespace SmartEventViewer
-{
+namespace SmartEventViewer {
     using String = DotNetDupe::System::String;
 
     typedef void(*SecurityEventCallback)(const EventRecord& eventRec, RiskLevel eRisk);
 
-    class SMARTEVENTVIEWER_API SecurityEventMonitor
-    {
+    class SMARTEVENTVIEWER_API SecurityEventMonitor {
     private:
         bool m_bIsMonitoring{ false };
         SecurityEventCallback m_pCallback{ nullptr };

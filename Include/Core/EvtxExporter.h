@@ -5,12 +5,10 @@
 #include "System/String.h"
 #include "System/Collections/Generic/List.h"
 
-namespace SmartEventViewer
-{
+namespace SmartEventViewer {
     using String = System::String;
 
-    class SMARTEVENTVIEWER_API EvtxExporter
-    {
+    class SMARTEVENTVIEWER_API EvtxExporter {
     public:
         EvtxExporter() = default;
 

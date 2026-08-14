@@ -4,10 +4,8 @@
 #include "System/SmartPointer.h"
 #include "System/Threading/Thread.h"
 
-namespace SmartEventViewer
-{
-    class SMARTEVENTVIEWER_API TelemetryBackgroundWorker
-    {
+namespace SmartEventViewer {
+    class SMARTEVENTVIEWER_API TelemetryBackgroundWorker {
     private:
         static bool s_bRunning;
         static DotNetDupe::System::SmartPointer<DotNetDupe::System::Threading::Thread> s_spWorkerThread;

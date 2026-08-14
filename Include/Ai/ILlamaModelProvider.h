@@ -8,26 +8,24 @@
 struct llama_model;
 struct llama_context;
 
-namespace SmartEventViewer
-{
+namespace SmartEventViewer {
     using String = DotNetDupe::System::String;
     class EventRecord;
 
-    class ILlamaModelProvider
-    {
+    class ILlamaModelProvider {
     public:
         virtual ~ILlamaModelProvider() = default;
 
-        virtual bool InitBackend() = 0;
-        virtual bool LoadModel(const String& sModelPath) = 0;
-        virtual bool CreateContext() = 0;
+        virtual void InitBackend() = 0;
+        virtual void LoadModel(const String& sModelPath) = 0;
+        virtual void CreateContext() = 0;
         virtual String ExecuteInference(const String& sSystemPrompt, const String& sUserQuery, const std::vector<EventRecord>& events) = 0;
         virtual void FreeContextAndModel() = 0;
         virtual bool IsLoaded() const = 0;
+        virtual bool IsModelFilePresent(const String& sModelPath) const = 0;
     };
 
-    class SMARTEVENTVIEWER_API DefaultLlamaModelProvider : public ILlamaModelProvider
-    {
+    class SMARTEVENTVIEWER_API DefaultLlamaModelProvider : public ILlamaModelProvider {
     private:
         bool m_bLoaded{ false };
         struct llama_model* m_pModel{ nullptr };
@@ -37,11 +35,12 @@ namespace SmartEventViewer
         DefaultLlamaModelProvider();
         ~DefaultLlamaModelProvider() override;
 
-        bool InitBackend() override;
-        bool LoadModel(const String& sModelPath) override;
-        bool CreateContext() override;
+        void InitBackend() override;
+        void LoadModel(const String& sModelPath) override;
+        void CreateContext() override;
         String ExecuteInference(const String& sSystemPrompt, const String& sUserQuery, const std::vector<EventRecord>& events) override;
         void FreeContextAndModel() override;
         bool IsLoaded() const override { return m_bLoaded; }
+        bool IsModelFilePresent(const String& sModelPath) const override;
     };
 }

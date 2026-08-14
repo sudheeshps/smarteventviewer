@@ -2,11 +2,10 @@
 
 #include "ViewerCommon.h"
 #include "System/String.h"
+#include "System/Diagnostics/EtwLogReader.h"
 
-namespace SmartEventViewer
-{
-    class EventRecord
-    {
+namespace SmartEventViewer {
+    class EventRecord {
     private:
         unsigned int m_uEventId;
         EventLevel m_eLevel{ EventLevel::Informational };
@@ -19,7 +18,10 @@ namespace SmartEventViewer
 
     public:
         SMARTEVENTVIEWER_API EventRecord() = default;
+        SMARTEVENTVIEWER_API EventRecord(const EventRecord& evt) = default;
         SMARTEVENTVIEWER_API EventRecord(unsigned int uEventId, EventLevel eLevel, const DotNetDupe::System::String& sProvider, const DotNetDupe::System::String& sChannel, const DotNetDupe::System::String& sMessage, const DotNetDupe::System::String& sTimeCreated, const DotNetDupe::System::String& sRawXml = DotNetDupe::System::String());
+
+        SMARTEVENTVIEWER_API static EventRecord FromEtwEvent(const DotNetDupe::System::Diagnostics::EtwEvent& etwEvt, const DotNetDupe::System::String& sDefaultChannel = DotNetDupe::System::String());
 
         SMARTEVENTVIEWER_API unsigned int GetEventId() const;
         SMARTEVENTVIEWER_API EventLevel GetLevel() const;

@@ -5,13 +5,11 @@
 #include "System/String.h"
 #include "System/Collections/Generic/List.h"
 
-namespace SmartEventViewer
-{
+namespace SmartEventViewer {
     using String = DotNetDupe::System::String;
     using StringList = DotNetDupe::System::Collections::Generic::List<String>;
 
-    class IEventLogReader
-    {
+    class IEventLogReader {
     public:
         virtual ~IEventLogReader() = default;
         SMARTEVENTVIEWER_API virtual bool GetEventSources(StringList& outSources) = 0;

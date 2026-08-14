@@ -17,15 +17,13 @@
 #include <sys/stat.h>
 #endif
 
-namespace SmartEventViewer
-{
+namespace SmartEventViewer {
     using String = DotNetDupe::System::String;
     using Console = DotNetDupe::System::Console;
     using CriticalSection = DotNetDupe::System::Threading::CriticalSection;
     using LockCS = DotNetDupe::System::Threading::Lock<CriticalSection>;
 
-    enum class LogLevel
-    {
+    enum class LogLevel {
         Trace,
         Debug,
         Info,
@@ -34,8 +32,7 @@ namespace SmartEventViewer
         Fatal
     };
 
-    class SMARTEVENTVIEWER_API Logger
-    {
+    class SMARTEVENTVIEWER_API Logger {
     private:
         static CriticalSection s_logCs;
         static String s_logFilePath;
@@ -43,10 +40,8 @@ namespace SmartEventViewer
         static size_t s_maxRolledFiles;
         static bool s_isInitialized;
 
-        static String LogLevelToString(LogLevel level)
-        {
-            switch (level)
-            {
+        static String LogLevelToString(LogLevel level) {
+            switch (level) {
                 case LogLevel::Trace:   return "TRACE";
                 case LogLevel::Debug:   return "DEBUG";
                 case LogLevel::Info:    return "INFO";
@@ -57,8 +52,7 @@ namespace SmartEventViewer
             }
         }
 
-        static unsigned long GetCurrentThreadIdNative()
-        {
+        static unsigned long GetCurrentThreadIdNative() {
 #if defined(_WIN32) || defined(_WIN64)
             return ::GetCurrentThreadId();
 #else
@@ -66,8 +60,7 @@ namespace SmartEventViewer
 #endif
         }
 
-        static String GetTimestampIso()
-        {
+        static String GetTimestampIso() {
 #if defined(_WIN32) || defined(_WIN64)
             SYSTEMTIME st;
             ::GetLocalTime(&st);
@@ -78,12 +71,10 @@ namespace SmartEventViewer
 #endif
         }
 
-        static long long GetFileSize(const String& sPath)
-        {
+        static long long GetFileSize(const String& sPath) {
 #if defined(_WIN32) || defined(_WIN64)
             WIN32_FILE_ATTRIBUTE_DATA fad;
-            if (::GetFileAttributesExA(sPath.GetRawString(), GetFileExInfoStandard, &fad))
-            {
+            if (::GetFileAttributesExA(sPath.GetRawString(), GetFileExInfoStandard, &fad)) {
                 LARGE_INTEGER size;
                 size.HighPart = fad.nFileSizeHigh;
                 size.LowPart = fad.nFileSizeLow;
@@ -93,21 +84,18 @@ namespace SmartEventViewer
             return 0;
         }
 
-        static void EnsureDirectoryCreated(const String& sDir)
-        {
+        static void EnsureDirectoryCreated(const String& sDir) {
             if (sDir.IsEmpty()) return;
 #if defined(_WIN32) || defined(_WIN64)
             ::_mkdir(sDir.GetRawString());
 #endif
         }
 
-        static void CheckAndRollFile()
-        {
+        static void CheckAndRollFile() {
             if (!DotNetDupe::System::IO::File::Exists(s_logFilePath)) return;
 
             long long fileBytes = GetFileSize(s_logFilePath);
-            if (fileBytes >= static_cast<long long>(s_maxFileSizeBytes))
-            {
+            if (fileBytes >= static_cast<long long>(s_maxFileSizeBytes)) {
                 String directory = DotNetDupe::System::IO::Path::GetDirectoryName(s_logFilePath);
                 String fileNameNoExt = DotNetDupe::System::IO::Path::GetFileNameWithoutExtension(s_logFilePath);
                 String ext = DotNetDupe::System::IO::Path::GetExtension(s_logFilePath);
@@ -126,8 +114,7 @@ namespace SmartEventViewer
         }
 
     public:
-        static void Initialize(const String& logFilePath = "logs/SmartEventViewerServer.log", size_t maxSizeBytes = 5 * 1024 * 1024, size_t maxRolledFiles = 10)
-        {
+        static void Initialize(const String& logFilePath = "logs/SmartEventViewerServer.log", size_t maxSizeBytes = 5 * 1024 * 1024, size_t maxRolledFiles = 10) {
             LockCS lock(s_logCs);
             s_logFilePath = logFilePath;
             s_maxFileSizeBytes = maxSizeBytes;
@@ -138,11 +125,9 @@ namespace SmartEventViewer
             s_isInitialized = true;
         }
 
-        static void Log(LogLevel level, const String& category, const String& message, double elapsedMs = -1.0)
-        {
+        static void Log(LogLevel level, const String& category, const String& message, double elapsedMs = -1.0) {
             LockCS lock(s_logCs);
-            if (!s_isInitialized)
-            {
+            if (!s_isInitialized) {
                 s_logFilePath = "logs/SmartEventViewerServer.log";
                 String directory = DotNetDupe::System::IO::Path::GetDirectoryName(s_logFilePath);
                 EnsureDirectoryCreated(directory);
@@ -156,13 +141,11 @@ namespace SmartEventViewer
             String sLevel = LogLevelToString(level);
 
             String formattedLog;
-            if (elapsedMs >= 0.0)
-            {
+            if (elapsedMs >= 0.0) {
                 formattedLog = String::Format("[{0}] [{1}] [TID:{2}] [{3}] {4} (Elapsed: {5:F2} ms)",
                     timestamp, sLevel, threadId, category, message, elapsedMs);
             }
-            else
-            {
+            else {
                 formattedLog = String::Format("[{0}] [{1}] [TID:{2}] [{3}] {4}",
                     timestamp, sLevel, threadId, category, message);
             }
@@ -171,49 +154,40 @@ namespace SmartEventViewer
             DotNetDupe::System::IO::File::AppendAllText(s_logFilePath, formattedLog + "\n");
         }
 
-        static DotNetDupe::System::Collections::Generic::List<String> GetRecentLogLines(size_t maxLines = 200)
-        {
+        static DotNetDupe::System::Collections::Generic::List<String> GetRecentLogLines(size_t maxLines = 200) {
             LockCS lock(s_logCs);
             DotNetDupe::System::Collections::Generic::List<String> result;
-            if (!DotNetDupe::System::IO::File::Exists(s_logFilePath))
-            {
+            if (!DotNetDupe::System::IO::File::Exists(s_logFilePath)) {
                 return result;
             }
 
-            try
-            {
+            try {
                 auto allLines = DotNetDupe::System::IO::File::ReadAllLines(s_logFilePath);
                 int totalCount = allLines.GetLength();
                 int startIndex = (totalCount > static_cast<int>(maxLines)) ? (totalCount - static_cast<int>(maxLines)) : 0;
 
-                for (int i = startIndex; i < totalCount; ++i)
-                {
+                for (int i = startIndex; i < totalCount; ++i) {
                     result.Add(allLines[i]);
                 }
             }
-            catch (...)
-            {
+            catch (...) {
             }
             return result;
         }
 
-        static void Info(const String& category, const String& message, double elapsedMs = -1.0)
-        {
+        static void Info(const String& category, const String& message, double elapsedMs = -1.0) {
             Log(LogLevel::Info, category, message, elapsedMs);
         }
 
-        static void Warning(const String& category, const String& message, double elapsedMs = -1.0)
-        {
+        static void Warning(const String& category, const String& message, double elapsedMs = -1.0) {
             Log(LogLevel::Warning, category, message, elapsedMs);
         }
 
-        static void Error(const String& category, const String& message, double elapsedMs = -1.0)
-        {
+        static void Error(const String& category, const String& message, double elapsedMs = -1.0) {
             Log(LogLevel::Error, category, message, elapsedMs);
         }
 
-        static void Debug(const String& category, const String& message, double elapsedMs = -1.0)
-        {
+        static void Debug(const String& category, const String& message, double elapsedMs = -1.0) {
             Log(LogLevel::Debug, category, message, elapsedMs);
         }
     };

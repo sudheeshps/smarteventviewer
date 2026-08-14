@@ -41,8 +41,8 @@ endif()
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/Include
     ${CMAKE_CURRENT_SOURCE_DIR}/SmartEventViewerCore
+    ${CMAKE_CURRENT_SOURCE_DIR}/packages/DotNetDupe.3.0.7/include
     ${CMAKE_CURRENT_SOURCE_DIR}/packages/DotNetDupe.3.0.2/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/DotNetDupe.3.0.2/include
     ${CMAKE_CURRENT_SOURCE_DIR}/external/llama.cpp/include
     ${CMAKE_CURRENT_SOURCE_DIR}/external/llama.cpp/ggml/include
     ${CMAKE_CURRENT_SOURCE_DIR}/external/llama.cpp/common
@@ -56,21 +56,29 @@ set(SMARTEVENTVIEWER_SOURCES
     SmartEventViewerCore/pch.cpp
     SmartEventViewerCore/EventRecord.cpp
     SmartEventViewerCore/AnomalyEngine.cpp
-    SmartEventViewerCore/WinEventLogReader.cpp
     SmartEventViewerCore/SystemTelemetryProvider.cpp
     SmartEventViewerCore/LinuxJournalReader.cpp
     SmartEventViewerCore/LocalLlmEngine.cpp
+    SmartEventViewerCore/LlmAnalysisController.cpp
+    SmartEventViewerCore/EventsController.cpp
+    SmartEventViewerCore/DiagnosticsController.cpp
+    SmartEventViewerCore/TelemetryController.cpp
+    SmartEventViewerCore/TelemetryCacheManager.cpp
+    SmartEventViewerCore/TelemetryWebSocketHandler.cpp
+    SmartEventViewerCore/TelemetryBackgroundWorker.cpp
+    SmartEventViewerCore/EventLruCacheManager.cpp
+    SmartEventViewerCore/AppLoggerManager.cpp
     SmartEventViewerCore/RagVectorStore.cpp
 )
 
 set(SMARTEVENTVIEWER_HEADERS
-    Include/Common.h
     Include/Core/EventRecord.h
     Include/Core/IEventLogReader.h
     Include/Core/AnomalyEngine.h
-    Include/Platform/WinEventLogReader.h
+    Include/Core/EventsController.h
+    Include/Core/DiagnosticsController.h
+    Include/Core/LlmAnalysisController.h
     Include/Platform/LinuxJournalReader.h
-    Include/Platform/SystemTelemetryProvider.h
     Include/Ai/ILlamaModelProvider.h
     Include/Ai/LocalLlmEngine.h
     Include/Ai/LlamaMessageDtos.h
@@ -97,8 +105,8 @@ endif()
 # Platform Specific Link Libraries for DotNetDupe and Win32 APIs
 if(WIN32)
     find_library(DOTNETDUPE_LIB DotNetDupe PATHS 
-        ${CMAKE_CURRENT_SOURCE_DIR}/packages/DotNetDupe.3.0.2/runtimes/win-x64/native 
-        ${CMAKE_CURRENT_SOURCE_DIR}/DotNetDupe.3.0.2/runtimes/win-x64/native
+        ${CMAKE_CURRENT_SOURCE_DIR}/packages/DotNetDupe.3.0.7/runtimes/win-x64/native 
+        ${CMAKE_CURRENT_SOURCE_DIR}/packages/DotNetDupe.3.0.2/runtimes/win-x64/native
     )
     target_link_libraries(SmartEventViewerCore PRIVATE ${DOTNETDUPE_LIB} wevtapi wtsapi32 iphlpapi psapi)
 endif()
@@ -106,7 +114,6 @@ endif()
 # Native C++ REST Server Executable Target (SmartEventViewerServer)
 set(SERVER_SOURCES
     SmartEventViewerServer/main.cpp
-    SmartEventViewerServer/EventsController.cpp
 )
 
 add_executable(SmartEventViewerServer ${SERVER_SOURCES})

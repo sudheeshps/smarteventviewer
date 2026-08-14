@@ -59,7 +59,7 @@ After building, execute unit tests via the test runner:
 - **File Length Limit**: **No single `.cpp` file can have more than 600 logical lines of code (LLOC).** Split larger implementation files across logical module files.
 - **Code Readability & Grouping**: Add necessary blank lines inside functions to separate logical blocks (e.g., validation, initialization, main execution, return preparation) for improved readability.
 - **Memory Management**: **SmartPointer from DotNetDupe shall be used in all places; no direct pointer manipulation (raw `new`, `delete`, raw pointers for ownership) is allowed.** Always follow RAII patterns.
-- **Exceptions**: Do not throw standard C++ exceptions (`std::runtime_error`). Throw custom exception types inheriting from `BasicException` (`SystemException`, `ArgumentException`, `InvalidOperationException`, `IOException`).
+- **Exceptions**: Do not throw standard C++ exceptions (`std::runtime_error`). Throw custom exception types inheriting from `DotNetDupe::System::Exception` (`SystemException`, `ArgumentException`, `InvalidOperationException`, `IOException`). **When catching exceptions, always explicitly catch `const DotNetDupe::System::Exception&` (or its derivatives) before generic `std::exception` or `...` blocks to properly handle DotNetDupe framework exceptions.**
 - **Test Integrity**: **Existing unit tests shall not be modified or deleted during refactoring.** All unit tests must continue to pass cleanly.
 
 ## Contextual Precedence

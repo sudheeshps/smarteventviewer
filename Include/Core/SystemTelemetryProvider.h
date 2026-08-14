@@ -12,14 +12,12 @@ namespace DotNetDupe {
     }
 }
 
-namespace SmartEventViewer
-{
+namespace SmartEventViewer {
     struct SystemMetricsResponseDto;
     struct ProcessResourceDto;
     struct ServicesResponseDto;
 
-    class SystemTelemetryProvider
-    {
+    class SystemTelemetryProvider {
     public:
         SystemTelemetryProvider() = default;
         ~SystemTelemetryProvider() = default;

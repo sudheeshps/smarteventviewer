@@ -9,8 +9,8 @@ set CONFIG=Release
 set PLATFORM=x64
 set TARGET=Build
 set MODEL_DIR=models
-set MODEL_FILE=%MODEL_DIR%\Llama-3-8B-Instruct.Q4_K_M.gguf
-set MODEL_URL=https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf
+set MODEL_FILE=%MODEL_DIR%\Qwen1.5-4B-Chat-Q4_K_M.gguf
+set MODEL_URL=https://huggingface.co/Qwen/Qwen1.5-4B-Chat-GGUF/resolve/main/qwen1_5-4b-chat-q4_k_m.gguf?download=true
 
 :parse_args
 if "%~1"=="" goto end_parse
@@ -63,6 +63,11 @@ if %ERRORLEVEL% neq 0 (
 echo [INFO] Copying latest React apiClient.ts to common output binary directory...
 if exist SmartEventViewerApp\src\apiClient.ts (
     copy /y SmartEventViewerApp\src\apiClient.ts bin\%PLATFORM%\%CONFIG%\apiClient.ts
+)
+
+echo [INFO] Copying llama.cpp dependencies to output binary directory...
+if exist vcpkg_installed\x64-windows\x64-windows\bin\llama.dll (
+    copy /y vcpkg_installed\x64-windows\x64-windows\bin\*.dll bin\%PLATFORM%\%CONFIG%\
 )
 
 if "%TARGET%"=="Clean" (

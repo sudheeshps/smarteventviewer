@@ -14,8 +14,7 @@
 struct llama_model;
 struct llama_context;
 
-namespace SmartEventViewer
-{
+namespace SmartEventViewer {
     using String = DotNetDupe::System::String;
     using StringList = DotNetDupe::System::Collections::Generic::List<String>;
     template<typename T>
@@ -23,10 +22,8 @@ namespace SmartEventViewer
 
     class EventRecord;
 
-    class LocalLlmEngine : public DotNetDupe::System::Object
-    {
+    class LocalLlmEngine : public DotNetDupe::System::Object {
     private:
-        String m_sModelPath{};
         bool m_bIsLoaded{ false };
         StringList m_listConversationHistory{};
 
@@ -49,10 +46,7 @@ namespace SmartEventViewer
         void NotifierThreadLoop();
         SmartPointer<LlamaResponse> HandleRequest(const SmartPointer<LlamaRequest>& pReq);
 
-        long long CheckExistingPartSize(const String& sPartPath) const;
-        bool ExecuteChunkDownloadLoop(const String& sUrl, const String& sPartPath, long long& rDownloadedBytes, long long lTotalSize, std::function<void(double)> progressCb);
-        bool FinalizeDownloadedModelFile(const String& sPartPath, const String& sTargetPath, long long lDownloadedBytes, long long lTotalSize, std::function<void(double)> progressCb);
-        void SimulateModelDownloadFallback(const String& sTargetPath, const String& sPartPath, long long lDownloadedBytes, long long lTotalSize, std::function<void(double)> progressCb);
+        bool ExecuteFileDownloader(const String& sUrl, const String& sTargetPath, std::function<void(double, double, long long, long long)> progressCb);
 
     public:
         SMARTEVENTVIEWER_API static void CountRiskMetrics(const std::vector<EventRecord>& events, unsigned int& crit, unsigned int& high, unsigned int& err, unsigned int& warn);
@@ -63,8 +57,6 @@ namespace SmartEventViewer
         SMARTEVENTVIEWER_API static String BuildLlamaSystemPrompt();
         SMARTEVENTVIEWER_API static String FormatEventContextForLlama(const std::vector<EventRecord>& events);
 
-        SMARTEVENTVIEWER_API static LocalLlmEngine& GetInstance();
-
         SMARTEVENTVIEWER_API LocalLlmEngine();
         SMARTEVENTVIEWER_API explicit LocalLlmEngine(const SmartPointer<ILlamaModelProvider>& spProvider);
         SMARTEVENTVIEWER_API ~LocalLlmEngine();
@@ -74,17 +66,17 @@ namespace SmartEventViewer
         LocalLlmEngine& operator=(const LocalLlmEngine&) = delete;
 
         SMARTEVENTVIEWER_API bool IsModelFilePresent(const String& sModelPath = "") const;
-        SMARTEVENTVIEWER_API bool DownloadModelFromUrl(const String& sDownloadUrl, const String& sModelPath, std::function<void(double)> progressCallback = nullptr);
-        SMARTEVENTVIEWER_API bool DownloadModelWithProgress(const String& sModelPath, std::function<void(double)> progressCallback = nullptr);
+        SMARTEVENTVIEWER_API void DownloadModelFromUrl(const String& sDownloadUrl, const String& sModelPath, std::function<void(double, double, long long, long long)> progressCallback = nullptr);
+        SMARTEVENTVIEWER_API void DownloadModelWithProgress(const String& sModelPath, std::function<void(double, double, long long, long long)> progressCallback = nullptr);
 
-        SMARTEVENTVIEWER_API bool Initialize(const String& sModelPath);
+        SMARTEVENTVIEWER_API void Initialize(const String& sModelPath);
         SMARTEVENTVIEWER_API void Unload();
 
         SMARTEVENTVIEWER_API void EnqueueRequest(const SmartPointer<LlamaRequest>& pRequest);
         SMARTEVENTVIEWER_API SmartPointer<LlamaResponse> TakeResponse();
 
-        SMARTEVENTVIEWER_API String ProcessQuery(const String& sNaturalLanguageQuery, const EventRecord* pContextEvents, unsigned int uEventCount, std::function<void(double)> downloadProgressCb = nullptr);
-        SMARTEVENTVIEWER_API String ProcessFollowupQuery(const String& sFollowupQuery, const EventRecord* pContextEvents, unsigned int uEventCount, std::function<void(double)> downloadProgressCb = nullptr);
+        SMARTEVENTVIEWER_API void ProcessQueryAsync(const String& sNaturalLanguageQuery, const EventRecord* pContextEvents, unsigned int uEventCount, std::function<void(const String& status, const String& result, double progressPct)> callback);
+        SMARTEVENTVIEWER_API void ProcessFollowupQueryAsync(const String& sFollowupQuery, const EventRecord* pContextEvents, unsigned int uEventCount, std::function<void(const String& status, const String& result, double progressPct)> callback);
         SMARTEVENTVIEWER_API void ClearConversationHistory();
         SMARTEVENTVIEWER_API size_t GetHistoryCount() const;
         SMARTEVENTVIEWER_API bool IsModelLoaded() const { return m_bIsLoaded; }

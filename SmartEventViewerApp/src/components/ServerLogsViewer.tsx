@@ -63,7 +63,7 @@ export const ServerLogsViewer: React.FC<ServerLogsViewerProps> = ({ onClose }) =
 
   useEffect(() => {
     if (logContainerRef.current) {
-      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+      logContainerRef.current.scrollTop = 0;
     }
   }, [records]);
 

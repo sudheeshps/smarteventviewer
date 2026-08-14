@@ -7,21 +7,18 @@
 #include "System/Threading/CriticalSection.h"
 #include "System/Threading/Lock.h"
 
-namespace SmartEventViewer
-{
+namespace SmartEventViewer {
     using String = DotNetDupe::System::String;
     using CriticalSection = DotNetDupe::System::Threading::CriticalSection;
     using LockCS = DotNetDupe::System::Threading::Lock<CriticalSection>;
 
-    struct TelemetryCacheEntry
-    {
+    struct TelemetryCacheEntry {
         ULONGLONG FetchTimeMs{ 0 };
         ULONGLONG TtlMs{ 2000 };
         SystemMetricsResponseDto MetricsDto{};
     };
 
-    class SMARTEVENTVIEWER_API TelemetryCacheManager
-    {
+    class SMARTEVENTVIEWER_API TelemetryCacheManager {
     private:
         LruCache<String, TelemetryCacheEntry> m_cache{ 5 };
         CriticalSection m_cacheCs;

@@ -57,6 +57,9 @@ export interface AnalyzeData {
   status?: string;
   progressMessage?: string;
   downloadProgress?: number;
+  downloadRateBytesPerSec?: number;
+  downloadedBytes?: number;
+  totalBytes?: number;
   channel?: string;
   query?: string;
   analysis?: string;
@@ -143,9 +146,11 @@ export async function fetchApiChannels(baseUrl: string = ''): Promise<ChannelDat
   };
 }
 
-export async function fetchApiEvents(channel: string, baseUrl: string = '', page: number = 1, pageSize: number = 20): Promise<EventsData> {
+export async function fetchApiEvents(channel: string, baseUrl: string = '', page: number = 1, pageSize: number = 20, severity: string = 'ALL'): Promise<EventsData> {
   const urlPrefix = baseUrl ? baseUrl : (window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080');
-  const resp = await fetch(`${urlPrefix}/api/events?channel=${encodeURIComponent(channel)}&page=${page}&pageSize=${pageSize}`);
+  let url = `${urlPrefix}/api/events?channel=${encodeURIComponent(channel)}&page=${page}&pageSize=${pageSize}`;
+  if (severity && severity !== 'ALL') url += `&level=${encodeURIComponent(severity)}`;
+  const resp = await fetch(url);
   if (!resp.ok) {
     throw new Error(`HTTP Error: ${resp.status}`);
   }
@@ -192,6 +197,9 @@ export async function fetchApiAnalyze(channel: string, query: string, baseUrl: s
     status: data.status || data.Status || '',
     progressMessage: data.progressMessage || data.ProgressMessage || '',
     downloadProgress: data.downloadProgress ?? data.DownloadProgress ?? 0,
+    downloadRateBytesPerSec: data.downloadRateBytesPerSec ?? data.DownloadRateBytesPerSec ?? 0,
+    downloadedBytes: data.downloadedBytes ?? data.DownloadedBytes ?? 0,
+    totalBytes: data.totalBytes ?? data.TotalBytes ?? 0,
     channel: data.channel || data.Channel || channel,
     query: data.query || data.Query || query,
     analysis: data.analysis || data.Analysis || '',
@@ -211,6 +219,9 @@ export async function fetchApiAnalyzeStatus(taskId: string, baseUrl: string = ''
     status: data.status || data.Status || '',
     progressMessage: data.progressMessage || data.ProgressMessage || '',
     downloadProgress: data.downloadProgress ?? data.DownloadProgress ?? 0,
+    downloadRateBytesPerSec: data.downloadRateBytesPerSec ?? data.DownloadRateBytesPerSec ?? 0,
+    downloadedBytes: data.downloadedBytes ?? data.DownloadedBytes ?? 0,
+    totalBytes: data.totalBytes ?? data.TotalBytes ?? 0,
     channel: data.channel || data.Channel || '',
     query: data.query || data.Query || '',
     analysis: data.analysis || data.Analysis || '',

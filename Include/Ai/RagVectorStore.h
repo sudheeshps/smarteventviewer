@@ -5,13 +5,11 @@
 #include "System/String.h"
 #include "System/Collections/Generic/List.h"
 
-namespace SmartEventViewer
-{
+namespace SmartEventViewer {
     using String = DotNetDupe::System::String;
     using EventList = DotNetDupe::System::Collections::Generic::List<EventRecord>;
 
-    class RagVectorStore
-    {
+    class RagVectorStore {
     private:
         EventList m_listIndexedEvents;
 

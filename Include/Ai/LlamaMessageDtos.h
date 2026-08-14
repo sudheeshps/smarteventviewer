@@ -7,22 +7,19 @@
 #include "System/Collections/Generic/List.h"
 #include "Core/EventRecord.h"
 
-namespace SmartEventViewer
-{
+namespace SmartEventViewer {
     using String = DotNetDupe::System::String;
     template<typename T>
     using List = DotNetDupe::System::Collections::Generic::List<T>;
 
-    enum class LlamaCommandType
-    {
+    enum class LlamaCommandType {
         Initialize = 0,
         IngestEvents = 1,
         ProcessQuery = 2,
         ProcessFollowup = 3
     };
 
-    class LlamaRequest : public DotNetDupe::System::Object
-    {
+    class LlamaRequest : public DotNetDupe::System::Object {
     public:
         String TaskId{};
         LlamaCommandType Command{ LlamaCommandType::ProcessQuery };
@@ -35,8 +32,7 @@ namespace SmartEventViewer
         ~LlamaRequest() override = default;
     };
 
-    class LlamaResponse : public DotNetDupe::System::Object
-    {
+    class LlamaResponse : public DotNetDupe::System::Object {
     public:
         String TaskId{};
         String Status{};

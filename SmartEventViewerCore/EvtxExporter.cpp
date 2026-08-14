@@ -7,15 +7,13 @@
 #pragma comment(lib, "wevtapi.lib")
 #endif
 
-namespace SmartEventViewer
-{
-    bool EvtxExporter::ExportChannelToEvtx(const String& sChannelPath, const String& sTargetEvtxFilePath)
-    {
+namespace SmartEventViewer {
+    bool EvtxExporter::ExportChannelToEvtx(const String& sChannelPath, const String& sTargetEvtxFilePath) {
 #if defined(_WIN32)
         String sChannel = sChannelPath.IsEmpty() ? 
-            String("Microsoft-Windows-TerminalServices-LocalSessionManager/Operational") : sChannelPath;
+            "Microsoft-Windows-TerminalServices-LocalSessionManager/Operational" : sChannelPath;
         String sTargetFile = sTargetEvtxFilePath.IsEmpty() ? 
-            String("C:\\Users\\Public\\RdpEvents_Valid.evtx") : sTargetEvtxFilePath;
+            "C:\\Users\\Public\\RdpEvents_Valid.evtx" : sTargetEvtxFilePath;
 
         // Convert DotNetDupe String to WCHAR wide string for Win32 API
         std::wstring wsChannel(sChannel.ToWString());
