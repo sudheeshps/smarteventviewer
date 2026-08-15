@@ -17,12 +17,15 @@
 #include "System/Net/Http/FileDownloader.h"
 #include "System/Threading/AutoResetEvent.h"
 #include "Core/LlmAnalysisController.h"
+#include "Core/LlmAnalysisController.h"
 #include "Core/EventsController.h"
+#include "System/Array.h"
+#include "System/Collections/Generic/List.h"
+#include "System/Collections/Generic/Dictionary.h"
 #include <cstdio>
 #include <cstring>
 #include <fstream>
 #include <sstream>
-#include <vector>
 
 #if __has_include(<llama.h>)
     #include <llama.h>
@@ -35,10 +38,12 @@ namespace SmartEventViewer {
     using File = DotNetDupe::System::IO::File;
     using Directory = DotNetDupe::System::IO::Directory;
     using Path = DotNetDupe::System::IO::Path;
+    template<typename T>
+    using List = DotNetDupe::System::Collections::Generic::List<T>;
 
-    void LocalLlmEngine::CountRiskMetrics(const std::vector<EventRecord>& events, unsigned int& crit, unsigned int& high, unsigned int& err, unsigned int& warn) {
+    void LocalLlmEngine::CountRiskMetrics(const List<EventRecord>& events, unsigned int& crit, unsigned int& high, unsigned int& err, unsigned int& warn) {
         crit = 0; high = 0; err = 0; warn = 0;
-        for (size_t i = 0; i < events.size(); ++i) {
+        for (int i = 0; i < events.GetCount(); ++i) {
             EventLevel lvl = events[i].GetLevel();
             RiskLevel risk = AnomalyEngine::EvaluateRisk(events[i]);
 
@@ -62,12 +67,12 @@ namespace SmartEventViewer {
         return "LOW (Normal Operational Baseline)";
     }
 
-    String LocalLlmEngine::FormatAnomaliesSection(const std::vector<EventRecord>& events) {
-        if (events.empty()) return " â€¢ No active event records returned.\n";
+    String LocalLlmEngine::FormatAnomaliesSection(const List<EventRecord>& events) {
+        if (events.GetCount() == 0) return " â€¢ No active event records returned.\n";
 
         String sResult;
         unsigned int shown = 0;
-        for (size_t i = 0; i < events.size() && shown < 5; ++i) {
+        for (int i = 0; i < events.GetCount() && shown < 5; ++i) {
             EventLevel lvl = events[i].GetLevel();
             RiskLevel risk = AnomalyEngine::EvaluateRisk(events[i]);
 
@@ -82,7 +87,7 @@ namespace SmartEventViewer {
         return sResult;
     }
 
-    String LocalLlmEngine::FormatThreatAnalysisResponse(const std::vector<EventRecord>& events) {
+    String LocalLlmEngine::FormatThreatAnalysisResponse(const List<EventRecord>& events) {
         unsigned int crit = 0, high = 0, err = 0, warn = 0;
         LocalLlmEngine::CountRiskMetrics(events, crit, high, err, warn);
         unsigned int total = crit + high + err + warn;
@@ -121,11 +126,11 @@ namespace SmartEventViewer {
             "Analyze the provided Windows Event Log telemetry and answer user queries with threat scoring, root cause analysis, and actionable mitigations.");
     }
 
-    String LocalLlmEngine::FormatEventContextForLlama(const std::vector<EventRecord>& events) {
-        if (events.empty()) return "No active log records in context.\n";
+    String LocalLlmEngine::FormatEventContextForLlama(const List<EventRecord>& events) {
+        if (events.GetCount() == 0) return "No active log records in context.\n";
 
         String sContext = "Context Events Ingested:\n";
-        for (size_t i = 0; i < events.size() && i < 10; ++i) {
+        for (int i = 0; i < events.GetCount() && i < 10; ++i) {
             String sLine = String::Format(" - EventID {0} [{1}]: {2}\n", events[i].GetEventId(), events[i].GetProviderName(), events[i].GetEventMessage());
             sContext = sContext + sLine;
         }
@@ -189,25 +194,25 @@ namespace SmartEventViewer {
 #endif
     }
 
-    String DefaultLlamaModelProvider::ExecuteInference(const String& sSystemPrompt, const String& sUserQuery, const std::vector<EventRecord>& events) {
-        Console::WriteLine("[AI_ENGINE] Executing LLM inference for query: '{0}' across {1} ingested events...", sUserQuery, static_cast<unsigned long long>(events.size()));
+    String DefaultLlamaModelProvider::ExecuteInference(const String& sSystemPrompt, const String& sUserQuery, const List<EventRecord>& events) {
+        Console::WriteLine("[AI_ENGINE] Executing LLM inference for query: '{0}' across {1} ingested events...", sUserQuery, static_cast<unsigned long long>(events.GetCount()));
         String sEventContext = LocalLlmEngine::FormatEventContextForLlama(events);
         String sFullPrompt = String::Format("{0}{1}\nUser Query: {2}\nAI Response:\n", sSystemPrompt, sEventContext, sUserQuery);
 
 #if __has_include(<llama.h>) || __has_include("llama.h")
         if (m_pModel != nullptr && m_pCtx != nullptr) {
             Console::WriteLine("[AI_ENGINE] Tokenizing prompt payload and executing llama_decode...");
-            std::vector<llama_token> tokens(1024);
+            DotNetDupe::System::Array<llama_token> tokens(1024);
             const llama_vocab* vocab = llama_model_get_vocab(m_pModel);
-            int n_tokens = llama_tokenize(vocab, sFullPrompt.GetRawString(), static_cast<int>(sFullPrompt.GetLength()), tokens.data(), static_cast<int>(tokens.size()), true, false);
+            int n_tokens = llama_tokenize(vocab, sFullPrompt.GetRawString(), static_cast<int>(sFullPrompt.GetLength()), tokens.GetData(), static_cast<int>(tokens.GetLength()), true, false);
             if (n_tokens > 0) {
-                llama_decode(m_pCtx, llama_batch_get_one(tokens.data(), n_tokens));
+                llama_decode(m_pCtx, llama_batch_get_one(tokens.GetData(), n_tokens));
                 Console::WriteLine("[AI_ENGINE] llama_decode successfully processed {0} tokens.", static_cast<unsigned long long>(n_tokens));
             }
         }
 #endif
 
-        String sLlamaHeader = String::Format("ðŸ¤– [LLAMA.CPP NATIVE ENGINE EXECUTED]\nIngested Context: {0} Windows Event log records\n\n", events.size());
+        String sLlamaHeader = String::Format("ðŸ¤– [LLAMA.CPP NATIVE ENGINE EXECUTED]\nIngested Context: {0} Windows Event log records\n\n", events.GetCount());
 
         String sThreatAnalysis = LocalLlmEngine::FormatThreatAnalysisResponse(events);
         Console::WriteLine("[AI_ENGINE] Threat analysis response generated successfully.");
@@ -259,23 +264,21 @@ namespace SmartEventViewer {
     }
 
     void LocalLlmEngine::Unload() {
-        if (m_bIsLoaded) {
-            m_bStopEngine = true;
-            m_requestQueue.CompleteAdding();
-            m_responseQueue.CompleteAdding();
+        m_bStopEngine = true;
+        m_requestQueue.CompleteAdding();
+        m_responseQueue.CompleteAdding();
 
-            if (m_spWorkerThread && m_spWorkerThread->IsAlive()) {
-                m_spWorkerThread->Join();
-            }
-            if (m_spNotifierThread && m_spNotifierThread->IsAlive()) {
-                m_spNotifierThread->Join();
-            }
-
-            if (m_spModelProvider) {
-                m_spModelProvider->FreeContextAndModel();
-            }
-            m_bIsLoaded = false;
+        if (m_spWorkerThread && m_spWorkerThread->IsAlive()) {
+            m_spWorkerThread->Join();
         }
+        if (m_spNotifierThread && m_spNotifierThread->IsAlive()) {
+            m_spNotifierThread->Join();
+        }
+
+        if (m_spModelProvider && m_bIsLoaded) {
+            m_spModelProvider->FreeContextAndModel();
+        }
+        m_bIsLoaded = false;
     }
 
     static const String s_sDefaultModelPath("models/Qwen1.5-4B-Chat-Q4_K_M.gguf");
@@ -288,7 +291,7 @@ namespace SmartEventViewer {
         return false;
     }
 
-    bool LocalLlmEngine::ExecuteFileDownloader(const String& sUrl, const String& sTargetPath, std::function<void(double, double, long long, long long)> progressCb) {
+    bool LocalLlmEngine::ExecuteFileDownloader(const String& sUrl, const String& sTargetPath, DotNetDupe::System::Action<double, double, long long, long long> progressCb) {
         try {
             Console::WriteLine(String::Format("[AI_ENGINE] Initializing ExecuteFileDownloader for URL '{0}'...", sUrl));
             DotNetDupe::System::Net::Http::FileDownloader downloader(sUrl, sTargetPath);
@@ -318,7 +321,7 @@ namespace SmartEventViewer {
         }
     }
 
-    void LocalLlmEngine::DownloadModelFromUrl(const String& sDownloadUrl, const String& sModelPath, std::function<void(double, double, long long, long long)> progressCallback) {
+    void LocalLlmEngine::DownloadModelFromUrl(const String& sDownloadUrl, const String& sModelPath, DotNetDupe::System::Action<double, double, long long, long long> progressCallback) {
         String targetPath = sModelPath.IsEmpty() ? s_sDefaultModelPath : sModelPath;
         String tempPath = targetPath + ".tmp";
         if (ExecuteFileDownloader(sDownloadUrl, tempPath, progressCallback)) {
@@ -327,7 +330,7 @@ namespace SmartEventViewer {
         }
     }
 
-    void LocalLlmEngine::DownloadModelWithProgress(const String& sModelPath, std::function<void(double, double, long long, long long)> progressCallback) {
+    void LocalLlmEngine::DownloadModelWithProgress(const String& sModelPath, DotNetDupe::System::Action<double, double, long long, long long> progressCallback) {
         DownloadModelFromUrl(s_sDefaultDownloadUrl, sModelPath, progressCallback);
     }
 
@@ -351,8 +354,8 @@ namespace SmartEventViewer {
 
     SmartPointer<LlamaResponse> LocalLlmEngine::HandleRequest(const SmartPointer<LlamaRequest>& pReq) {
         auto pResp = SmartPointer<LlamaResponse>::NewShared();
-        std::vector<EventRecord> eventCopy;
-        for (int i = 0; i < pReq->ContextEvents.GetCount(); ++i) eventCopy.push_back(pReq->ContextEvents[i]);
+        List<EventRecord> eventCopy;
+        for (int i = 0; i < pReq->ContextEvents.GetCount(); ++i) eventCopy.Add(pReq->ContextEvents[i]);
         String sSystemPrompt = LocalLlmEngine::BuildLlamaSystemPrompt();
         pResp->AnalysisResult = (!this->m_spModelProvider.IsNull())
             ? this->m_spModelProvider->ExecuteInference(sSystemPrompt, pReq->UserQuery, eventCopy)
@@ -376,19 +379,19 @@ namespace SmartEventViewer {
         }
     }
 
-    void LocalLlmEngine::ProcessQueryAsync(const String& sNaturalLanguageQuery, const EventRecord* pContextEvents, unsigned int uEventCount, std::function<void(const String& status, const String& result, double progressPct)> callback) {
-        std::vector<EventRecord> eventCopy;
+    void LocalLlmEngine::ProcessQueryAsync(const String& sNaturalLanguageQuery, const EventRecord* pContextEvents, unsigned int uEventCount, DotNetDupe::System::Action<const String&, const String&, double> callback) {
+        List<EventRecord> eventCopy;
         if (pContextEvents && uEventCount > 0) {
-            for (unsigned int i = 0; i < uEventCount; ++i) eventCopy.push_back(pContextEvents[i]);
+            for (unsigned int i = 0; i < uEventCount; ++i) eventCopy.Add(pContextEvents[i]);
         }
         
         DotNetDupe::System::Threading::Tasks::Task::Run(DotNetDupe::System::Action<>([this, sNaturalLanguageQuery, eventCopy, callback]() {
             try {
                 if (!IsModelFilePresent(s_sDefaultModelPath)) {
                     callback("DOWNLOADING", "Downloading model...", 0.0);
-                    DownloadModelWithProgress(s_sDefaultModelPath, [callback](double pct, double rate, long long dl, long long total) {
+                    DownloadModelWithProgress(s_sDefaultModelPath, DotNetDupe::System::Action<double, double, long long, long long>([callback](double pct, double rate, long long dl, long long total) {
                         callback("DOWNLOADING", "Downloading", pct);
-                    });
+                    }));
                 }
                 if (!m_bIsLoaded) Initialize(s_sDefaultModelPath);
                 
@@ -397,25 +400,27 @@ namespace SmartEventViewer {
                 String sResult = m_spModelProvider->ExecuteInference(BuildLlamaSystemPrompt(), sNaturalLanguageQuery, eventCopy);
                 m_listConversationHistory.Add(sResult);
                 callback("COMPLETED", sResult, 100.0);
+            } catch (const DotNetDupe::System::Exception& ex) {
+                callback("ERROR", ex.What(), 0.0);
             } catch (const std::exception& ex) {
                 callback("ERROR", ex.what(), 0.0);
             }
         }));
     }
 
-    void LocalLlmEngine::ProcessFollowupQueryAsync(const String& sFollowupQuery, const EventRecord* pContextEvents, unsigned int uEventCount, std::function<void(const String& status, const String& result, double progressPct)> callback) {
-        std::vector<EventRecord> eventCopy;
+    void LocalLlmEngine::ProcessFollowupQueryAsync(const String& sFollowupQuery, const EventRecord* pContextEvents, unsigned int uEventCount, DotNetDupe::System::Action<const String&, const String&, double> callback) {
+        List<EventRecord> eventCopy;
         if (pContextEvents && uEventCount > 0) {
-            for (unsigned int i = 0; i < uEventCount; ++i) eventCopy.push_back(pContextEvents[i]);
+            for (unsigned int i = 0; i < uEventCount; ++i) eventCopy.Add(pContextEvents[i]);
         }
         
         DotNetDupe::System::Threading::Tasks::Task::Run(DotNetDupe::System::Action<>([this, sFollowupQuery, eventCopy, callback]() {
             try {
                 if (!IsModelFilePresent(s_sDefaultModelPath)) {
                     callback("DOWNLOADING", "Model file not present locally. Starting download...", 0.0);
-                    DownloadModelWithProgress(s_sDefaultModelPath, [callback](double pct, double rate, long long dl, long long total) {
+                    DownloadModelWithProgress(s_sDefaultModelPath, DotNetDupe::System::Action<double, double, long long, long long>([callback](double pct, double rate, long long dl, long long total) {
                         callback("DOWNLOADING", String::Format("Downloading model: {0} bytes", dl), pct);
-                    });
+                    }));
                 }
                 
                 if (!m_bIsLoaded) {

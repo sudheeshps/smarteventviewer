@@ -97,7 +97,7 @@ public:
     void InitBackend() override { }
     void LoadModel(const String& sModelPath) override { m_bLoaded = true; }
     void CreateContext() override { if (!m_bLoaded) throw DotNetDupe::System::SystemException("Mock not loaded"); }
-    String ExecuteInference(const String& sSystemPrompt, const String& sUserQuery, const std::vector<SmartEventViewer::EventRecord>& events) override {
+    String ExecuteInference(const String& sSystemPrompt, const String& sUserQuery, const DotNetDupe::System::Collections::Generic::List<SmartEventViewer::EventRecord>& events) override {
         return "🤖 [MOCK LLAMA MODEL PROVIDER EXECUTED]\nMock inference result for query: " + sUserQuery;
     }
     void FreeContextAndModel() override { m_bLoaded = false; }

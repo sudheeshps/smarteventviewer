@@ -41,8 +41,7 @@ endif()
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/Include
     ${CMAKE_CURRENT_SOURCE_DIR}/SmartEventViewerCore
-    ${CMAKE_CURRENT_SOURCE_DIR}/packages/DotNetDupe.3.0.7/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/packages/DotNetDupe.3.0.2/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/packages/DotNetDupe.4.0.0/include
     ${CMAKE_CURRENT_SOURCE_DIR}/external/llama.cpp/include
     ${CMAKE_CURRENT_SOURCE_DIR}/external/llama.cpp/ggml/include
     ${CMAKE_CURRENT_SOURCE_DIR}/external/llama.cpp/common
@@ -105,8 +104,7 @@ endif()
 # Platform Specific Link Libraries for DotNetDupe and Win32 APIs
 if(WIN32)
     find_library(DOTNETDUPE_LIB DotNetDupe PATHS 
-        ${CMAKE_CURRENT_SOURCE_DIR}/packages/DotNetDupe.3.0.7/runtimes/win-x64/native 
-        ${CMAKE_CURRENT_SOURCE_DIR}/packages/DotNetDupe.3.0.2/runtimes/win-x64/native
+        ${CMAKE_CURRENT_SOURCE_DIR}/packages/DotNetDupe.4.0.0/runtimes/win-x64/native
     )
     target_link_libraries(SmartEventViewerCore PRIVATE ${DOTNETDUPE_LIB} wevtapi wtsapi32 iphlpapi psapi)
 endif()

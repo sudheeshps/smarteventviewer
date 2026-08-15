@@ -5,7 +5,7 @@
 
 #include "System/Console.h"
 #include "System/Convert.h"
-#include "System/Path.h"
+#include "System/IO/Path.h"
 #include "System/IO/File.h"
 #include "System/IO/TextWriter.h"
 #include "System/IO/StringWriter.h"

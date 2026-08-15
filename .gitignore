@@ -76,3 +76,10 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+/obj/x64
+/packages
+/bin/x64
+/build_Release
+/dist/SmartEventViewer_v1.0.0_x64
+/node_modules/.vite/vitest/da39a3ee5e6b4b0d3255bfef95601890afd80709
+/_deps

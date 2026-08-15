@@ -1,41 +1,58 @@
 #include "pch.h"
 #include "../Include/Core/EventRecord.h"
+#include "System/Convert.h"
+
 namespace SmartEventViewer {
     using String = DotNetDupe::System::String;
+    using Convert = DotNetDupe::System::Convert;
 
-    static EventLevel ParseEtwLevel(int iLevel, const String& sRawXml) {
-        int actualLevel = iLevel;
-        std::string rawXml = sRawXml.GetRawString();
-        if (actualLevel == 0 && !rawXml.empty()) {
-            size_t lvlPos = rawXml.find("<Level>");
-            if (lvlPos != std::string::npos) {
-                size_t endLvl = rawXml.find("</Level>", lvlPos);
-                if (endLvl != std::string::npos) {
-                    std::string lvlStr = rawXml.substr(lvlPos + 7, endLvl - (lvlPos + 7));
-                    try { actualLevel = std::stoi(lvlStr); } catch(...) {}
-                }
-            }
-        }
-        if (actualLevel == 1) return EventLevel::Critical;
-        if (actualLevel == 2) return EventLevel::Error;
-        if (actualLevel == 3) return EventLevel::Warning;
-        if (actualLevel == 5) return EventLevel::Verbose;
+    static EventLevel LevelFromInt(int iLevel) {
+        if (iLevel == 1) return EventLevel::Critical;
+        if (iLevel == 2) return EventLevel::Error;
+        if (iLevel == 3) return EventLevel::Warning;
+        if (iLevel == 5) return EventLevel::Verbose;
         return EventLevel::Informational;
     }
 
+    static int ParseXmlLevelValue(const String& sRawXml) {
+        int iLvlPos = sRawXml.IndexOf("<Level>");
+        if (iLvlPos < 0) return 0;
+
+        int iEndLvl = sRawXml.IndexOf("</Level>", iLvlPos);
+        if (iEndLvl < 0) return 0;
+
+        String sLvlStr = sRawXml.Substring(iLvlPos + 7, iEndLvl - (iLvlPos + 7));
+        try {
+            return Convert::ToInt32(sLvlStr);
+        } catch (const DotNetDupe::System::Exception&) {
+            return 0;
+        }
+    }
+
+    static EventLevel ParseEtwLevel(int iLevel, const String& sRawXml) {
+        int actualLevel = iLevel;
+        if (actualLevel == 0 && !sRawXml.IsEmpty()) {
+            actualLevel = ParseXmlLevelValue(sRawXml);
+        }
+        return LevelFromInt(actualLevel);
+    }
+
+    static String GetEventIdDescription(int iEventId) {
+        if (iEventId == 4688) return " (New Process Creation)";
+        if (iEventId == 4689) return " (Process Termination)";
+        if (iEventId == 4624) return " (Successful User Account Logon)";
+        if (iEventId == 4625) return " (Failed User Account Logon Attempt)";
+        if (iEventId == 1102) return " (Security Audit Log Cleared)";
+        if (iEventId == 7045) return " (New Windows Service Installed)";
+        return "";
+    }
+
     static String FormatFallbackMessage(int iEventId, const String& sProvider, const String& sMsg) {
-        std::string rawMsg = sMsg.GetRawString();
-        if (!sMsg.IsEmpty() && rawMsg.rfind("<Event", 0) != 0 && rawMsg.rfind("<?xml", 0) != 0) {
+        if (!sMsg.IsEmpty() && !sMsg.StartsWith("<Event") && !sMsg.StartsWith("<?xml")) {
             return sMsg;
         }
-        std::string sSummary = "Event ID #" + std::to_string(iEventId) + " logged by provider '" + sProvider.GetRawString() + "'";
-        if (iEventId == 4688) sSummary += " (New Process Creation)";
-        else if (iEventId == 4689) sSummary += " (Process Termination)";
-        else if (iEventId == 4624) sSummary += " (Successful User Account Logon)";
-        else if (iEventId == 4625) sSummary += " (Failed User Account Logon Attempt)";
-        else if (iEventId == 1102) sSummary += " (Security Audit Log Cleared)";
-        else if (iEventId == 7045) sSummary += " (New Windows Service Installed)";
-        return String(sSummary.c_str());
+        String sDesc = GetEventIdDescription(iEventId);
+        return String::Format("Event ID #{0} logged by provider '{1}'{2}", iEventId, sProvider, sDesc);
     }
 
     EventRecord EventRecord::FromEtwEvent(const DotNetDupe::System::Diagnostics::EtwEvent& etwEvt, const String& sDefaultChannel) {

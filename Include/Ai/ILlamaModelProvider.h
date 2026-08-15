@@ -3,13 +3,15 @@
 #include "ViewerCommon.h"
 #include "System/String.h"
 #include "System/SmartPointer.h"
-#include <vector>
+#include "System/Collections/Generic/List.h"
 
 struct llama_model;
 struct llama_context;
 
 namespace SmartEventViewer {
     using String = DotNetDupe::System::String;
+    template<typename T>
+    using List = DotNetDupe::System::Collections::Generic::List<T>;
     class EventRecord;
 
     class ILlamaModelProvider {
@@ -19,7 +21,7 @@ namespace SmartEventViewer {
         virtual void InitBackend() = 0;
         virtual void LoadModel(const String& sModelPath) = 0;
         virtual void CreateContext() = 0;
-        virtual String ExecuteInference(const String& sSystemPrompt, const String& sUserQuery, const std::vector<EventRecord>& events) = 0;
+        virtual String ExecuteInference(const String& sSystemPrompt, const String& sUserQuery, const List<EventRecord>& events) = 0;
         virtual void FreeContextAndModel() = 0;
         virtual bool IsLoaded() const = 0;
         virtual bool IsModelFilePresent(const String& sModelPath) const = 0;
@@ -38,7 +40,7 @@ namespace SmartEventViewer {
         void InitBackend() override;
         void LoadModel(const String& sModelPath) override;
         void CreateContext() override;
-        String ExecuteInference(const String& sSystemPrompt, const String& sUserQuery, const std::vector<EventRecord>& events) override;
+        String ExecuteInference(const String& sSystemPrompt, const String& sUserQuery, const List<EventRecord>& events) override;
         void FreeContextAndModel() override;
         bool IsLoaded() const override { return m_bLoaded; }
         bool IsModelFilePresent(const String& sModelPath) const override;

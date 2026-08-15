@@ -3,6 +3,8 @@
 #include "Core/EventsController.h"
 #include "Logging/AppLoggerManager.h"
 
+#include "System/Text/StringBuilder.h"
+
 namespace SmartEventViewer {
     LogFormatResponseDto DiagnosticsController::GetLogFormat() {
         LogFormatResponseDto dto;
@@ -15,35 +17,39 @@ namespace SmartEventViewer {
         return dto;
     }
 
-    static String SanitizeJsonEscapes(const String& input) {
-        std::string s = input.GetRawString();
-        std::string out;
-        out.reserve(s.size() + 16);
-        for (size_t i = 0; i < s.size(); ++i) {
-            if (s[i] == '\\') {
-                if (i + 1 < s.size()) {
-                    char next = s[i + 1];
-                    if (next == '"' || next == '\\' || next == '/' || next == 'b' ||
-                        next == 'f' || next == 'n' || next == 'r' || next == 't' || next == 'u') {
-                        out.push_back('\\');
-                        out.push_back(next);
-                        i++;
-                        continue;
-                    }
-                }
-                out.push_back('\\');
-                out.push_back('\\');
-            } else {
-                out.push_back(s[i]);
+    static bool IsJsonEscapeChar(char c) {
+        return (c == '"' || c == '\\' || c == '/' || c == 'b' ||
+                c == 'f' || c == 'n' || c == 'r' || c == 't' || c == 'u');
+    }
+
+    static void AppendEscapedChar(DotNetDupe::System::Text::StringBuilder& sb, const String& input, int& i) {
+        if (input[i] == '\\') {
+            if (i + 1 < input.GetLength() && IsJsonEscapeChar(input[i + 1])) {
+                sb.Append('\\');
+                sb.Append(input[i + 1]);
+                i++;
+                return;
             }
+            sb.Append("\\\\");
+        } else {
+            sb.Append(input[i]);
         }
-        return String(out.c_str());
+    }
+
+    static String SanitizeJsonEscapes(const String& input) {
+        DotNetDupe::System::Text::StringBuilder sb(input.GetLength() + 16);
+        for (int i = 0; i < input.GetLength(); ++i) {
+            AppendEscapedChar(sb, input, i);
+        }
+        return sb.ToString();
     }
 
     static LogRecordDto ParseLogRecord(const String& rawLine) {
         String sanitized = SanitizeJsonEscapes(rawLine);
         try {
             return DotNetDupe::System::Text::Json::JsonSerializer::Deserialize<LogRecordDto>(sanitized);
+        } catch (const DotNetDupe::System::Exception&) {
+            return LogRecordDto(DotNetDupe::System::DateTime::Now(), DotNetDupe::Extensions::Logging::LogLevel::Information, 0, 0, "SERVER", rawLine);
         } catch (...) {
             return LogRecordDto(DotNetDupe::System::DateTime::Now(), DotNetDupe::Extensions::Logging::LogLevel::Information, 0, 0, "SERVER", rawLine);
         }

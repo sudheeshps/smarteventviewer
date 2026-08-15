@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "../Include/Core/EvtxExporter.h"
+#include "System/Array.h"
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -8,6 +9,23 @@
 #endif
 
 namespace SmartEventViewer {
+    static DotNetDupe::System::Array<wchar_t> ToWideCharArray(const String& sInput) {
+        if (sInput.IsEmpty()) {
+            DotNetDupe::System::Array<wchar_t> emptyArr(1);
+            emptyArr[0] = L'\0';
+            return emptyArr;
+        }
+        int iLen = ::MultiByteToWideChar(CP_UTF8, 0, sInput.GetRawString(), -1, NULL, 0);
+        if (iLen <= 0) {
+            DotNetDupe::System::Array<wchar_t> emptyArr(1);
+            emptyArr[0] = L'\0';
+            return emptyArr;
+        }
+        DotNetDupe::System::Array<wchar_t> wideArr(iLen);
+        ::MultiByteToWideChar(CP_UTF8, 0, sInput.GetRawString(), -1, wideArr.GetData(), iLen);
+        return wideArr;
+    }
+
     bool EvtxExporter::ExportChannelToEvtx(const String& sChannelPath, const String& sTargetEvtxFilePath) {
 #if defined(_WIN32)
         String sChannel = sChannelPath.IsEmpty() ? 
@@ -15,18 +33,16 @@ namespace SmartEventViewer {
         String sTargetFile = sTargetEvtxFilePath.IsEmpty() ? 
             "C:\\Users\\Public\\RdpEvents_Valid.evtx" : sTargetEvtxFilePath;
 
-        // Convert DotNetDupe String to WCHAR wide string for Win32 API
-        std::wstring wsChannel(sChannel.ToWString());
-        std::wstring wsTargetFile(sTargetFile.ToWString());
+        auto wsChannel = ToWideCharArray(sChannel);
+        auto wsTargetFile = ToWideCharArray(sTargetFile);
 
         LPCWSTR pwszQuery = L"*[System[(EventID=21 or EventID=22 or EventID=24 or EventID=25 or EventID=4624 or EventID=4634)]]";
 
-        // Native Windows EvtExportLog API call using dynamic user-chosen target path
         BOOL bSuccess = EvtExportLog(
             NULL,
-            wsChannel.c_str(),
+            wsChannel.GetData(),
             pwszQuery,
-            wsTargetFile.c_str(),
+            wsTargetFile.GetData(),
             EvtExportLogChannelPath
         );
 

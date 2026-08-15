@@ -107,8 +107,8 @@ namespace SmartEventViewer {
         String val;
         if (query.TryGetValue("channel", val) || query.TryGetValue("Channel", val)) sChannel = val;
         if (query.TryGetValue("level", val) || query.TryGetValue("Level", val)) sLevel = val;
-        if (query.TryGetValue("page", val) && !val.IsEmpty()) page = static_cast<size_t>(std::stoul(val.GetRawString()));
-        if (query.TryGetValue("pageSize", val) && !val.IsEmpty()) pageSize = static_cast<size_t>(std::stoul(val.GetRawString()));
+        if (query.TryGetValue("page", val) && !val.IsEmpty()) page = static_cast<size_t>(DotNetDupe::System::Convert::ToUInt64(val));
+        if (query.TryGetValue("pageSize", val) && !val.IsEmpty()) pageSize = static_cast<size_t>(DotNetDupe::System::Convert::ToUInt64(val));
     }
 
     EventSummaryResponseDto EventsController::GetEventSummary() {
