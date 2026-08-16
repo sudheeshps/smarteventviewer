@@ -181,7 +181,8 @@ namespace SmartEventViewer {
         EventSummaryResponseDto GetEventSummary();
         EventSummaryResponseDto GetEventSummary(const String& channelName);
 
-        // Returns strongly typed EventLogResponseDto payload with pagination
+        // Returns strongly typed EventLogResponseDto payload with pagination and level filter
+        EventLogResponseDto GetEvents(const String& channelName, size_t page, size_t pageSize, const String& sLevelFilter);
         EventLogResponseDto GetEvents(const String& channelName, size_t page, size_t pageSize);
         EventLogResponseDto GetEvents(const String& channelName);
     };

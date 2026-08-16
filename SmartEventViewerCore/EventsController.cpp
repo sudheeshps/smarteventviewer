@@ -142,6 +142,22 @@ namespace SmartEventViewer {
         return fallbackDto;
     }
 
+    EventLogResponseDto EventsController::GetEvents(const String& channelName, size_t page, size_t pageSize, const String& sLevelFilter) {
+        String sRawChannel = channelName;
+        if (sRawChannel.IsEmpty()) {
+            sRawChannel = "Application";
+        }
+        String sTargetChannel = UrlDecodeChannel(sRawChannel);
+
+        String sFilter = sLevelFilter;
+        if (sFilter.IsEmpty()) {
+            sFilter = "ALL";
+        }
+
+        AppLoggerManager::Info("SERVER", String::Format("[SERVER] Executing EventsController::GetEvents() for channel: {0} (Page: {1}, PageSize: {2}, Level: {3})", sTargetChannel, page, pageSize, sFilter));
+        return EventLruCacheManager::GetInstance().GetEvents(sTargetChannel, page, pageSize, sFilter);
+    }
+
     EventLogResponseDto EventsController::GetEvents(const String& channelName, size_t page, size_t pageSize) {
         String sRawChannel = channelName;
         String sLevelFilter = "ALL";
@@ -149,10 +165,6 @@ namespace SmartEventViewer {
         if (!m_httpContext.IsNull()) {
             ExtractQueryParams(Request(), sRawChannel, sLevelFilter, page, pageSize);
         }
-        if (sRawChannel.IsEmpty()) sRawChannel = "Application";
-        String sTargetChannel = UrlDecodeChannel(sRawChannel);
-
-        AppLoggerManager::Info("SERVER", String::Format("[SERVER] Executing EventsController::GetEvents() for channel: {0} (Page: {1}, PageSize: {2}, Level: {3})", sTargetChannel, page, pageSize, sLevelFilter));
-        return EventLruCacheManager::GetInstance().GetEvents(sTargetChannel, page, pageSize, sLevelFilter);
+        return GetEvents(sRawChannel, page, pageSize, sLevelFilter);
     }
 }

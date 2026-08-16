@@ -85,7 +85,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="EventRecordTests.cpp" />
-    <ClCompile Include="IntegrationTests.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\SmartEventViewerCore\SmartEventViewerCore.vcxproj">

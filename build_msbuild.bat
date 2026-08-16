@@ -8,6 +8,7 @@ echo ===================================================
 set CONFIG=Release
 set PLATFORM=x64
 set TARGET=Build
+set RUN_TESTS=0
 set MODEL_DIR=models
 set MODEL_FILE=%MODEL_DIR%\Qwen1.5-4B-Chat-Q4_K_M.gguf
 set MODEL_URL=https://huggingface.co/Qwen/Qwen1.5-4B-Chat-GGUF/resolve/main/qwen1_5-4b-chat-q4_k_m.gguf?download=true
@@ -22,6 +23,8 @@ if /i "%~1"=="debug" (
     set TARGET=Clean
 ) else if /i "%~1"=="rebuild" (
     set TARGET=Rebuild
+) else if /i "%~1"=="test" (
+    set RUN_TESTS=1
 )
 shift
 goto parse_args
@@ -53,21 +56,11 @@ if not exist "%MODEL_FILE%" (
 )
 
 echo [INFO] Running MSBuild (Configuration=%CONFIG%, Platform=%PLATFORM%, Target=%TARGET%)...
-msbuild SmartEventViewer.sln /t:%TARGET% /p:Configuration=%CONFIG% /p:Platform=%PLATFORM%
+msbuild SmartEventViewer.sln /t:%TARGET% /p:Configuration=%CONFIG% /p:Platform=%PLATFORM% /m
 
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] MSBuild failed with error code %ERRORLEVEL%.
     exit /b %ERRORLEVEL%
-)
-
-echo [INFO] Copying latest React apiClient.ts to common output binary directory...
-if exist SmartEventViewerApp\src\apiClient.ts (
-    copy /y SmartEventViewerApp\src\apiClient.ts bin\%PLATFORM%\%CONFIG%\apiClient.ts
-)
-
-echo [INFO] Copying llama.cpp dependencies to output binary directory...
-if exist vcpkg_installed\x64-windows\x64-windows\bin\llama.dll (
-    copy /y vcpkg_installed\x64-windows\x64-windows\bin\*.dll bin\%PLATFORM%\%CONFIG%\
 )
 
 if "%TARGET%"=="Clean" (
@@ -75,15 +68,28 @@ if "%TARGET%"=="Clean" (
     exit /b 0
 )
 
-rem echo [INFO] Running Unit Test Suite...
-rem if exist .\bin\%PLATFORM%\%CONFIG%\SmartEventViewerTests.exe (
-rem    .\bin\%PLATFORM%\%CONFIG%\SmartEventViewerTests.exe
-rem )
+echo [INFO] Copying runtime dependencies to root binary directory...
+if not exist bin\%PLATFORM%\%CONFIG% mkdir bin\%PLATFORM%\%CONFIG%
 
-rem echo [INFO] Running Integration Test Suite...
-rem if exist .\bin\%PLATFORM%\%CONFIG%\SmartEventViewerIntegrationTests.exe (
-rem    .\bin\%PLATFORM%\%CONFIG%\SmartEventViewerIntegrationTests.exe
-rem )
+if exist packages\DotNetDupe.4.0.0\runtimes\win-x64\native (
+    copy /y packages\DotNetDupe.4.0.0\runtimes\win-x64\native\*.dll bin\%PLATFORM%\%CONFIG%\ >nul 2>&1
+)
+
+if exist vcpkg_installed\x64-windows\x64-windows\bin (
+    copy /y vcpkg_installed\x64-windows\x64-windows\bin\*.dll bin\%PLATFORM%\%CONFIG%\ >nul 2>&1
+)
+
+
+if %RUN_TESTS% equ 1 (
+    echo [INFO] Running Unit Tests...
+    if exist .\bin\%PLATFORM%\%CONFIG%\SmartEventViewerTests.exe (
+        .\bin\%PLATFORM%\%CONFIG%\SmartEventViewerTests.exe
+    )
+    echo [INFO] Running Integration Tests...
+    if exist .\bin\%PLATFORM%\%CONFIG%\SmartEventViewerIntegrationTests.exe (
+        .\bin\%PLATFORM%\%CONFIG%\SmartEventViewerIntegrationTests.exe
+    )
+)
 
 echo ===================================================
 echo [SUCCESS] MSBuild %CONFIG% %TARGET% completed!

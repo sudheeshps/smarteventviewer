@@ -50,16 +50,17 @@ namespace SmartEventViewer {
         if (sCmd.IsEmpty()) return "Access Denied (System Protected)";
 
         String sResult = sCmd;
-        if (!sPath.IsEmpty() && sResult.StartsWith(sPath)) {
+        int iLen = sResult.GetLength();
+        if (!sPath.IsEmpty() && sResult.StartsWith(sPath) && sPath.GetLength() < iLen) {
             sResult = sResult.Substring(static_cast<int>(sPath.GetLength()));
         }
-        else if (sResult.StartsWith("\"")) {
+        else if (sResult.StartsWith("\"") && iLen > 1) {
             int nextQuote = sResult.IndexOf("\"", 1);
-            if (nextQuote != -1) sResult = sResult.Substring(nextQuote + 1);
+            if (nextQuote != -1 && nextQuote + 1 < iLen) sResult = sResult.Substring(nextQuote + 1);
         }
         else {
             int spaceIdx = sResult.IndexOf(" ");
-            if (spaceIdx != -1) sResult = sResult.Substring(spaceIdx);
+            if (spaceIdx != -1 && spaceIdx + 1 < iLen) sResult = sResult.Substring(spaceIdx);
         }
 
         sResult = sResult.Trim();

@@ -249,11 +249,11 @@ namespace DotNetDupe {
                         if (element.TryGetProperty("diskReadMBps", prop)) dto.DiskReadMBps = prop.GetDouble();
                         if (element.TryGetProperty("diskWriteMBps", prop)) dto.DiskWriteMBps = prop.GetDouble();
                         if (element.TryGetProperty("networkUsageMbps", prop)) dto.NetworkUsageMbps = prop.GetDouble();
-                        if (element.TryGetProperty("topProcesses", prop)) dto.TopProcesses = JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::ProcessResourceDto>>::Read(prop);
-                        if (element.TryGetProperty("activeUserSessions", prop)) dto.ActiveUserSessions = JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::UserSessionDto>>::Read(prop);
-                        if (element.TryGetProperty("expiredUserSessions", prop)) dto.ExpiredUserSessions = JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::UserSessionDto>>::Read(prop);
-                        if (element.TryGetProperty("systemUsers", prop)) dto.SystemUsers = JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::UserPrincipalDto>>::Read(prop);
-                        if (element.TryGetProperty("rdpSessions", prop)) dto.RdpSessions = JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::RdpSessionDto>>::Read(prop);
+                        if (element.TryGetProperty("topProcesses", prop) && prop.GetValueKind() == JsonValueKind::Array && prop.GetArrayLength() > 0) dto.TopProcesses = JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::ProcessResourceDto>>::Read(prop);
+                        if (element.TryGetProperty("activeUserSessions", prop) && prop.GetValueKind() == JsonValueKind::Array && prop.GetArrayLength() > 0) dto.ActiveUserSessions = JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::UserSessionDto>>::Read(prop);
+                        if (element.TryGetProperty("expiredUserSessions", prop) && prop.GetValueKind() == JsonValueKind::Array && prop.GetArrayLength() > 0) dto.ExpiredUserSessions = JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::UserSessionDto>>::Read(prop);
+                        if (element.TryGetProperty("systemUsers", prop) && prop.GetValueKind() == JsonValueKind::Array && prop.GetArrayLength() > 0) dto.SystemUsers = JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::UserPrincipalDto>>::Read(prop);
+                        if (element.TryGetProperty("rdpSessions", prop) && prop.GetValueKind() == JsonValueKind::Array && prop.GetArrayLength() > 0) dto.RdpSessions = JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::RdpSessionDto>>::Read(prop);
                         return dto;
                     }
                 };
@@ -290,7 +290,7 @@ namespace DotNetDupe {
                     static SmartEventViewer::ServicesResponseDto Read(const JsonElement& element) {
                         SmartEventViewer::ServicesResponseDto dto;
                         JsonElement prop;
-                        if (element.TryGetProperty("services", prop)) dto.Services = JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::ServiceInfoDto>>::Read(prop);
+                        if (element.TryGetProperty("services", prop) && prop.GetValueKind() == JsonValueKind::Array && prop.GetArrayLength() > 0) dto.Services = JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::ServiceInfoDto>>::Read(prop);
                         return dto;
                     }
                 };

@@ -110,6 +110,24 @@ namespace SmartEventViewer {
         return uDefaultCount;
     }
 
+    static String LevelToString(EventLevel lvl) {
+        if (lvl == EventLevel::Critical) return "Critical";
+        if (lvl == EventLevel::Error) return "Error";
+        if (lvl == EventLevel::Warning) return "Warning";
+        if (lvl == EventLevel::Verbose) return "Verbose";
+        return "Information";
+    }
+
+    static String ResolveEventLevel(const EventRecord& evt, const DotNetDupe::System::Diagnostics::EtwEventLevel& etwLevel, int iRawLevel) {
+        if (evt.GetLevel() != EventLevel::Informational || iRawLevel != 0) return LevelToString(evt.GetLevel());
+        if (etwLevel == DotNetDupe::System::Diagnostics::EtwEventLevel::Critical) return "Critical";
+        if (etwLevel == DotNetDupe::System::Diagnostics::EtwEventLevel::Error) return "Error";
+        if (etwLevel == DotNetDupe::System::Diagnostics::EtwEventLevel::Warning) return "Warning";
+        if (etwLevel == DotNetDupe::System::Diagnostics::EtwEventLevel::Verbose) return "Verbose";
+        if (etwLevel == DotNetDupe::System::Diagnostics::EtwEventLevel::Info) return "Information";
+        return LevelToString(evt.GetLevel());
+    }
+
     static void PopulateEventsList(const String& sChannel, size_t page, size_t pageSize, const String& sLevelFilterLower, EventLogResponseDto& responseDto) {
         size_t startIndex = (page - 1) * pageSize;
         auto etwLevel = ParseEtwEventLevel(sLevelFilterLower);
@@ -119,7 +137,7 @@ namespace SmartEventViewer {
             EventDto dto;
             dto.Index = startIndex + i + 1;
             dto.Id = evt.GetEventId();
-            dto.Level = (evt.GetLevel() == EventLevel::Critical ? "Critical" : (evt.GetLevel() == EventLevel::Error ? "Error" : (evt.GetLevel() == EventLevel::Warning ? "Warning" : "Information")));
+            dto.Level = ResolveEventLevel(evt, etwLevel, rawEvents[i].iLevel);
             dto.Risk = (evt.GetRiskLevel() == RiskLevel::Critical ? "Critical" : (evt.GetRiskLevel() == RiskLevel::High ? "High" : (evt.GetRiskLevel() == RiskLevel::Medium ? "Medium" : "Low")));
             dto.Provider = evt.GetProviderName();
             dto.Time = evt.GetTimeCreated();

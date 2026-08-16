@@ -23,7 +23,7 @@
     Copy all dependencies and the client app (SmartEventViewerApp) into $(OutDir)
     when building SmartEventViewerTests so integration tests can launch the server directly from $(OutDir).
   -->
-  <Target Name="CopyIntegrationTestAppAndDependencies" AfterTargets="Build" Condition="'$(ProjectName)' == 'SmartEventViewerTests'">
+  <Target Name="CopyIntegrationTestAppAndDependencies" AfterTargets="Build" Condition="'$(ProjectName)' == 'SmartEventViewerTests' OR '$(ProjectName)' == 'SmartEventViewerIntegrationTests'">
     <ItemGroup>
       <ServerFiles Include="$(SolutionDir)bin\$(Platform)\$(Configuration)\SmartEventViewerServer.*" />
       <CoreFiles Include="$(SolutionDir)bin\$(Platform)\$(Configuration)\SmartEventViewerCore.*" />
@@ -31,7 +31,5 @@
 
     <Copy SourceFiles="@(ServerFiles)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
     <Copy SourceFiles="@(CoreFiles)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
-
-    <Exec Command="robocopy &quot;$(SolutionDir)SmartEventViewerApp&quot; &quot;$(OutDir)SmartEventViewerApp&quot; /E /XO /NP /NFL /NDL /NJH /NJS &amp; if %errorlevel% leq 7 exit /b 0" />
   </Target>
 </Project>

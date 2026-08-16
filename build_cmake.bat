@@ -7,6 +7,7 @@ echo ===================================================
 
 set BUILD_TYPE=Release
 set ACTION=build
+set RUN_TESTS=0
 set MODEL_DIR=models
 set MODEL_FILE=%MODEL_DIR%\Qwen1.5-4B-Chat-Q4_K_M.gguf
 set MODEL_URL=https://huggingface.co/Qwen/Qwen1.5-4B-Chat-GGUF/resolve/main/qwen1_5-4b-chat-q4_k_m.gguf?download=true
@@ -21,6 +22,8 @@ if /i "%~1"=="debug" (
     set ACTION=clean
 ) else if /i "%~1"=="rebuild" (
     set ACTION=rebuild
+) else if /i "%~1"=="test" (
+    set RUN_TESTS=1
 )
 shift
 goto parse_args
@@ -79,29 +82,34 @@ if %ERRORLEVEL% neq 0 (
     exit /b %ERRORLEVEL%
 )
 
-echo [INFO] Building project targets...
-cmake --build %BUILD_DIR% --config %BUILD_TYPE%
+echo [INFO] Building project targets (Core, Server, Tests, IntegrationTests)...
+cmake --build %BUILD_DIR% --config %BUILD_TYPE% --target SmartEventViewerCore SmartEventViewerServer SmartEventViewerTests SmartEventViewerIntegrationTests
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] CMake build failed.
     exit /b %ERRORLEVEL%
 )
 
-echo [INFO] Copying latest React apiClient.ts to common output binary directory...
-if exist SmartEventViewerApp\src\apiClient.ts (
-    if not exist bin\x64\%BUILD_TYPE% mkdir bin\x64\%BUILD_TYPE%
-    copy /y SmartEventViewerApp\src\apiClient.ts bin\x64\%BUILD_TYPE%\apiClient.ts
+echo [INFO] Copying runtime dependencies to binary directories...
+if not exist bin\x64\%BUILD_TYPE% mkdir bin\x64\%BUILD_TYPE%
+if not exist %BUILD_DIR%\bin\%BUILD_TYPE% mkdir %BUILD_DIR%\bin\%BUILD_TYPE%
+
+if exist packages\DotNetDupe.4.0.0\runtimes\win-x64\native (
+    copy /y packages\DotNetDupe.4.0.0\runtimes\win-x64\native\*.dll bin\x64\%BUILD_TYPE%\ >nul 2>&1
+    copy /y packages\DotNetDupe.4.0.0\runtimes\win-x64\native\*.dll %BUILD_DIR%\bin\%BUILD_TYPE%\ >nul 2>&1
 )
 
-echo [INFO] Copying llama.cpp dependencies to output binary directory...
-if exist vcpkg_installed\x64-windows\x64-windows\bin\llama.dll (
-    if not exist bin\x64\%BUILD_TYPE% mkdir bin\x64\%BUILD_TYPE%
-    copy /y vcpkg_installed\x64-windows\x64-windows\bin\*.dll bin\x64\%BUILD_TYPE%\
+if exist vcpkg_installed\x64-windows\x64-windows\bin (
+    copy /y vcpkg_installed\x64-windows\x64-windows\bin\*.dll bin\x64\%BUILD_TYPE%\ >nul 2>&1
+    copy /y vcpkg_installed\x64-windows\x64-windows\bin\*.dll %BUILD_DIR%\bin\%BUILD_TYPE%\ >nul 2>&1
 )
 
-echo [INFO] Running Unit & Integration Test Suites...
-ctest --test-dir %BUILD_DIR% -C %BUILD_TYPE% --output-on-failure
-if %ERRORLEVEL% neq 0 (
-    echo [WARNING] Tests finished with exit code %ERRORLEVEL%.
+
+if %RUN_TESTS% equ 1 (
+    echo [INFO] Running Unit and Integration Test Suites via CTest...
+    ctest --test-dir %BUILD_DIR% -C %BUILD_TYPE% --output-on-failure
+    if %ERRORLEVEL% neq 0 (
+        echo [WARNING] CTest finished with exit code %ERRORLEVEL%.
+    )
 )
 
 echo ===================================================

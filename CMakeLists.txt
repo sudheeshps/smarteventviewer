@@ -37,17 +37,27 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/llama.cpp/CMakeLists.txt")
     )
 endif()
 
-# Include directories (Include, SmartEventViewerCore, DotNetDupe, llama.cpp, vcpkg)
+# Include directories (Include, SmartEventViewerCore, DotNetDupe, llama.cpp, vcpkg, GoogleTest)
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/Include
     ${CMAKE_CURRENT_SOURCE_DIR}/SmartEventViewerCore
     ${CMAKE_CURRENT_SOURCE_DIR}/packages/DotNetDupe.4.0.0/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/packages/Microsoft.googletest.v140.windesktop.msvcstl.static.rt-dyn.1.8.1.8/build/native/include
     ${CMAKE_CURRENT_SOURCE_DIR}/external/llama.cpp/include
     ${CMAKE_CURRENT_SOURCE_DIR}/external/llama.cpp/ggml/include
     ${CMAKE_CURRENT_SOURCE_DIR}/external/llama.cpp/common
     ${CMAKE_CURRENT_SOURCE_DIR}/external/llama.cpp
     ${CMAKE_BINARY_DIR}/vcpkg_installed/x64-windows/include
     ${CMAKE_CURRENT_SOURCE_DIR}/vcpkg_installed/x64-windows/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/vcpkg_installed/x64-windows/x64-windows/include
+)
+
+link_directories(
+    ${CMAKE_CURRENT_SOURCE_DIR}/vcpkg_installed/x64-windows/x64-windows/lib
+    ${CMAKE_CURRENT_SOURCE_DIR}/vcpkg_installed/x64-windows/lib
+    ${CMAKE_CURRENT_SOURCE_DIR}/packages/DotNetDupe.4.0.0/runtimes/win-x64/native
+    ${CMAKE_CURRENT_SOURCE_DIR}/packages/Microsoft.googletest.v140.windesktop.msvcstl.static.rt-dyn.1.8.1.8/lib/native/v140/windesktop/msvcstl/static/rt-dyn/x64/Release
+    ${CMAKE_CURRENT_SOURCE_DIR}/packages/Microsoft.googletest.v140.windesktop.msvcstl.static.rt-dyn.1.8.1.8/lib/native/v140/windesktop/msvcstl/static/rt-dyn/x64/Debug
 )
 
 # Core Engine Source Files
@@ -93,13 +103,21 @@ add_library(SmartEventViewerCore SHARED
 
 target_compile_definitions(SmartEventViewerCore PRIVATE SMARTEVENTVIEWER_EXPORTS)
 
-# Link llama.cpp package from vcpkg
-find_package(llama CONFIG QUIET)
-if(llama_FOUND)
-    target_link_libraries(SmartEventViewerCore PRIVATE llama::llama)
-elseif(TARGET llama)
-    target_link_libraries(SmartEventViewerCore PRIVATE llama common)
-endif()
+target_link_directories(SmartEventViewerCore PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/vcpkg_installed/x64-windows/x64-windows/lib
+    ${CMAKE_CURRENT_SOURCE_DIR}/vcpkg_installed/x64-windows/lib
+    ${CMAKE_CURRENT_SOURCE_DIR}/vcpkg_installed/x64-windows/x64-windows/debug/lib
+    ${CMAKE_CURRENT_SOURCE_DIR}/vcpkg_installed/x64-windows/debug/lib
+    ${CMAKE_CURRENT_SOURCE_DIR}/packages/DotNetDupe.4.0.0/runtimes/win-x64/native
+)
+
+target_link_libraries(SmartEventViewerCore PRIVATE
+    llama
+    llama-common
+    ggml
+    ggml-cpu
+    ggml-base
+)
 
 # Platform Specific Link Libraries for DotNetDupe and Win32 APIs
 if(WIN32)
@@ -122,12 +140,21 @@ if(WIN32)
 endif()
 
 # Unit Tests Executable Target (SmartEventViewerTests)
+find_library(GTEST_LIB NAMES gtest gtestd PATHS
+    ${CMAKE_CURRENT_SOURCE_DIR}/packages/Microsoft.googletest.v140.windesktop.msvcstl.static.rt-dyn.1.8.1.8/lib/native/v140/windesktop/msvcstl/static/rt-dyn/x64/Release
+    ${CMAKE_CURRENT_SOURCE_DIR}/packages/Microsoft.googletest.v140.windesktop.msvcstl.static.rt-dyn.1.8.1.8/lib/native/v140/windesktop/msvcstl/static/rt-dyn/x64/Debug
+)
+find_library(GTEST_MAIN_LIB NAMES gtest_main gtest_maind PATHS
+    ${CMAKE_CURRENT_SOURCE_DIR}/packages/Microsoft.googletest.v140.windesktop.msvcstl.static.rt-dyn.1.8.1.8/lib/native/v140/windesktop/msvcstl/static/rt-dyn/x64/Release
+    ${CMAKE_CURRENT_SOURCE_DIR}/packages/Microsoft.googletest.v140.windesktop.msvcstl.static.rt-dyn.1.8.1.8/lib/native/v140/windesktop/msvcstl/static/rt-dyn/x64/Debug
+)
+
 set(TEST_SOURCES
     SmartEventViewerTests/EventRecordTests.cpp
 )
 
 add_executable(SmartEventViewerTests ${TEST_SOURCES})
-target_link_libraries(SmartEventViewerTests PRIVATE SmartEventViewerCore ${DOTNETDUPE_LIB})
+target_link_libraries(SmartEventViewerTests PRIVATE SmartEventViewerCore ${DOTNETDUPE_LIB} ${GTEST_LIB})
 
 if(WIN32)
     target_link_libraries(SmartEventViewerTests PRIVATE wevtapi wtsapi32 iphlpapi psapi)
@@ -137,8 +164,42 @@ endif()
 enable_testing()
 add_test(NAME SmartEventViewerTests COMMAND SmartEventViewerTests)
 
+# Integration Tests Executable Target (SmartEventViewerIntegrationTests)
+set(INTEGRATION_TEST_SOURCES
+    SmartEventViewerIntegrationTests/Main.cpp
+    SmartEventViewerIntegrationTests/EventsControllerTests.cpp
+    SmartEventViewerIntegrationTests/TelemetryControllerTests.cpp
+    SmartEventViewerIntegrationTests/DiagnosticsControllerTests.cpp
+    SmartEventViewerIntegrationTests/LlmAnalysisControllerTests.cpp
+    SmartEventViewerIntegrationTests/PushNotificationTests.cpp
+)
+
+add_executable(SmartEventViewerIntegrationTests ${INTEGRATION_TEST_SOURCES})
+target_link_libraries(SmartEventViewerIntegrationTests PRIVATE SmartEventViewerCore ${DOTNETDUPE_LIB} ${GTEST_LIB})
+
+if(WIN32)
+    target_link_libraries(SmartEventViewerIntegrationTests PRIVATE wevtapi wtsapi32 iphlpapi psapi shell32)
+endif()
+
+add_test(NAME SmartEventViewerIntegrationTests COMMAND SmartEventViewerIntegrationTests)
+
+if(WIN32)
+    add_custom_command(TARGET SmartEventViewerCore POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
+        ${CMAKE_CURRENT_SOURCE_DIR}/packages/DotNetDupe.4.0.0/runtimes/win-x64/native
+        $<TARGET_FILE_DIR:SmartEventViewerCore>
+    )
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg_installed/x64-windows/x64-windows/bin")
+        add_custom_command(TARGET SmartEventViewerCore POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
+            ${CMAKE_CURRENT_SOURCE_DIR}/vcpkg_installed/x64-windows/x64-windows/bin
+            $<TARGET_FILE_DIR:SmartEventViewerCore>
+        )
+    endif()
+endif()
+
 # Deployment & Packaging (CPack / Standalone ZIP)
-install(TARGETS SmartEventViewerCore SmartEventViewerServer SmartEventViewerTests
+install(TARGETS SmartEventViewerCore SmartEventViewerServer SmartEventViewerTests SmartEventViewerIntegrationTests
     RUNTIME DESTINATION bin
     LIBRARY DESTINATION bin
     ARCHIVE DESTINATION lib
