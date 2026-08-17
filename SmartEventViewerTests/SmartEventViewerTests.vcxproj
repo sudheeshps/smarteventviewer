@@ -53,13 +53,15 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(SolutionDir)Include;$(SolutionDir)SmartEventViewerServer;$(SolutionDir)SmartEventViewerCore;$(SolutionDir)packages\DotNetDupe.4.0.0\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Include;$(SolutionDir)SmartEventViewerServer;$(SolutionDir)SmartEventViewerCore;$(SolutionDir)SmartEventViewerTests\Unit;$(SolutionDir)SmartEventViewerTests\Integration;$(SolutionDir)packages\DotNetDupe.4.0.0\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(SolutionDir)packages\DotNetDupe.4.0.0\runtimes\win-x64\native;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>DotNetDupe.lib;$(OutDir)SmartEventViewerCore.lib;wevtapi.lib;wtsapi32.lib;iphlpapi.lib;psapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <EnableUAC>true</EnableUAC>
+      <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -72,7 +74,7 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(SolutionDir)Include;$(SolutionDir)SmartEventViewerServer;$(SolutionDir)SmartEventViewerCore;$(SolutionDir)packages\DotNetDupe.4.0.0\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Include;$(SolutionDir)SmartEventViewerServer;$(SolutionDir)SmartEventViewerCore;$(SolutionDir)SmartEventViewerTests\Unit;$(SolutionDir)SmartEventViewerTests\Integration;$(SolutionDir)packages\DotNetDupe.4.0.0\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -81,10 +83,25 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(SolutionDir)packages\DotNetDupe.4.0.0\runtimes\win-x64\native;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>DotNetDupe.lib;$(OutDir)SmartEventViewerCore.lib;wevtapi.lib;wtsapi32.lib;iphlpapi.lib;psapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <EnableUAC>true</EnableUAC>
+      <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="EventRecordTests.cpp" />
+    <ClInclude Include="Unit\Mocks\MockEventLogReader.h" />
+    <ClInclude Include="Unit\Mocks\MockSystemTelemetryProvider.h" />
+    <ClInclude Include="Unit\Mocks\MockTelemetryPushNotifier.h" />
+    <ClInclude Include="Integration\TestRestClient.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Main.cpp" />
+    <ClCompile Include="Unit\EventRecordTests.cpp" />
+    <ClCompile Include="Unit\ServiceUnitTests.cpp" />
+    <ClCompile Include="Integration\EventsControllerTests.cpp" />
+    <ClCompile Include="Integration\TelemetryControllerTests.cpp" />
+    <ClCompile Include="Integration\LlmAnalysisControllerTests.cpp" />
+    <ClCompile Include="Integration\DiagnosticsControllerTests.cpp" />
+    <ClCompile Include="Integration\PushNotificationTests.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\SmartEventViewerCore\SmartEventViewerCore.vcxproj">
@@ -108,13 +125,13 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
     <Import Project="..\packages\Microsoft.googletest.v140.windesktop.msvcstl.static.rt-dyn.1.8.1.8\build\native\Microsoft.googletest.v140.windesktop.msvcstl.static.rt-dyn.targets" Condition="Exists('..\packages\Microsoft.googletest.v140.windesktop.msvcstl.static.rt-dyn.1.8.1.8\build\native\Microsoft.googletest.v140.windesktop.msvcstl.static.rt-dyn.targets')" />
-    <Import Project="..\packages\DotNetDupe.4.0.0\build\native\DotNetDupe.targets" Condition="Exists('..\packages\DotNetDupe.4.0.0\build\native\DotNetDupe.targets')" />
+    <Import Project="..\packages\DotNetDupe.4.0.1\build\native\DotNetDupe.targets" Condition="Exists('..\packages\DotNetDupe.4.0.1\build\native\DotNetDupe.targets')" />
   </ImportGroup>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
       <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
     </PropertyGroup>
     <Error Condition="!Exists('..\packages\Microsoft.googletest.v140.windesktop.msvcstl.static.rt-dyn.1.8.1.8\build\native\Microsoft.googletest.v140.windesktop.msvcstl.static.rt-dyn.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.googletest.v140.windesktop.msvcstl.static.rt-dyn.1.8.1.8\build\native\Microsoft.googletest.v140.windesktop.msvcstl.static.rt-dyn.targets'))" />
-    <Error Condition="!Exists('..\packages\DotNetDupe.4.0.0\build\native\DotNetDupe.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\DotNetDupe.4.0.0\build\native\DotNetDupe.targets'))" />
+    <Error Condition="!Exists('..\packages\DotNetDupe.4.0.1\build\native\DotNetDupe.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\DotNetDupe.4.0.1\build\native\DotNetDupe.targets'))" />
   </Target>
 </Project>

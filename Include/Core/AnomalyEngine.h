@@ -1,10 +1,17 @@
 #pragma once
 
-#include "EventRecord.h"
+#include "ViewerCommon.h"
+#include "Core/EventRecord.h"
+#include "Core/IAnomalyEngine.h"
 
 namespace SmartEventViewer {
-    class AnomalyEngine {
+    class SMARTEVENTVIEWER_API AnomalyEngine : public IAnomalyEngine {
     public:
-        SMARTEVENTVIEWER_API static RiskLevel EvaluateRisk(const EventRecord& eventRec);
+        AnomalyEngine() = default;
+        ~AnomalyEngine() override = default;
+
+        RiskLevel EvaluateRisk(const EventRecord& eventRec) override;
+
+        static RiskLevel StaticEvaluateRisk(const EventRecord& eventRec);
     };
 }

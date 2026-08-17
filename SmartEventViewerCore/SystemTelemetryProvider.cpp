@@ -1,6 +1,6 @@
 #include "pch.h"
 #include "Core/SystemTelemetryProvider.h"
-#include "Core/TelemetryController.h"
+#include "Dto/TelemetryDtos.h"
 #include "System/Console.h"
 #include "System/Diagnostics/SystemMetrics.h"
 #include "System/Diagnostics/ActiveUserSession.h"

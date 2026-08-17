@@ -67,27 +67,44 @@ set(SMARTEVENTVIEWER_SOURCES
     SmartEventViewerCore/AnomalyEngine.cpp
     SmartEventViewerCore/SystemTelemetryProvider.cpp
     SmartEventViewerCore/LinuxJournalReader.cpp
-    SmartEventViewerCore/LocalLlmEngine.cpp
-    SmartEventViewerCore/LlmAnalysisController.cpp
-    SmartEventViewerCore/EventsController.cpp
-    SmartEventViewerCore/DiagnosticsController.cpp
-    SmartEventViewerCore/TelemetryController.cpp
-    SmartEventViewerCore/TelemetryCacheManager.cpp
-    SmartEventViewerCore/TelemetryWebSocketHandler.cpp
+    SmartEventViewerCore/WindowsEtwLogReader.cpp
+    SmartEventViewerCore/WindowsSystemTelemetryProvider.cpp
+    SmartEventViewerCore/TelemetryChangeDetector.cpp
+    SmartEventViewerCore/EventService.cpp
+    SmartEventViewerCore/TelemetryService.cpp
+    SmartEventViewerCore/AnalysisService.cpp
+    SmartEventViewerCore/DiagnosticsService.cpp
     SmartEventViewerCore/TelemetryBackgroundWorker.cpp
-    SmartEventViewerCore/EventLruCacheManager.cpp
+    SmartEventViewerCore/LocalLlmEngine.cpp
     SmartEventViewerCore/AppLoggerManager.cpp
     SmartEventViewerCore/RagVectorStore.cpp
 )
 
 set(SMARTEVENTVIEWER_HEADERS
+    Include/Dto/EventDtos.h
+    Include/Dto/TelemetryDtos.h
+    Include/Dto/AnalysisDtos.h
+    Include/Dto/DiagnosticsDtos.h
     Include/Core/EventRecord.h
     Include/Core/IEventLogReader.h
+    Include/Core/IAnomalyEngine.h
+    Include/Core/ISystemTelemetryProvider.h
+    Include/Core/ITelemetryPushNotifier.h
+    Include/Core/IEventService.h
+    Include/Core/ITelemetryService.h
+    Include/Core/IAnalysisService.h
+    Include/Core/IDiagnosticsService.h
     Include/Core/AnomalyEngine.h
-    Include/Core/EventsController.h
-    Include/Core/DiagnosticsController.h
-    Include/Core/LlmAnalysisController.h
+    Include/Core/TelemetryChangeDetector.h
+    Include/Core/EventService.h
+    Include/Core/TelemetryService.h
+    Include/Core/AnalysisService.h
+    Include/Core/DiagnosticsService.h
+    Include/Core/TelemetryBackgroundWorker.h
+    Include/Core/SystemTelemetryProvider.h
     Include/Platform/LinuxJournalReader.h
+    Include/Platform/WindowsEtwLogReader.h
+    Include/Platform/WindowsSystemTelemetryProvider.h
     Include/Ai/ILlamaModelProvider.h
     Include/Ai/LocalLlmEngine.h
     Include/Ai/LlamaMessageDtos.h
@@ -101,7 +118,23 @@ add_library(SmartEventViewerCore SHARED
     ${SMARTEVENTVIEWER_HEADERS}
 )
 
-target_compile_definitions(SmartEventViewerCore PRIVATE SMARTEVENTVIEWER_EXPORTS)
+target_include_directories(SmartEventViewerCore PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/Include
+    ${CMAKE_CURRENT_SOURCE_DIR}/SmartEventViewerCore
+    ${CMAKE_CURRENT_SOURCE_DIR}/packages/DotNetDupe.4.0.0/include
+)
+
+target_compile_definitions(SmartEventViewerCore PRIVATE
+    SMARTEVENTVIEWERCORE_EXPORTS
+)
+
+# Link llama.cpp components to SmartEventViewerCore
+target_link_libraries(SmartEventViewerCore PRIVATE
+    llama
+    ggml
+    ggml-cpu
+    ggml-base
+)
 
 target_link_directories(SmartEventViewerCore PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/vcpkg_installed/x64-windows/x64-windows/lib
@@ -109,14 +142,6 @@ target_link_directories(SmartEventViewerCore PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/vcpkg_installed/x64-windows/x64-windows/debug/lib
     ${CMAKE_CURRENT_SOURCE_DIR}/vcpkg_installed/x64-windows/debug/lib
     ${CMAKE_CURRENT_SOURCE_DIR}/packages/DotNetDupe.4.0.0/runtimes/win-x64/native
-)
-
-target_link_libraries(SmartEventViewerCore PRIVATE
-    llama
-    llama-common
-    ggml
-    ggml-cpu
-    ggml-base
 )
 
 # Platform Specific Link Libraries for DotNetDupe and Win32 APIs
@@ -130,9 +155,19 @@ endif()
 # Native C++ REST Server Executable Target (SmartEventViewerServer)
 set(SERVER_SOURCES
     SmartEventViewerServer/main.cpp
+    SmartEventViewerServer/Controllers/EventsController.cpp
+    SmartEventViewerServer/Controllers/TelemetryController.cpp
+    SmartEventViewerServer/Controllers/LlmAnalysisController.cpp
+    SmartEventViewerServer/Controllers/DiagnosticsController.cpp
+    SmartEventViewerServer/WebSockets/TelemetryWebSocketHandler.cpp
 )
 
 add_executable(SmartEventViewerServer ${SERVER_SOURCES})
+target_include_directories(SmartEventViewerServer PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/SmartEventViewerServer
+    ${CMAKE_CURRENT_SOURCE_DIR}/Include
+    ${CMAKE_CURRENT_SOURCE_DIR}/packages/DotNetDupe.4.0.0/include
+)
 target_link_libraries(SmartEventViewerServer PRIVATE SmartEventViewerCore ${DOTNETDUPE_LIB})
 
 if(WIN32)
@@ -151,9 +186,15 @@ find_library(GTEST_MAIN_LIB NAMES gtest_main gtest_maind PATHS
 
 set(TEST_SOURCES
     SmartEventViewerTests/EventRecordTests.cpp
+    SmartEventViewerTests/ServiceUnitTests.cpp
 )
 
 add_executable(SmartEventViewerTests ${TEST_SOURCES})
+target_include_directories(SmartEventViewerTests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/SmartEventViewerTests
+    ${CMAKE_CURRENT_SOURCE_DIR}/Include
+    ${CMAKE_CURRENT_SOURCE_DIR}/packages/DotNetDupe.4.0.0/include
+)
 target_link_libraries(SmartEventViewerTests PRIVATE SmartEventViewerCore ${DOTNETDUPE_LIB} ${GTEST_LIB})
 
 if(WIN32)

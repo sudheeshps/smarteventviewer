@@ -1,11 +1,8 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "Core/TelemetryBackgroundWorker.h"
-#include "Core/TelemetryCacheManager.h"
-#include "Core/TelemetryWebSocketHandler.h"
+#include "Core/TelemetryService.h"
 #include "System/Console.h"
-#include "System/SystemException.h"
 #include "System/Threading/Thread.h"
-#include <exception>
 
 using Console = DotNetDupe::System::Console;
 using Thread = DotNetDupe::System::Threading::Thread;
@@ -14,15 +11,20 @@ using ThreadStart = DotNetDupe::System::Threading::ThreadStart;
 namespace SmartEventViewer {
     bool TelemetryBackgroundWorker::s_bRunning = false;
     DotNetDupe::System::SmartPointer<Thread> TelemetryBackgroundWorker::s_spWorkerThread = nullptr;
+    DotNetDupe::System::SmartPointer<ITelemetryService> TelemetryBackgroundWorker::s_spTelemetryService = nullptr;
 
-    void TelemetryBackgroundWorker::Start() {
+    void TelemetryBackgroundWorker::Start(const DotNetDupe::System::SmartPointer<ITelemetryService>& spService) {
         if (s_bRunning) return;
         s_bRunning = true;
+        s_spTelemetryService = spService.IsNull() 
+            ? DotNetDupe::System::SmartPointer<ITelemetryService>(DotNetDupe::System::SmartPointer<TelemetryService>::NewShared()) 
+            : spService;
+
         s_spWorkerThread = DotNetDupe::System::SmartPointer<Thread>::NewShared(ThreadStart([]() {
             WorkerThreadProc();
         }));
         s_spWorkerThread->Start();
-        Console::WriteLine("[TELEMETRY_WORKER] Background sampling worker thread started via DotNetDupe::System::Threading::Thread.");
+        Console::WriteLine("[TELEMETRY_WORKER] Telemetry worker thread started.");
     }
 
     void TelemetryBackgroundWorker::Stop() {
@@ -32,65 +34,31 @@ namespace SmartEventViewer {
             s_spWorkerThread->Join(2000);
             s_spWorkerThread = nullptr;
         }
-        Console::WriteLine("[TELEMETRY_WORKER] Background sampling worker thread stopped.");
+        s_spTelemetryService = nullptr;
+        Console::WriteLine("[TELEMETRY_WORKER] Telemetry worker thread stopped.");
     }
 
     bool TelemetryBackgroundWorker::IsRunning() {
         return s_bRunning;
     }
 
-    void TelemetryBackgroundWorker::WorkerThreadProc() {
-        uint64_t uIterationCount = 0;
+    void TelemetryBackgroundWorker::Tick() {
+        if (!s_spTelemetryService.IsNull()) {
+            try {
+                s_spTelemetryService->SampleAndDetectChanges();
+            } catch (const DotNetDupe::System::Exception& ex) {
+                Console::WriteLine(String::Format("[TELEMETRY_WORKER_ERROR] Sampling error: {0}", ex.What()));
+            } catch (...) {
+                Console::WriteLine("[TELEMETRY_WORKER_ERROR] Unknown sampling error.");
+            }
+        }
+    }
 
+    void TelemetryBackgroundWorker::WorkerThreadProc() {
         while (s_bRunning) {
             Thread::Sleep(1000);
             if (!s_bRunning) break;
-
-            uIterationCount++;
-
-            // 1. Every 1 second: update Summary
-            try {
-                TelemetryCacheManager::GetInstance().GetSummary();
-                TelemetryWebSocketHandler::GetInstance()->BroadcastCategoryUpdate("summary");
-            } catch (const DotNetDupe::System::SystemException& sysEx) {
-                Console::WriteLine(String::Format("[TELEMETRY_WORKER_ERROR] Summary sampling failed (DotNetDupe SystemException): {0}", sysEx.What()));
-            } catch (const DotNetDupe::System::Exception& dupeEx) {
-                Console::WriteLine(String::Format("[TELEMETRY_WORKER_ERROR] Summary sampling failed (DotNetDupe BasicException): {0}", dupeEx.What()));
-            } catch (const std::exception& ex) {
-                Console::WriteLine(String::Format("[TELEMETRY_WORKER_ERROR] Summary sampling failed (std::exception): {0}", ex.what()));
-            } catch (...) {
-                Console::WriteLine("[TELEMETRY_WORKER_ERROR] Summary sampling failed (Unknown Exception).");
-            }
-
-            // 2. Every 1 second: update Processes
-            try {
-                TelemetryCacheManager::GetInstance().GetProcesses();
-                TelemetryWebSocketHandler::GetInstance()->BroadcastCategoryUpdate("processes");
-            } catch (const DotNetDupe::System::SystemException& sysEx) {
-                Console::WriteLine(String::Format("[TELEMETRY_WORKER_ERROR] Processes sampling failed (DotNetDupe SystemException): {0}", sysEx.What()));
-            } catch (const DotNetDupe::System::Exception& dupeEx) {
-                Console::WriteLine(String::Format("[TELEMETRY_WORKER_ERROR] Processes sampling failed (DotNetDupe BasicException): {0}", dupeEx.What()));
-            } catch (const std::exception& ex) {
-                Console::WriteLine(String::Format("[TELEMETRY_WORKER_ERROR] Processes sampling failed (std::exception): {0}", ex.what()));
-            } catch (...) {
-                Console::WriteLine("[TELEMETRY_WORKER_ERROR] Processes sampling failed (Unknown Exception).");
-            }
-
-            // 3. Every 10 seconds (every 10 iterations): update Sessions
-            if (uIterationCount % 10 == 0) {
-                try {
-                    TelemetryCacheManager::GetInstance().GetSessions();
-                    TelemetryWebSocketHandler::GetInstance()->BroadcastCategoryUpdate("sessions");
-                } catch (const DotNetDupe::System::SystemException& sysEx) {
-                    Console::WriteLine(String::Format("[TELEMETRY_WORKER_ERROR] Sessions sampling failed (DotNetDupe SystemException): {0}", sysEx.What()));
-                } catch (const DotNetDupe::System::Exception& dupeEx) {
-                    Console::WriteLine(String::Format("[TELEMETRY_WORKER_ERROR] Sessions sampling failed (DotNetDupe BasicException): {0}", dupeEx.What()));
-                } catch (const std::exception& ex) {
-                    Console::WriteLine(String::Format("[TELEMETRY_WORKER_ERROR] Sessions sampling failed (std::exception): {0}", ex.what()));
-                } catch (...) {
-                    Console::WriteLine("[TELEMETRY_WORKER_ERROR] Sessions sampling failed (Unknown Exception).");
-                }
-            }
+            Tick();
         }
     }
 }

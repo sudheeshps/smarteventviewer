@@ -1,7 +1,9 @@
 #pragma once
+
 #include "ViewerCommon.h"
 #include "System/Diagnostics/SystemMetrics.h"
 #include "System/String.h"
+#include "Dto/TelemetryDtos.h"
 
 namespace DotNetDupe {
     namespace System {
@@ -13,10 +15,6 @@ namespace DotNetDupe {
 }
 
 namespace SmartEventViewer {
-    struct SystemMetricsResponseDto;
-    struct ProcessResourceDto;
-    struct ServicesResponseDto;
-
     class SystemTelemetryProvider {
     public:
         SystemTelemetryProvider() = default;

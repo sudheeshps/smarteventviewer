@@ -1,8 +1,8 @@
 #include "pch.h"
-#include "../Include/Core/AnomalyEngine.h"
+#include "Core/AnomalyEngine.h"
 
 namespace SmartEventViewer {
-    RiskLevel AnomalyEngine::EvaluateRisk(const EventRecord& eventRec) {
+    RiskLevel AnomalyEngine::StaticEvaluateRisk(const EventRecord& eventRec) {
         if (eventRec.GetEventId() == 4625) {
             return RiskLevel::High;
         }
@@ -13,5 +13,9 @@ namespace SmartEventViewer {
             return RiskLevel::Medium;
         }
         return RiskLevel::Low;
+    }
+
+    RiskLevel AnomalyEngine::EvaluateRisk(const EventRecord& eventRec) {
+        return StaticEvaluateRisk(eventRec);
     }
 }

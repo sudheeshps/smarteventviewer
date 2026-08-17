@@ -61,7 +61,7 @@
       <AdditionalLibraryDirectories>$(SolutionDir)packages\DotNetDupe.4.0.0\runtimes\win-x64\native;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>DotNetDupe.lib;$(OutDir)SmartEventViewerCore.lib;wevtapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <EnableUAC>true</EnableUAC>
-      <UACExecutionLevel>asInvoker</UACExecutionLevel>
+      <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -84,11 +84,23 @@
       <AdditionalLibraryDirectories>$(SolutionDir)packages\DotNetDupe.4.0.0\runtimes\win-x64\native;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>DotNetDupe.lib;$(OutDir)SmartEventViewerCore.lib;wevtapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <EnableUAC>true</EnableUAC>
-      <UACExecutionLevel>asInvoker</UACExecutionLevel>
+      <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Controllers\EventsController.h" />
+    <ClInclude Include="Controllers\TelemetryController.h" />
+    <ClInclude Include="Controllers\LlmAnalysisController.h" />
+    <ClInclude Include="Controllers\DiagnosticsController.h" />
+    <ClInclude Include="WebSockets\TelemetryWebSocketHandler.h" />
+  </ItemGroup>
+  <ItemGroup>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Controllers\EventsController.cpp" />
+    <ClCompile Include="Controllers\TelemetryController.cpp" />
+    <ClCompile Include="Controllers\LlmAnalysisController.cpp" />
+    <ClCompile Include="Controllers\DiagnosticsController.cpp" />
+    <ClCompile Include="WebSockets\TelemetryWebSocketHandler.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\SmartEventViewerCore\SmartEventViewerCore.vcxproj">
@@ -100,12 +112,12 @@
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
-    <Import Project="..\packages\DotNetDupe.4.0.0\build\native\DotNetDupe.targets" Condition="Exists('..\packages\DotNetDupe.4.0.0\build\native\DotNetDupe.targets')" />
+    <Import Project="..\packages\DotNetDupe.4.0.1\build\native\DotNetDupe.targets" Condition="Exists('..\packages\DotNetDupe.4.0.1\build\native\DotNetDupe.targets')" />
   </ImportGroup>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
       <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
     </PropertyGroup>
-    <Error Condition="!Exists('..\packages\DotNetDupe.4.0.0\build\native\DotNetDupe.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\DotNetDupe.4.0.0\build\native\DotNetDupe.targets'))" />
+    <Error Condition="!Exists('..\packages\DotNetDupe.4.0.1\build\native\DotNetDupe.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\DotNetDupe.4.0.1\build\native\DotNetDupe.targets'))" />
   </Target>
 </Project>

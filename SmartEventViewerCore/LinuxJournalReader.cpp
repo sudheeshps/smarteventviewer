@@ -1,11 +1,29 @@
 #include "pch.h"
-#include "../Include/Platform/LinuxJournalReader.h"
+#include "Platform/LinuxJournalReader.h"
 
 namespace SmartEventViewer {
     LinuxJournalReader::LinuxJournalReader() = default;
 
     LinuxJournalReader::~LinuxJournalReader() {
         Close();
+    }
+
+    StringList LinuxJournalReader::GetEventChannels() {
+        StringList channels;
+        GetEventSources(channels);
+        return channels;
+    }
+
+    DotNetDupe::System::Collections::Generic::List<EventRecord> LinuxJournalReader::ReadEvents(
+        const String& sChannelName, size_t nMaxCount, size_t nStartIndex, bool bReverseOrder) {
+        (void)sChannelName;
+        (void)nStartIndex;
+        (void)bReverseOrder;
+        DotNetDupe::System::Collections::Generic::List<EventRecord> list;
+        for (size_t i = 0; i < nMaxCount; ++i) {
+            list.Add(EventRecord(1001 + static_cast<unsigned int>(i), EventLevel::Informational, "systemd-journald", sChannelName, "Linux journal entry", "2026-07-29T11:21:00Z"));
+        }
+        return list;
     }
 
     bool LinuxJournalReader::GetEventSources(StringList& outSources) {

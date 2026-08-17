@@ -19,14 +19,29 @@
 #include "Extensions/Logging/ConsoleLoggerProvider.h"
 #include "Extensions/Logging/LoggerConfiguration.h"
 #include "Extensions/Logging/LoggerTextWriter.h"
-#include "Core/EventsController.h"
-#include "Core/TelemetryController.h"
-#include "Core/LlmAnalysisController.h"
-#include "Core/DiagnosticsController.h"
-#include "Logging/AppLoggerManager.h"
 
-#include "Core/TelemetryWebSocketHandler.h"
+#include "Controllers/EventsController.h"
+#include "Controllers/TelemetryController.h"
+#include "Controllers/LlmAnalysisController.h"
+#include "Controllers/DiagnosticsController.h"
+#include "WebSockets/TelemetryWebSocketHandler.h"
+
+#include "Core/IEventService.h"
+#include "Core/EventService.h"
+#include "Core/ITelemetryService.h"
+#include "Core/TelemetryService.h"
+#include "Core/IAnalysisService.h"
+#include "Core/AnalysisService.h"
+#include "Core/IDiagnosticsService.h"
+#include "Core/DiagnosticsService.h"
+#include "Core/IEventLogReader.h"
+#include "Platform/WindowsEtwLogReader.h"
+#include "Core/ISystemTelemetryProvider.h"
+#include "Platform/WindowsSystemTelemetryProvider.h"
+#include "Core/IAnomalyEngine.h"
+#include "Core/AnomalyEngine.h"
 #include "Core/TelemetryBackgroundWorker.h"
+#include "Logging/AppLoggerManager.h"
 
 using namespace DotNetDupe::System;
 using namespace DotNetDupe::System::IO;
@@ -75,17 +90,31 @@ int main(int argc, char* argv[]) {
         logConfig.Rollover.MaxBackupFiles = 5;
 
         LogManager::Configure(logConfig);
-        
         Console::SetOut(SmartPointer<LoggerTextWriter>::NewShared("Console"));
 
+        // Register Providers, Engines and Push Notifier
+        builder.GetServices().AddSingleton<SmartEventViewer::ITelemetryPushNotifier>(SmartEventViewer::TelemetryWebSocketHandler::GetInstance());
+        builder.GetServices().AddSingleton<SmartEventViewer::IEventLogReader, SmartEventViewer::WindowsEtwLogReader>();
+        builder.GetServices().AddSingleton<SmartEventViewer::ISystemTelemetryProvider, SmartEventViewer::WindowsSystemTelemetryProvider>();
+        builder.GetServices().AddSingleton<SmartEventViewer::IAnomalyEngine, SmartEventViewer::AnomalyEngine>();
         builder.GetServices().AddSingleton<SmartEventViewer::LocalLlmEngine, SmartEventViewer::LocalLlmEngine>();
+
+        // Register Domain Services
+        builder.GetServices().AddSingleton<SmartEventViewer::IEventService, SmartEventViewer::EventService>();
+        builder.GetServices().AddSingleton<SmartEventViewer::ITelemetryService, SmartEventViewer::TelemetryService>();
+        builder.GetServices().AddSingleton<SmartEventViewer::IAnalysisService>(SmartEventViewer::AnalysisService::GetSharedInstance());
+        builder.GetServices().AddSingleton<SmartEventViewer::IDiagnosticsService, SmartEventViewer::DiagnosticsService>();
+
+        SmartEventViewer::AnalysisService::GetSharedInstance()->SetPushNotifier(SmartEventViewer::TelemetryWebSocketHandler::GetInstance());
+
+        // Register Web API Controllers
         builder.GetServices().AddTransient<SmartEventViewer::EventsController, SmartEventViewer::EventsController>();
         builder.GetServices().AddTransient<SmartEventViewer::TelemetryController, SmartEventViewer::TelemetryController>();
-        builder.GetServices().AddTransient<SmartEventViewer::LlmAnalysisController, SmartEventViewer::LlmAnalysisController, SmartEventViewer::LocalLlmEngine>();
+        builder.GetServices().AddTransient<SmartEventViewer::LlmAnalysisController, SmartEventViewer::LlmAnalysisController>();
         builder.GetServices().AddTransient<SmartEventViewer::DiagnosticsController, SmartEventViewer::DiagnosticsController>();
 
-        Console::WriteLine("[SERVER] Registering Domain Controllers: EventsController, TelemetryController, LlmAnalysisController (DI), DiagnosticsController");
-        
+        Console::WriteLine("[SERVER] Registering Domain Controllers: EventsController, TelemetryController, LlmAnalysisController, DiagnosticsController");
+
         builder.AddController<SmartEventViewer::EventsController>("/api")
             .MapGet("/channels", &SmartEventViewer::EventsController::GetChannels)
             .MapGet("/events/summary", static_cast<SmartEventViewer::EventSummaryResponseDto (SmartEventViewer::EventsController::*)()>(&SmartEventViewer::EventsController::GetEventSummary))
@@ -107,7 +136,7 @@ int main(int argc, char* argv[]) {
 
         builder.AddController<SmartEventViewer::LlmAnalysisController>("/api")
             .MapPost("/analyze", &SmartEventViewer::LlmAnalysisController::AnalyzeEvents)
-            .MapGet("/analyze/status", &SmartEventViewer::LlmAnalysisController::GetAnalyzeStatus);
+            .MapGet("/analyze/status", static_cast<SmartEventViewer::AnalyzeResponseDto (SmartEventViewer::LlmAnalysisController::*)(const DotNetDupe::System::String&)>(&SmartEventViewer::LlmAnalysisController::GetAnalyzeStatus));
 
         // 2. Build the WebApplication
         Console::WriteLine("[SERVER] Building WebApplication pipeline...");
@@ -132,7 +161,11 @@ int main(int argc, char* argv[]) {
         g_webServer->EnableStaticFiles("index.html");
 
         // 5. Start Telemetry Background Worker Thread
-        SmartEventViewer::TelemetryBackgroundWorker::Start();
+        auto spTelemetryService = SmartPointer<SmartEventViewer::ITelemetryService>(SmartPointer<SmartEventViewer::TelemetryService>::NewShared(
+            SmartPointer<SmartEventViewer::ISystemTelemetryProvider>(SmartPointer<SmartEventViewer::WindowsSystemTelemetryProvider>::NewShared()),
+            SmartPointer<SmartEventViewer::ITelemetryPushNotifier>(SmartEventViewer::TelemetryWebSocketHandler::GetInstance())
+        ));
+        SmartEventViewer::TelemetryBackgroundWorker::Start(spTelemetryService);
 
         // 6. Start the server via DotNetDupe WebAppServer framework
         Console::WriteLine("[SERVER] Starting WebAppServer static + WebAPI listener on port 8080");

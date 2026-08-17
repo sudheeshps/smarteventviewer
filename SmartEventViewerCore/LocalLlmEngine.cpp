@@ -16,9 +16,8 @@
 #include "System/Net/Http/HttpMethod.h"
 #include "System/Net/Http/FileDownloader.h"
 #include "System/Threading/AutoResetEvent.h"
-#include "Core/LlmAnalysisController.h"
-#include "Core/LlmAnalysisController.h"
-#include "Core/EventsController.h"
+#include "Dto/AnalysisDtos.h"
+#include "Dto/EventDtos.h"
 #include "System/Array.h"
 #include "System/Collections/Generic/List.h"
 #include "System/Collections/Generic/Dictionary.h"
@@ -45,7 +44,7 @@ namespace SmartEventViewer {
         crit = 0; high = 0; err = 0; warn = 0;
         for (int i = 0; i < events.GetCount(); ++i) {
             EventLevel lvl = events[i].GetLevel();
-            RiskLevel risk = AnomalyEngine::EvaluateRisk(events[i]);
+            RiskLevel risk = AnomalyEngine::StaticEvaluateRisk(events[i]);
 
             if (lvl == EventLevel::Critical || risk == RiskLevel::Critical) crit++;
             else if (risk == RiskLevel::High) high++;
@@ -74,7 +73,7 @@ namespace SmartEventViewer {
         unsigned int shown = 0;
         for (int i = 0; i < events.GetCount() && shown < 5; ++i) {
             EventLevel lvl = events[i].GetLevel();
-            RiskLevel risk = AnomalyEngine::EvaluateRisk(events[i]);
+            RiskLevel risk = AnomalyEngine::StaticEvaluateRisk(events[i]);
 
             if (lvl == EventLevel::Critical || lvl == EventLevel::Error || risk == RiskLevel::Critical || risk == RiskLevel::High) {
                 String sItem = String::Format(" â€¢ Event ID {0} [{1}]: {2}\n", events[i].GetEventId(), events[i].GetProviderName(), events[i].GetEventMessage());
@@ -310,9 +309,7 @@ namespace SmartEventViewer {
             }));
 
             if (downloader.Start()) {
-                while (!LlmAnalysisController::s_bStopWorker && !bSuccess.load()) {
-                     if (completionEvent.WaitOne(10 * 60 * 1000)) break;
-                }
+                completionEvent.WaitOne(10 * 60 * 1000);
                 return bSuccess.load();
             }
             return false;
