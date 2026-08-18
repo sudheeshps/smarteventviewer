@@ -32,6 +32,8 @@ namespace SmartEventViewer {
         bool TryGetCached(const String& sKey, unsigned long long uTtlMs, SystemMetricsResponseDto& outDto);
         void PutCached(const String& sKey, unsigned long long uTtlMs, const SystemMetricsResponseDto& dto);
         void CheckHeartbeat(unsigned long long curTimeMs);
+        void SampleSummaryAndProcesses();
+        void SampleSessionsAndServices(unsigned long long curTimeMs);
 
     public:
         TelemetryService();

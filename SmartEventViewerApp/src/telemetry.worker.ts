@@ -1,6 +1,8 @@
 // Telemetry Web Worker running in a separate background thread
 // Polls active category endpoints at 1.5s intervals and immediately on tab switch.
 
+let socket: WebSocket | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let currentAbortController: AbortController | null = null;
 let currentBaseUrl: string = '';
 let currentActiveSubTab: string = 'overview';
@@ -13,6 +15,7 @@ self.onmessage = (event: MessageEvent) => {
   if (type === 'START_POLLING') {
     currentBaseUrl = baseUrl || currentBaseUrl;
     currentActiveSubTab = subTab || currentActiveSubTab;
+    connectWebSocket();
     fetchActiveSubTab(false);
     if (pollingIntervalId !== null) clearInterval(pollingIntervalId);
     pollingIntervalId = setInterval(() => {
@@ -22,6 +25,15 @@ self.onmessage = (event: MessageEvent) => {
     if (pollingIntervalId !== null) {
       clearInterval(pollingIntervalId);
       pollingIntervalId = null;
+    }
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+    if (socket) {
+      socket.onclose = null;
+      socket.close();
+      socket = null;
     }
     if (currentAbortController) {
       currentAbortController.abort();
@@ -35,6 +47,62 @@ self.onmessage = (event: MessageEvent) => {
     }
   }
 };
+
+function connectWebSocket() {
+  if (socket) {
+    socket.onclose = null;
+    socket.close();
+    socket = null;
+  }
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+
+  const urlPrefix = currentBaseUrl || (self.location.origin.includes(':') ? self.location.origin : 'http://127.0.0.1:8080');
+  const wsUrl = urlPrefix.replace(/^http/, 'ws') + '/ws/telemetry';
+
+  try {
+    socket = new WebSocket(wsUrl);
+
+    socket.onopen = () => {
+      console.log('[TelemetryWorker] Push WebSocket connected:', wsUrl);
+    };
+
+    socket.onmessage = (event: MessageEvent) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'TELEMETRY_UPDATED') {
+          handleServerPush(msg.category);
+        }
+      } catch {
+      }
+    };
+
+    socket.onerror = () => {
+    };
+
+    socket.onclose = () => {
+      socket = null;
+      reconnectTimer = setTimeout(() => {
+        connectWebSocket();
+      }, 5000);
+    };
+  } catch {
+  }
+}
+
+function handleServerPush(category: string) {
+  if (category === 'llm_analysis') {
+    self.postMessage({ type: 'LLM_ANALYSIS_UPDATED' });
+  } else if (category === 'summary' || category === 'processes') {
+    fetchActiveSubTab(false);
+  } else if (category === 'sessions' && (currentActiveSubTab === 'sessions' || currentActiveSubTab === 'users')) {
+    fetchActiveSubTab(false);
+  } else if (category === 'services' && currentActiveSubTab === 'services') {
+    fetchActiveSubTab(false);
+  }
+}
 
 function mapProcessItem(p: Record<string, unknown>) {
   return {

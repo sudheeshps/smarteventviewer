@@ -142,25 +142,42 @@ namespace SmartEventViewer {
         }
     }
 
+    void TelemetryService::SampleSummaryAndProcesses() {
+        try {
+            auto summary = m_spProvider->QuerySummary();
+            if (m_spChangeDetector->HasSummaryChanged(summary)) {
+                m_spNotifier->BroadcastCategoryUpdate("summary");
+            }
+            auto processes = m_spProvider->QueryProcesses();
+            if (m_spChangeDetector->HaveProcessesChanged(processes)) {
+                m_spNotifier->BroadcastCategoryUpdate("processes");
+            }
+        } catch (...) {
+        }
+    }
+
+    void TelemetryService::SampleSessionsAndServices(unsigned long long curTimeMs) {
+        static unsigned long long s_lastHeavyCheckMs = 0;
+        if (curTimeMs - s_lastHeavyCheckMs < 10000) return;
+        s_lastHeavyCheckMs = curTimeMs;
+        try {
+            auto sessions = GetSessions();
+            if (m_spChangeDetector->HaveSessionsChanged(sessions)) {
+                m_spNotifier->BroadcastCategoryUpdate("sessions");
+            }
+            auto services = GetServices();
+            if (m_spChangeDetector->HaveServicesChanged(services)) {
+                m_spNotifier->BroadcastCategoryUpdate("services");
+            }
+        } catch (...) {
+        }
+    }
+
     void TelemetryService::SampleAndDetectChanges() {
-        unsigned long long curTimeMs = GetCurrentTickMs();
         if (m_spNotifier.IsNull() || m_spChangeDetector.IsNull()) return;
-        auto summary = m_spProvider->QuerySummary();
-        if (m_spChangeDetector->HasSummaryChanged(summary)) {
-            m_spNotifier->BroadcastCategoryUpdate("summary");
-        }
-        auto processes = m_spProvider->QueryProcesses();
-        if (m_spChangeDetector->HaveProcessesChanged(processes)) {
-            m_spNotifier->BroadcastCategoryUpdate("processes");
-        }
-        auto sessions = GetSessions();
-        if (m_spChangeDetector->HaveSessionsChanged(sessions)) {
-            m_spNotifier->BroadcastCategoryUpdate("sessions");
-        }
-        auto services = GetServices();
-        if (m_spChangeDetector->HaveServicesChanged(services)) {
-            m_spNotifier->BroadcastCategoryUpdate("services");
-        }
+        unsigned long long curTimeMs = GetCurrentTickMs();
+        SampleSummaryAndProcesses();
+        SampleSessionsAndServices(curTimeMs);
         CheckHeartbeat(curTimeMs);
     }
 }
