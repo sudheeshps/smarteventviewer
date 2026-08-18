@@ -1,12 +1,11 @@
 // Telemetry Web Worker running in a separate background thread
-// Connects to WebSocket /ws/telemetry for real-time server push events
-// and pulls endpoint data strictly when notified that its category updated.
+// Polls active category endpoints at 1.5s intervals and immediately on tab switch.
 
-let socket: WebSocket | null = null;
 let currentAbortController: AbortController | null = null;
 let currentBaseUrl: string = '';
 let currentActiveSubTab: string = 'overview';
-let reconnectTimeoutId: ReturnType<typeof setTimeout> | null = null;
+let pollingIntervalId: ReturnType<typeof setInterval> | null = null;
+let isFetching: boolean = false;
 
 self.onmessage = (event: MessageEvent) => {
   const { type, baseUrl, subTab } = event.data;
@@ -14,162 +13,143 @@ self.onmessage = (event: MessageEvent) => {
   if (type === 'START_POLLING') {
     currentBaseUrl = baseUrl || currentBaseUrl;
     currentActiveSubTab = subTab || currentActiveSubTab;
-    connectWebSocket();
-    fetchActiveSubTab();
+    fetchActiveSubTab(false);
+    if (pollingIntervalId !== null) clearInterval(pollingIntervalId);
+    pollingIntervalId = setInterval(() => {
+      fetchActiveSubTab(false);
+    }, 2000);
   } else if (type === 'STOP_POLLING') {
-    disconnectWebSocket();
+    if (pollingIntervalId !== null) {
+      clearInterval(pollingIntervalId);
+      pollingIntervalId = null;
+    }
+    if (currentAbortController) {
+      currentAbortController.abort();
+      currentAbortController = null;
+    }
+    isFetching = false;
   } else if (type === 'CHANGE_SUBTAB') {
-    currentActiveSubTab = subTab;
-    fetchActiveSubTab();
+    if (currentActiveSubTab !== subTab) {
+      currentActiveSubTab = subTab;
+      fetchActiveSubTab(true);
+    }
   }
 };
 
-function disconnectWebSocket() {
-  if (reconnectTimeoutId !== null) {
-    clearTimeout(reconnectTimeoutId);
-    reconnectTimeoutId = null;
+function mapProcessItem(p: Record<string, unknown>) {
+  return {
+    processId: (p.processId ?? p.ProcessId ?? 0) as number,
+    name: (p.name ?? p.Name ?? '') as string,
+    path: (p.path ?? p.Path ?? '') as string,
+    commandLine: (p.commandLine ?? p.CommandLine ?? '') as string,
+    cpuUsagePercent: (p.cpuUsagePercent ?? p.CpuUsagePercent ?? 0) as number,
+    memoryUsageMB: (p.memoryUsageMB ?? p.MemoryUsageMB ?? 0) as number,
+    networkReadBytes: (p.networkReadBytes ?? p.NetworkReadBytes ?? 0) as number,
+    networkWriteBytes: (p.networkWriteBytes ?? p.NetworkWriteBytes ?? 0) as number,
+    openPorts: (p.openPorts ?? p.OpenPorts ?? '-') as string,
+    connectionEstablished: (p.connectionEstablished ?? p.ConnectionEstablished ?? false) as boolean,
+  };
+}
+
+async function fetchActiveSubTab(forceAbort: boolean = false) {
+  if (isFetching && !forceAbort) {
+    return;
   }
-  if (socket) {
-    socket.onclose = null;
-    socket.close();
-    socket = null;
-  }
-  if (currentAbortController) {
+
+  if (forceAbort && currentAbortController) {
     currentAbortController.abort();
     currentAbortController = null;
   }
-}
 
-function connectWebSocket() {
-  disconnectWebSocket();
-
-  const urlPrefix = currentBaseUrl ? currentBaseUrl : (self.location.origin.includes(':') ? self.location.origin : 'http://127.0.0.1:8080');
-  const wsUrl = urlPrefix.replace(/^http/, 'ws') + '/ws/telemetry';
-
-  try {
-    socket = new WebSocket(wsUrl);
-
-    socket.onopen = () => {
-      console.log('[TelemetryWorker] WebSocket connected to', wsUrl);
-    };
-
-    socket.onmessage = (messageEvent: MessageEvent) => {
-      try {
-        const msg = JSON.parse(messageEvent.data);
-        if (msg.type === 'TELEMETRY_UPDATED') {
-          handleServerPush(msg.category);
-        }
-      } catch (err) {
-        console.warn('[TelemetryWorker] Invalid WS message format:', err);
-      }
-    };
-
-    socket.onerror = (err) => {
-      console.warn('[TelemetryWorker] WebSocket error:', err);
-    };
-
-    socket.onclose = () => {
-      console.log('[TelemetryWorker] WebSocket connection closed. Reconnecting in 3s...');
-      socket = null;
-      reconnectTimeoutId = setTimeout(() => {
-        connectWebSocket();
-      }, 3000);
-    };
-  } catch (err) {
-    console.warn('[TelemetryWorker] Failed to create WebSocket connection:', err);
-  }
-}
-
-function handleServerPush(updatedCategory: string) {
-  if (updatedCategory === 'llm_analysis') {
-    self.postMessage({ type: 'LLM_ANALYSIS_UPDATED' });
-  } else if (updatedCategory === 'summary' && currentActiveSubTab === 'overview') {
-    fetchActiveSubTab();
-  } else if (updatedCategory === 'processes' && currentActiveSubTab === 'processes') {
-    fetchActiveSubTab();
-  } else if (updatedCategory === 'sessions' && (currentActiveSubTab === 'sessions' || currentActiveSubTab === 'users')) {
-    fetchActiveSubTab();
-  } else if (updatedCategory === 'services' && currentActiveSubTab === 'services') {
-    fetchActiveSubTab();
-  }
-}
-
-async function fetchActiveSubTab() {
-  if (currentAbortController) {
-    currentAbortController.abort();
-  }
-
+  isFetching = true;
   currentAbortController = new AbortController();
   const signal = currentAbortController.signal;
   const urlPrefix = currentBaseUrl ? currentBaseUrl : (self.location.origin.includes(':') ? self.location.origin : 'http://127.0.0.1:8080');
 
   try {
     if (currentActiveSubTab === 'overview') {
-      // Progressive loading: Fetch CPU, Memory, Disk, Network independently so available info displays immediately
-      fetch(`${urlPrefix}/api/metrics/cpu`, { signal }).then(r => r.ok && r.json()).then(data => {
-        if (data) self.postMessage({ type: 'METRICS_CPU_UPDATED', payload: (data.cpuUsagePercent ?? data.CpuUsagePercent ?? 0) });
-      }).catch(() => {});
-
-      fetch(`${urlPrefix}/api/metrics/memory`, { signal }).then(r => r.ok && r.json()).then(data => {
-        if (data) self.postMessage({
-          type: 'METRICS_MEMORY_UPDATED',
-          payload: {
-            memoryUsagePercent: data.memoryUsagePercent ?? data.MemoryUsagePercent ?? 0,
-            memoryTotalMB: data.memoryTotalMB ?? data.MemoryTotalMB ?? 0,
-            memoryUsedMB: data.memoryUsedMB ?? data.MemoryUsedMB ?? 0,
-          }
-        });
-      }).catch(() => {});
-
-      fetch(`${urlPrefix}/api/metrics/disk`, { signal }).then(r => r.ok && r.json()).then(data => {
-        if (data) self.postMessage({
-          type: 'METRICS_DISK_UPDATED',
-          payload: {
-            diskReadMBps: data.diskReadMBps ?? data.DiskReadMBps ?? 0,
-            diskWriteMBps: data.diskWriteMBps ?? data.DiskWriteMBps ?? 0,
-          }
-        });
-      }).catch(() => {});
-
-      fetch(`${urlPrefix}/api/metrics/network`, { signal }).then(r => r.ok && r.json()).then(data => {
-        if (data) self.postMessage({ type: 'METRICS_NETWORK_UPDATED', payload: (data.networkUsageMbps ?? data.NetworkUsageMbps ?? 0) });
-      }).catch(() => {});
-
       const resp = await fetch(`${urlPrefix}/api/metrics/summary`, { signal });
       if (resp.ok) {
         const data = await resp.json();
-        self.postMessage({ type: 'METRICS_SUMMARY_UPDATED', payload: data });
+        const rawProcs = (data.topProcesses || data.TopProcesses || []) as Array<Record<string, unknown>>;
+        const mappedProcs = rawProcs.map(mapProcessItem);
+        self.postMessage({
+          type: 'METRICS_SUMMARY_UPDATED',
+          payload: {
+            ...data,
+            topProcesses: mappedProcs,
+          }
+        });
       }
     } else if (currentActiveSubTab === 'processes') {
       const resp = await fetch(`${urlPrefix}/api/metrics/processes`, { signal });
       if (resp.ok) {
         const data = await resp.json();
         const rawList = Array.isArray(data) ? data : (data.topProcesses || data.TopProcesses || []);
-        const processesList = rawList.map((p: Record<string, unknown>) => ({
-          processId: (p.processId ?? p.ProcessId ?? 0) as number,
-          name: (p.name ?? p.Name ?? '') as string,
-          path: (p.path ?? p.Path ?? '') as string,
-          commandLine: (p.commandLine ?? p.CommandLine ?? '') as string,
-          cpuUsagePercent: (p.cpuUsagePercent ?? p.CpuUsagePercent ?? 0) as number,
-          memoryUsageMB: (p.memoryUsageMB ?? p.MemoryUsageMB ?? 0) as number,
-          networkReadBytes: (p.networkReadBytes ?? p.NetworkReadBytes ?? 0) as number,
-          networkWriteBytes: (p.networkWriteBytes ?? p.NetworkWriteBytes ?? 0) as number,
-          openPorts: (p.openPorts ?? p.OpenPorts ?? '-') as string,
-          connectionEstablished: (p.connectionEstablished ?? p.ConnectionEstablished ?? false) as boolean,
-        }));
+        const processesList = (rawList as Array<Record<string, unknown>>).map(mapProcessItem);
         self.postMessage({ type: 'METRICS_PROCESSES_UPDATED', payload: processesList });
       }
     } else if (currentActiveSubTab === 'sessions' || currentActiveSubTab === 'users') {
       const resp = await fetch(`${urlPrefix}/api/metrics/sessions`, { signal });
       if (resp.ok) {
         const data = await resp.json();
-        self.postMessage({ type: 'METRICS_SESSIONS_UPDATED', payload: data });
+        const rawActive = (data.activeUserSessions || data.ActiveUserSessions || []) as Array<Record<string, unknown>>;
+        const activeUserSessions = rawActive.map(s => ({
+          username: (s.username ?? s.Username ?? '') as string,
+          privilege: (s.privilege ?? s.Privilege ?? '') as string,
+          loginTimestamp: (s.loginTimestamp ?? s.LoginTimestamp ?? '') as string,
+          logoutTimestamp: (s.logoutTimestamp ?? s.LogoutTimestamp ?? '') as string,
+          isActive: (s.isActive ?? s.IsActive ?? true) as boolean,
+        }));
+
+        const rawExpired = (data.expiredUserSessions || data.ExpiredUserSessions || []) as Array<Record<string, unknown>>;
+        const expiredUserSessions = rawExpired.map(s => ({
+          username: (s.username ?? s.Username ?? '') as string,
+          privilege: (s.privilege ?? s.Privilege ?? '') as string,
+          loginTimestamp: (s.loginTimestamp ?? s.LoginTimestamp ?? '') as string,
+          logoutTimestamp: (s.logoutTimestamp ?? s.LogoutTimestamp ?? '') as string,
+          isActive: (s.isActive ?? s.IsActive ?? false) as boolean,
+        }));
+
+        const rawUsers = (data.systemUsers || data.SystemUsers || []) as Array<Record<string, unknown>>;
+        const systemUsers = rawUsers.map(u => ({
+          username: (u.username ?? u.Username ?? '') as string,
+          domain: (u.domain ?? u.Domain ?? '') as string,
+          sidOrUid: (u.sidOrUid ?? u.SidOrUid ?? '') as string,
+          userClass: (u.userClass ?? u.UserClass ?? 'Normal') as string,
+          isDisabled: (u.isDisabled ?? u.IsDisabled ?? false) as boolean,
+          isAccountLocked: (u.isAccountLocked ?? u.IsAccountLocked ?? false) as boolean,
+          groups: (u.groups ?? u.Groups ?? []) as string[],
+          permissions: (u.permissions ?? u.Permissions ?? []) as string[],
+        }));
+
+        const rawRdp = (data.rdpSessions || data.RdpSessions || []) as Array<Record<string, unknown>>;
+        const rdpSessions = rawRdp.map(r => ({
+          sessionId: (r.sessionId ?? r.SessionId ?? 0) as number,
+          sessionName: (r.sessionName ?? r.SessionName ?? '') as string,
+          userName: (r.userName ?? r.UserName ?? '') as string,
+          domainName: (r.domainName ?? r.DomainName ?? '') as string,
+          clientName: (r.clientName ?? r.ClientName ?? '') as string,
+          clientIpAddress: (r.clientIpAddress ?? r.ClientIpAddress ?? '') as string,
+          state: (r.state ?? r.State ?? 'Unknown') as string,
+          isRdpSession: (r.isRdpSession ?? r.IsRdpSession ?? false) as boolean,
+        }));
+
+        self.postMessage({
+          type: 'METRICS_SESSIONS_UPDATED',
+          payload: {
+            activeUserSessions,
+            expiredUserSessions,
+            systemUsers,
+            rdpSessions,
+          }
+        });
       }
     } else if (currentActiveSubTab === 'services') {
       const resp = await fetch(`${urlPrefix}/api/metrics/services`, { signal });
       if (resp.ok) {
         const data = await resp.json();
-        const rawList = data.services || data.Services || (Array.isArray(data) ? data : []);
+        const rawList = (data.services || data.Services || (Array.isArray(data) ? data : [])) as Array<Record<string, unknown>>;
         const servicesList = rawList.map((s: Record<string, unknown>) => ({
           serviceName: (s.serviceName ?? s.ServiceName ?? '') as string,
           displayName: (s.displayName ?? s.DisplayName ?? '') as string,
@@ -188,5 +168,6 @@ async function fetchActiveSubTab() {
     }
   } finally {
     currentAbortController = null;
+    isFetching = false;
   }
 }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchApiChannels, fetchApiEvents, fetchEventSummary } from '../apiClient';
+import { fetchApiChannels, fetchApiEvents, fetchEventSummary, formatTo12Hour } from '../apiClient';
 import type { EventSummaryData } from '../apiClient';
 import { ServerLogsViewer } from './ServerLogsViewer';
 import type { SystemMetricsData, EventsData } from '../apiClient';
@@ -38,61 +38,62 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
   };
 
   // System Hardware Telemetry & User Sessions State
-  const [metrics, setMetrics] = useState<SystemMetricsData | null>(null);
+  const defaultMetrics: SystemMetricsData = {
+    cpuUsagePercent: 0,
+    memoryUsagePercent: 0,
+    memoryUsedMB: 0,
+    memoryTotalMB: 0,
+    diskUsagePercent: 0,
+    diskReadMBps: 0,
+    diskWriteMBps: 0,
+    networkUsageMbps: 0,
+    topProcesses: [],
+    activeUserSessions: [],
+    expiredUserSessions: [],
+    systemUsers: [],
+    rdpSessions: [],
+    systemServices: [],
+  };
+
+  const [metrics, setMetrics] = useState<SystemMetricsData>(defaultMetrics);
   const [serviceSearchQuery, setServiceSearchQuery] = useState<string>('');
 
   const workerRef = React.useRef<Worker | null>(null);
 
   useEffect(() => {
-    fetchDashboardChannelsAndEvents(window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080');
+    const baseUrl = window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080';
+    fetchDashboardChannelsAndEvents(baseUrl);
     setIsLoading(false);
 
-    const baseUrl = window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080';
     const worker = new Worker(new URL('../telemetry.worker.ts', import.meta.url), { type: 'module' });
     workerRef.current = worker;
 
     worker.onmessage = (event: MessageEvent) => {
       const { type, payload } = event.data;
-      const initialMetrics = {
-        cpuUsagePercent: 0,
-        memoryUsagePercent: 0,
-        memoryUsedMB: 0,
-        memoryTotalMB: 0,
-        diskUsagePercent: 0,
-        diskReadMBps: 0,
-        diskWriteMBps: 0,
-        networkUsageMbps: 0,
-        topProcesses: [],
-        activeUserSessions: [],
-        expiredUserSessions: [],
-        systemUsers: [],
-        rdpSessions: [],
-        systemServices: [],
-      };
 
       if (type === 'METRICS_CPU_UPDATED') {
         setMetrics((prev) => ({
-          ...(prev || initialMetrics),
+          ...(prev || defaultMetrics),
           cpuUsagePercent: payload,
         }));
       } else if (type === 'METRICS_MEMORY_UPDATED') {
         setMetrics((prev) => ({
-          ...(prev || initialMetrics),
+          ...(prev || defaultMetrics),
           ...payload,
         }));
       } else if (type === 'METRICS_DISK_UPDATED') {
         setMetrics((prev) => ({
-          ...(prev || initialMetrics),
+          ...(prev || defaultMetrics),
           ...payload,
         }));
       } else if (type === 'METRICS_NETWORK_UPDATED') {
         setMetrics((prev) => ({
-          ...(prev || initialMetrics),
+          ...(prev || defaultMetrics),
           networkUsageMbps: payload,
         }));
       } else if (type === 'METRICS_SUMMARY_UPDATED') {
         setMetrics((prev) => ({
-          ...(prev || initialMetrics),
+          ...(prev || defaultMetrics),
           ...payload,
           topProcesses: (payload.topProcesses && payload.topProcesses.length > 0) ? payload.topProcesses : (prev?.topProcesses || []),
           activeUserSessions: (payload.activeUserSessions && payload.activeUserSessions.length > 0) ? payload.activeUserSessions : (prev?.activeUserSessions || []),
@@ -102,18 +103,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
         }));
       } else if (type === 'METRICS_PROCESSES_UPDATED') {
         setMetrics((prev) => ({
-          ...(prev || initialMetrics),
+          ...(prev || defaultMetrics),
           topProcesses: Array.isArray(payload) && payload.length > 0 ? payload : (prev?.topProcesses || []),
         }));
       } else if (type === 'METRICS_SESSIONS_UPDATED') {
         setMetrics((prev) => ({
-          ...(prev || initialMetrics),
+          ...(prev || defaultMetrics),
           ...payload,
           topProcesses: prev?.topProcesses || [],
         }));
       } else if (type === 'METRICS_SERVICES_UPDATED') {
         setMetrics((prev) => ({
-          ...(prev || initialMetrics),
+          ...(prev || defaultMetrics),
           systemServices: payload,
         }));
       }
@@ -185,7 +186,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
         level: ((e.level as string) || 'Information') as EventDto['level'],
         risk: ((e.risk as string) || 'Low') as EventDto['risk'],
         provider: (e.provider as string) || 'Security',
-        time: (e.time as string) || '',
+        time: formatTo12Hour(e.time as string),
         desc: (e.message as string) || `Event #${e.id} in Security`,
       }));
       setRecentEvents(mappedEvents);
@@ -687,7 +688,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
                     <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                       <td style={{ padding: '5px', fontWeight: 700, color: '#f8fafc' }}>{s.username}</td>
                       <td style={{ padding: '5px', color: '#fbbf24', fontWeight: 600 }}>{s.privilege}</td>
-                      <td style={{ padding: '5px' }}>{s.loginTimestamp}</td>
+                      <td style={{ padding: '5px' }}>{formatTo12Hour(s.loginTimestamp)}</td>
                       <td style={{ padding: '5px' }}>
                         <span style={{ background: 'rgba(74,222,128,0.2)', color: '#4ade80', padding: '1px 6px', borderRadius: '3px', fontWeight: 700, fontSize: '0.62rem' }}>
                           ACTIVE
@@ -718,8 +719,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
                     <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                       <td style={{ padding: '5px', fontWeight: 700, color: '#94a3b8' }}>{s.username}</td>
                       <td style={{ padding: '5px', color: '#94a3b8' }}>{s.privilege}</td>
-                      <td style={{ padding: '5px' }}>{s.loginTimestamp}</td>
-                      <td style={{ padding: '5px', color: '#f87171', fontWeight: 600 }}>{s.logoutTimestamp}</td>
+                      <td style={{ padding: '5px' }}>{formatTo12Hour(s.loginTimestamp)}</td>
+                      <td style={{ padding: '5px', color: '#f87171', fontWeight: 600 }}>{formatTo12Hour(s.logoutTimestamp)}</td>
                     </tr>
                   ))}
                 </tbody>

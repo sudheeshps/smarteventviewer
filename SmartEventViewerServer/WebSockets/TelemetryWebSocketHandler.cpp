@@ -2,11 +2,6 @@
 #include "Logging/AppLoggerManager.h"
 
 namespace SmartEventViewer {
-    DotNetDupe::System::SmartPointer<TelemetryWebSocketHandler> TelemetryWebSocketHandler::GetInstance() {
-        static auto s_instance = DotNetDupe::System::SmartPointer<TelemetryWebSocketHandler>::NewShared();
-        return s_instance;
-    }
-
     void TelemetryWebSocketHandler::OnConnected(DotNetDupe::System::SmartPointer<DotNetDupe::WebAppCore::WebSockets::WebSocketContext> pContext) {
         LockCS lock(m_csLock);
         m_clients.Add(pContext);

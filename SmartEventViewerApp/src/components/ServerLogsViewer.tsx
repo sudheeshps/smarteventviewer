@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { fetchApiServerLogs, fetchApiLogFormat } from '../apiClient';
 import type { LogColumnFormat, LogRecordData } from '../apiClient';
+import { formatUtcToLocal } from '../utils/timeUtils';
 
 interface ServerLogsViewerProps {
   onClose?: () => void;
@@ -193,8 +194,8 @@ export const ServerLogsViewer: React.FC<ServerLogsViewerProps> = ({ onClose }) =
                       const recObj = rec as unknown as Record<string, unknown>;
                       const rawVal = recObj[col.key] ?? recObj[col.key.toLowerCase()] ?? recObj[col.key.toUpperCase()];
                       let cellVal = (rawVal !== undefined && rawVal !== null && rawVal !== '') ? String(rawVal) : '-';
-                      if (col.key === 'timestamp' && (!rawVal || rawVal === '')) {
-                        cellVal = '-';
+                      if (col.key === 'timestamp' || col.type === 'timestamp') {
+                        cellVal = (!rawVal || rawVal === '' || rawVal === '-') ? '-' : formatUtcToLocal(rawVal as string);
                       }
 
                       return (

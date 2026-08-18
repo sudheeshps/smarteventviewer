@@ -16,11 +16,13 @@ namespace SmartEventViewer {
 
         SMARTEVENTVIEWER_API StringList GetEventChannels() override;
         SMARTEVENTVIEWER_API unsigned long long GetChannelEventCount(const String& sChannelName) override;
+        SMARTEVENTVIEWER_API bool GetChannelLevelCounts(const String& sChannelName, EventLevelCounts& outCounts) override;
         SMARTEVENTVIEWER_API DotNetDupe::System::Collections::Generic::List<EventRecord> ReadEvents(
             const String& sChannelName,
             size_t nMaxCount,
             size_t nStartIndex = 0,
-            bool bReverseOrder = true) override;
+            bool bReverseOrder = true,
+            EventLevel eLevel = EventLevel::LogAlways) override;
 
         SMARTEVENTVIEWER_API bool GetEventSources(StringList& outSources) override;
         SMARTEVENTVIEWER_API bool OpenLog(const String& sChannelName) override;

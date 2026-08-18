@@ -1,3 +1,5 @@
+export { formatUtcToLocal, formatTo12Hour } from './utils/timeUtils';
+
 export interface ChannelData {
   channels?: string[];
 }

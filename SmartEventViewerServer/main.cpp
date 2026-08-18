@@ -93,19 +93,24 @@ int main(int argc, char* argv[]) {
         Console::SetOut(SmartPointer<LoggerTextWriter>::NewShared("Console"));
 
         // Register Providers, Engines and Push Notifier
-        builder.GetServices().AddSingleton<SmartEventViewer::ITelemetryPushNotifier>(SmartEventViewer::TelemetryWebSocketHandler::GetInstance());
+        auto spPushNotifier = SmartPointer<SmartEventViewer::TelemetryWebSocketHandler>::NewShared();
+        builder.GetServices().AddSingleton<SmartEventViewer::ITelemetryPushNotifier>(spPushNotifier);
         builder.GetServices().AddSingleton<SmartEventViewer::IEventLogReader, SmartEventViewer::WindowsEtwLogReader>();
         builder.GetServices().AddSingleton<SmartEventViewer::ISystemTelemetryProvider, SmartEventViewer::WindowsSystemTelemetryProvider>();
         builder.GetServices().AddSingleton<SmartEventViewer::IAnomalyEngine, SmartEventViewer::AnomalyEngine>();
         builder.GetServices().AddSingleton<SmartEventViewer::LocalLlmEngine, SmartEventViewer::LocalLlmEngine>();
 
         // Register Domain Services
+        auto spTelemetryService = SmartPointer<SmartEventViewer::ITelemetryService>(SmartPointer<SmartEventViewer::TelemetryService>::NewShared(
+            SmartPointer<SmartEventViewer::ISystemTelemetryProvider>(SmartPointer<SmartEventViewer::WindowsSystemTelemetryProvider>::NewShared()),
+            spPushNotifier
+        ));
         builder.GetServices().AddSingleton<SmartEventViewer::IEventService, SmartEventViewer::EventService>();
-        builder.GetServices().AddSingleton<SmartEventViewer::ITelemetryService, SmartEventViewer::TelemetryService>();
+        builder.GetServices().AddSingleton<SmartEventViewer::ITelemetryService>(spTelemetryService);
         builder.GetServices().AddSingleton<SmartEventViewer::IAnalysisService>(SmartEventViewer::AnalysisService::GetSharedInstance());
         builder.GetServices().AddSingleton<SmartEventViewer::IDiagnosticsService, SmartEventViewer::DiagnosticsService>();
 
-        SmartEventViewer::AnalysisService::GetSharedInstance()->SetPushNotifier(SmartEventViewer::TelemetryWebSocketHandler::GetInstance());
+        SmartEventViewer::AnalysisService::GetSharedInstance()->SetPushNotifier(spPushNotifier);
 
         // Register Web API Controllers
         builder.GetServices().AddTransient<SmartEventViewer::EventsController, SmartEventViewer::EventsController>();
@@ -143,7 +148,10 @@ int main(int argc, char* argv[]) {
         g_app = builder.Build();
 
         // 3. Map WebSocket for Telemetry Push
-        g_app->MapWebSocket("/ws/telemetry", SmartEventViewer::TelemetryWebSocketHandler::GetInstance());
+        g_app->MapWebSocket("/ws/telemetry", spPushNotifier);
+        g_app->MapWebSocket("ws/telemetry", spPushNotifier);
+        g_app->MapWebSocket("/ws/telemetry/", spPushNotifier);
+        g_app->MapWebSocket("ws/telemetry/", spPushNotifier);
         Console::WriteLine("[SERVER] Mapped WebSocket endpoint: /ws/telemetry");
 
         // 3c. Setup Web API Controllers
@@ -161,10 +169,6 @@ int main(int argc, char* argv[]) {
         g_webServer->EnableStaticFiles("index.html");
 
         // 5. Start Telemetry Background Worker Thread
-        auto spTelemetryService = SmartPointer<SmartEventViewer::ITelemetryService>(SmartPointer<SmartEventViewer::TelemetryService>::NewShared(
-            SmartPointer<SmartEventViewer::ISystemTelemetryProvider>(SmartPointer<SmartEventViewer::WindowsSystemTelemetryProvider>::NewShared()),
-            SmartPointer<SmartEventViewer::ITelemetryPushNotifier>(SmartEventViewer::TelemetryWebSocketHandler::GetInstance())
-        ));
         SmartEventViewer::TelemetryBackgroundWorker::Start(spTelemetryService);
 
         // 6. Start the server via DotNetDupe WebAppServer framework

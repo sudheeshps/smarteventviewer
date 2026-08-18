@@ -50,13 +50,37 @@ namespace SmartEventViewer {
                 return 0ULL;
             }
 
+            bool GetChannelLevelCounts(const String& sChannelName, EventLevelCounts& outCounts) override {
+                LockCS lock(m_csLock);
+                DotNetDupe::System::Collections::Generic::List<EventRecord> evts;
+                if (!m_eventsByChannel.TryGetValue(sChannelName, evts)) return false;
+                outCounts = EventLevelCounts{};
+                for (int i = 0; i < evts.GetCount(); ++i) {
+                    auto lvl = evts[i].GetLevel();
+                    if (lvl == EventLevel::Critical) outCounts.CriticalCount++;
+                    else if (lvl == EventLevel::Error) outCounts.ErrorCount++;
+                    else if (lvl == EventLevel::Warning) outCounts.WarningCount++;
+                    else if (lvl == EventLevel::Informational) outCounts.InfoCount++;
+                    else if (lvl == EventLevel::Verbose) outCounts.VerboseCount++;
+                }
+                return true;
+            }
+
             DotNetDupe::System::Collections::Generic::List<EventRecord> ReadEvents(
-                const String& sChannelName, size_t nMaxCount, size_t nStartIndex = 0, bool bReverseOrder = true) override {
+                const String& sChannelName, size_t nMaxCount, size_t nStartIndex = 0, bool bReverseOrder = true, EventLevel eLevel = EventLevel::LogAlways) override {
                 LockCS lock(m_csLock);
                 DotNetDupe::System::Collections::Generic::List<EventRecord> results;
                 DotNetDupe::System::Collections::Generic::List<EventRecord> evts;
                 if (m_eventsByChannel.TryGetValue(sChannelName, evts)) {
-                    SliceEvents(evts, nMaxCount, nStartIndex, bReverseOrder, results);
+                    if (eLevel != EventLevel::LogAlways) {
+                        DotNetDupe::System::Collections::Generic::List<EventRecord> filtered;
+                        for (int i = 0; i < evts.GetCount(); ++i) {
+                            if (evts[i].GetLevel() == eLevel) filtered.Add(evts[i]);
+                        }
+                        SliceEvents(filtered, nMaxCount, nStartIndex, bReverseOrder, results);
+                    } else {
+                        SliceEvents(evts, nMaxCount, nStartIndex, bReverseOrder, results);
+                    }
                 }
                 return results;
             }

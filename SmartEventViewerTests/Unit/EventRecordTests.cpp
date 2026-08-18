@@ -278,3 +278,32 @@ TEST(EventRecordTest, GivenSecurityChannel_WhenGetSummaryAndLevelEventsQueried_T
         Console::WriteLine("[SECURITY_LOG] Access restricted in non-elevated execution: {0}", ex.What());
     }
 }
+
+// Positive Test for EventRecord with DateTime
+TEST(EventRecordTest, GivenDateTime_WhenEventRecordCreated_ThenGetDateTimeReturnsMatchingTime) {
+    DotNetDupe::System::DateTime dt(2026, 8, 18, 10, 0, 0, DotNetDupe::System::DateTimeKind::Local);
+    SmartEventViewer::EventRecord evt(100, SmartEventViewer::EventLevel::Informational, "Kernel", "System", "Test message", dt);
+    EXPECT_EQ(evt.GetEventId(), 100U);
+    EXPECT_EQ(evt.GetDateTime().GetYear(), 2026);
+    EXPECT_EQ(evt.GetDateTime().GetMonth(), 8);
+    EXPECT_EQ(evt.GetDateTime().GetDay(), 18);
+    EXPECT_FALSE(evt.GetTimeCreated().IsEmpty());
+    Console::WriteLine("[PASS] GivenDateTime_WhenEventRecordCreated_ThenGetDateTimeReturnsMatchingTime");
+}
+
+// Positive Test for ETW UTC to Local Conversion
+TEST(EventRecordTest, GivenUtcEtwEvent_WhenFromEtwEventCalled_ThenConvertsToLocalTime) {
+    DotNetDupe::System::Diagnostics::EtwEvent etwEvt;
+    etwEvt.iEventId = 4624;
+    etwEvt.iLevel = 4;
+    etwEvt.sProviderName = "Microsoft-Windows-Security-Auditing";
+    etwEvt.sChannelName = "Security";
+    etwEvt.sMessage = "Logon success";
+    etwEvt.dtTimeCreated = DotNetDupe::System::DateTimeOffset::UtcNow();
+
+    auto record = SmartEventViewer::EventRecord::FromEtwEvent(etwEvt, "Security");
+    EXPECT_EQ(record.GetEventId(), 4624U);
+    EXPECT_FALSE(record.GetTimeCreated().IsEmpty());
+    EXPECT_EQ(record.GetDateTime().GetKind(), DotNetDupe::System::DateTimeKind::Local);
+    Console::WriteLine("[PASS] GivenUtcEtwEvent_WhenFromEtwEventCalled_ThenConvertsToLocalTime: {0}", record.GetTimeCreated());
+}

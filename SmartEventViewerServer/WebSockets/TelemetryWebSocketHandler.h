@@ -21,8 +21,6 @@ namespace SmartEventViewer {
         TelemetryWebSocketHandler() = default;
         ~TelemetryWebSocketHandler() override = default;
 
-        static DotNetDupe::System::SmartPointer<TelemetryWebSocketHandler> GetInstance();
-
         void OnConnected(DotNetDupe::System::SmartPointer<DotNetDupe::WebAppCore::WebSockets::WebSocketContext> pContext) override;
         void OnMessage(DotNetDupe::System::SmartPointer<DotNetDupe::WebAppCore::WebSockets::WebSocketContext> pContext, const DotNetDupe::System::String& message) override;
         void OnDisconnected(DotNetDupe::System::SmartPointer<DotNetDupe::WebAppCore::WebSockets::WebSocketContext> pContext) override;

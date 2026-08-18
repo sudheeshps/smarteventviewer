@@ -5,6 +5,8 @@
 namespace SmartEventViewer {
     using String = DotNetDupe::System::String;
     using Convert = DotNetDupe::System::Convert;
+    using DateTime = DotNetDupe::System::DateTime;
+    using DateTimeKind = DotNetDupe::System::DateTimeKind;
 
     static EventLevel LevelFromInt(int iLevel) {
         if (iLevel == 1) return EventLevel::Critical;
@@ -59,13 +61,22 @@ namespace SmartEventViewer {
         EventLevel level = ParseEtwLevel(etwEvt.iLevel, etwEvt.sRawXml);
         String sMsg = FormatFallbackMessage(etwEvt.iEventId, etwEvt.sProviderName, etwEvt.sMessage);
         String sChannel = etwEvt.sChannelName.IsEmpty() ? sDefaultChannel : etwEvt.sChannelName;
-        String sTimeStr = etwEvt.dtTimeCreated.ToString();
+        DateTime dtUtc(etwEvt.dtTimeCreated.GetTicks(), DateTimeKind::Utc);
+        DateTime dtLocal = dtUtc.ToLocalTime();
+        return EventRecord(static_cast<unsigned int>(etwEvt.iEventId), level, etwEvt.sProviderName, sChannel, sMsg, dtLocal, etwEvt.sRawXml);
+    }
 
-        return EventRecord(static_cast<unsigned int>(etwEvt.iEventId), level, etwEvt.sProviderName, sChannel, sMsg, sTimeStr, etwEvt.sRawXml);
+    EventRecord::EventRecord(unsigned int uEventId, EventLevel eLevel, const String& sProvider, const String& sChannel, const String& sMessage, DateTime dtTimeCreated, const String& sRawXml)
+        : m_uEventId(uEventId), m_eLevel(eLevel), m_sProviderName(sProvider), m_sChannel(sChannel), m_sMessage(sMessage), m_dtTimeCreated(dtTimeCreated), m_sTimeCreated(dtTimeCreated.ToString()), m_sRawXml(sRawXml) {
     }
 
     EventRecord::EventRecord(unsigned int uEventId, EventLevel eLevel, const String& sProvider, const String& sChannel, const String& sMessage, const String& sTimeCreated, const String& sRawXml)
         : m_uEventId(uEventId), m_eLevel(eLevel), m_sProviderName(sProvider), m_sChannel(sChannel), m_sMessage(sMessage), m_sTimeCreated(sTimeCreated), m_sRawXml(sRawXml) {
+        DateTime dt;
+        if (DateTime::TryParse(sTimeCreated, dt)) {
+            m_dtTimeCreated = (dt.GetKind() == DateTimeKind::Utc) ? dt.ToLocalTime() : dt;
+            m_sTimeCreated = m_dtTimeCreated.ToString();
+        }
     }
 
     unsigned int EventRecord::GetEventId() const {
@@ -94,6 +105,10 @@ namespace SmartEventViewer {
 
     String EventRecord::GetEventMessage() const {
         return m_sMessage;
+    }
+
+    DateTime EventRecord::GetDateTime() const {
+        return m_dtTimeCreated;
     }
 
     String EventRecord::GetTimeCreated() const {

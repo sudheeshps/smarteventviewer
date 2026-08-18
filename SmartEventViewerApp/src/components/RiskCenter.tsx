@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { EventDto } from '../types';
-import { fetchApiEvents } from '../apiClient';
+import { fetchApiEvents, formatTo12Hour } from '../apiClient';
 
 interface RiskCenterProps {
   onSelectChannel?: (channelName: string) => void;
@@ -36,7 +36,7 @@ export const RiskCenter: React.FC<RiskCenterProps> = ({ onSelectChannel }) => {
           level: ((e.level as string) || 'Information') as EventDto['level'],
           risk: ((e.risk as string) || 'Low') as EventDto['risk'],
           provider: (e.provider as string) || channel,
-          time: (e.time as string) || '',
+          time: formatTo12Hour(e.time as string),
           desc: (e.message as string) || `Event #${e.id} in ${channel}`,
         }));
 

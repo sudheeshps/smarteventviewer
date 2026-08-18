@@ -494,6 +494,28 @@
     </main>
 
     <script>
+        function formatTo12Hour(timeStr) {
+            if (!timeStr || timeStr === '-') return '-';
+            const trimmed = String(timeStr).trim();
+            const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?/);
+            if (match) {
+                const [, year, month, day, hourStr, minStr, secStr] = match;
+                const hour = parseInt(hourStr, 10);
+                const ampm = hour >= 12 ? 'PM' : 'AM';
+                const hour12 = hour % 12 || 12;
+                const hh = String(hour12).padStart(2, '0');
+                const mm = minStr.padStart(2, '0');
+                const ss = secStr ? secStr.padStart(2, '0') : '00';
+                return `${year}-${month}-${day} ${hh}:${mm}:${ss} ${ampm}`;
+            }
+            return trimmed;
+        }
+
+        function formatUtcToLocal(utcStr) {
+            if (!utcStr || utcStr === '-') return '-';
+            return formatTo12Hour(utcStr);
+        }
+
         // Reads real system events from Windows Event Log channels
         function loadRealSystemRiskCenterData() {
             const now = new Date();
@@ -527,7 +549,7 @@
                     sTr.innerHTML = `
                         <td><strong>Event ID ${evt.id}</strong> (${evt.provider})</td>
                         <td><strong>${evt.user}</strong></td>
-                        <td>${evt.time}</td>
+                        <td>${formatTo12Hour(evt.time)}</td>
                         <td><code>${evt.ip}</code></td>
                         <td><span class="ip-badge ${evt.ipType}">${evt.ipLabel}</span></td>
                         <td><span class="location-tag">${evt.loc}</span></td>
@@ -544,7 +566,7 @@
                     <td>${evt.desc}</td>
                     <td><strong>${evt.user}</strong></td>
                     <td><code>${evt.ip}</code></td>
-                    <td>${evt.time}</td>
+                    <td>${formatTo12Hour(evt.time)}</td>
                 `;
                 rdpEventsTbody.appendChild(eTr);
             });
@@ -563,7 +585,7 @@
                 <div class="threat-desc">Real-time Windows Event Log reader connected directly to operating system kernel subsystem.</div>
                 <div class="threat-meta">
                     <span>Source: Windows EvtQuery Engine</span>
-                    <span>Time: ${timeIso}</span>
+                    <span>Time: ${formatTo12Hour(timeIso)}</span>
                     <span>Status: Clean</span>
                 </div>
             `;

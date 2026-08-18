@@ -11,38 +11,74 @@ namespace SmartEventViewer {
     }
 
     SystemMetricsResponseDto TelemetryController::GetSummary() {
-        return m_spTelemetryService->GetSummary();
+        try {
+            return m_spTelemetryService->GetSummary();
+        } catch (...) {
+            return SystemMetricsResponseDto{};
+        }
     }
 
     SystemMetricsResponseDto TelemetryController::GetCpuUsage() {
-        return m_spTelemetryService->GetCpuUsage();
+        try {
+            return m_spTelemetryService->GetCpuUsage();
+        } catch (...) {
+            return SystemMetricsResponseDto{};
+        }
     }
 
     SystemMetricsResponseDto TelemetryController::GetMemoryUsage() {
-        return m_spTelemetryService->GetMemoryUsage();
+        try {
+            return m_spTelemetryService->GetMemoryUsage();
+        } catch (...) {
+            return SystemMetricsResponseDto{};
+        }
     }
 
     SystemMetricsResponseDto TelemetryController::GetDiskUsage() {
-        return m_spTelemetryService->GetDiskUsage();
+        try {
+            return m_spTelemetryService->GetDiskUsage();
+        } catch (...) {
+            return SystemMetricsResponseDto{};
+        }
     }
 
     SystemMetricsResponseDto TelemetryController::GetNetworkUsage() {
-        return m_spTelemetryService->GetNetworkUsage();
+        try {
+            return m_spTelemetryService->GetNetworkUsage();
+        } catch (...) {
+            return SystemMetricsResponseDto{};
+        }
     }
 
     SystemMetricsResponseDto TelemetryController::GetProcesses() {
-        return m_spTelemetryService->GetProcesses();
+        try {
+            return m_spTelemetryService->GetProcesses();
+        } catch (...) {
+            return SystemMetricsResponseDto{};
+        }
     }
 
     SystemMetricsResponseDto TelemetryController::GetSessions() {
-        return m_spTelemetryService->GetSessions();
+        try {
+            return m_spTelemetryService->GetSessions();
+        } catch (...) {
+            return SystemMetricsResponseDto{};
+        }
     }
 
     ServicesResponseDto TelemetryController::GetServices() {
-        return m_spTelemetryService->GetServices();
+        try {
+            return m_spTelemetryService->GetServices();
+        } catch (...) {
+            return ServicesResponseDto{};
+        }
     }
 
     SystemMetricsResponseDto TelemetryController::GetMetrics() {
-        return m_spTelemetryService->GetFullMetrics();
+        try {
+            return m_spTelemetryService->GetFullMetrics();
+        } catch (...) {
+            return SystemMetricsResponseDto{};
+        }
     }
 }

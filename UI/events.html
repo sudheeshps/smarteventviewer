@@ -631,6 +631,23 @@
         let progressiveTimer = null;
         let enumeratedSystemChannels = [];
 
+        function formatTo12Hour(timeStr) {
+            if (!timeStr || timeStr === '-') return '-';
+            const trimmed = String(timeStr).trim();
+            const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?/);
+            if (match) {
+                const [, year, month, day, hourStr, minStr, secStr] = match;
+                const hour = parseInt(hourStr, 10);
+                const ampm = hour >= 12 ? 'PM' : 'AM';
+                const hour12 = hour % 12 || 12;
+                const hh = String(hour12).padStart(2, '0');
+                const mm = minStr.padStart(2, '0');
+                const ss = secStr ? secStr.padStart(2, '0') : '00';
+                return `${year}-${month}-${day} ${hh}:${mm}:${ss} ${ampm}`;
+            }
+            return trimmed;
+        }
+
         // Native Win32 EvtOpenChannelEnum REST API Bridge (DotNetDupe NativeRestServer)
         async function fetchNativeSystemEventChannels() {
             try {
@@ -1019,7 +1036,7 @@
                 tr.onclick = () => selectEvent(evt, tr);
                 tr.innerHTML = `
                     <td>#${evt.idx}</td>
-                    <td>${evt.time}</td>
+                    <td>${formatTo12Hour(evt.time)}</td>
                     <td>${evt.id}</td>
                     <td>${evt.level}</td>
                     <td><span class="badge badge-${evt.risk.toLowerCase()}">${evt.risk}</span></td>
@@ -1061,7 +1078,7 @@
         function inspectEvent(evt) {
             document.getElementById('inspect-idx').innerText = `#${evt.idx}`;
             document.getElementById('inspect-id').innerText = evt.id;
-            document.getElementById('inspect-time').innerText = evt.time;
+            document.getElementById('inspect-time').innerText = formatTo12Hour(evt.time);
             document.getElementById('inspect-provider').innerText = evt.provider;
             document.getElementById('inspect-risk-badge').innerHTML = `<span class="badge badge-${evt.risk.toLowerCase()}">${evt.risk} Risk</span>`;
             document.getElementById('inspect-desc').innerText = evt.desc;

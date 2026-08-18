@@ -10,17 +10,31 @@ namespace SmartEventViewer {
     using String = DotNetDupe::System::String;
     using StringList = DotNetDupe::System::Collections::Generic::List<String>;
 
+    struct EventLevelCounts {
+        unsigned long long CriticalCount{ 0 };
+        unsigned long long ErrorCount{ 0 };
+        unsigned long long WarningCount{ 0 };
+        unsigned long long InfoCount{ 0 };
+        unsigned long long VerboseCount{ 0 };
+    };
+
     class IEventLogReader : public virtual DotNetDupe::System::Object {
     public:
         virtual ~IEventLogReader() = default;
 
         virtual StringList GetEventChannels() = 0;
         virtual unsigned long long GetChannelEventCount(const String& sChannelName) = 0;
+        virtual bool GetChannelLevelCounts(const String& sChannelName, EventLevelCounts& outCounts) {
+            (void)sChannelName;
+            (void)outCounts;
+            return false;
+        }
         virtual DotNetDupe::System::Collections::Generic::List<EventRecord> ReadEvents(
             const String& sChannelName,
             size_t nMaxCount,
             size_t nStartIndex = 0,
-            bool bReverseOrder = true) = 0;
+            bool bReverseOrder = true,
+            EventLevel eLevel = EventLevel::LogAlways) = 0;
 
         virtual bool GetEventSources(StringList& outSources) {
             outSources = GetEventChannels();

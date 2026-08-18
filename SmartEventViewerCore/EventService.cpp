@@ -69,18 +69,32 @@ namespace SmartEventViewer {
         return false;
     }
 
-    void EventService::CalculateSummaryCounts(const String& sChannel, EventSummaryResponseDto& dto) {
-        dto.Channel = sChannel;
-        dto.TotalCount = m_spReader->GetChannelEventCount(sChannel);
+    void EventService::ApplySampledCounts(const String& sChannel, EventSummaryResponseDto& dto) {
         auto sample = m_spReader->ReadEvents(sChannel, 100, 0, true);
         for (int i = 0; i < sample.GetCount(); ++i) {
             auto lvl = sample[i].GetLevel();
             if (lvl == EventLevel::Critical) dto.CriticalCount++;
             else if (lvl == EventLevel::Error) dto.ErrorCount++;
             else if (lvl == EventLevel::Warning) dto.WarningCount++;
-            else if (lvl == EventLevel::Informational) dto.InfoCount++;
             else if (lvl == EventLevel::Verbose) dto.VerboseCount++;
         }
+        unsigned long long uNonInfo = dto.CriticalCount + dto.ErrorCount + dto.WarningCount + dto.VerboseCount;
+        dto.InfoCount = (dto.TotalCount >= uNonInfo) ? (dto.TotalCount - uNonInfo) : 0ULL;
+    }
+
+    void EventService::CalculateSummaryCounts(const String& sChannel, EventSummaryResponseDto& dto) {
+        dto.Channel = sChannel;
+        dto.TotalCount = m_spReader->GetChannelEventCount(sChannel);
+        EventLevelCounts counts;
+        if (m_spReader->GetChannelLevelCounts(sChannel, counts)) {
+            dto.CriticalCount = counts.CriticalCount;
+            dto.ErrorCount = counts.ErrorCount;
+            dto.WarningCount = counts.WarningCount;
+            dto.InfoCount = counts.InfoCount;
+            dto.VerboseCount = counts.VerboseCount;
+            return;
+        }
+        ApplySampledCounts(sChannel, dto);
     }
 
     EventSummaryResponseDto EventService::GetEventSummary(const String& sChannelName) {
@@ -138,10 +152,26 @@ namespace SmartEventViewer {
         return String::Compare(s1, 0, s2, 0, nLen, true) == 0;
     }
 
-    static bool MatchesLevelFilter(const EventRecord& record, const String& sFilter) {
-        if (sFilter == "ALL" || sFilter.IsEmpty()) return true;
-        String sRecLvl = EventLevelToString(record.GetLevel());
-        return CaseInsensitiveEqual(sRecLvl, sFilter);
+    static EventLevel ParseLevelFilter(const String& sFilter) {
+        if (CaseInsensitiveEqual(sFilter, "Critical")) return EventLevel::Critical;
+        if (CaseInsensitiveEqual(sFilter, "Error")) return EventLevel::Error;
+        if (CaseInsensitiveEqual(sFilter, "Warning")) return EventLevel::Warning;
+        if (CaseInsensitiveEqual(sFilter, "Information") || CaseInsensitiveEqual(sFilter, "Informational")) return EventLevel::Informational;
+        if (CaseInsensitiveEqual(sFilter, "Verbose")) return EventLevel::Verbose;
+        return EventLevel::LogAlways;
+    }
+
+    static unsigned long long GetFilteredTotalCount(IEventLogReader* pReader, const String& sChannel, EventLevel level, unsigned long long uTotal) {
+        if (level == EventLevel::LogAlways) return uTotal;
+        EventLevelCounts counts;
+        if (pReader && pReader->GetChannelLevelCounts(sChannel, counts)) {
+            if (level == EventLevel::Critical) return counts.CriticalCount;
+            if (level == EventLevel::Error) return counts.ErrorCount;
+            if (level == EventLevel::Warning) return counts.WarningCount;
+            if (level == EventLevel::Informational) return counts.InfoCount;
+            if (level == EventLevel::Verbose) return counts.VerboseCount;
+        }
+        return uTotal;
     }
 
     EventLogResponseDto EventService::GetEvents(
@@ -151,21 +181,21 @@ namespace SmartEventViewer {
         EventLogResponseDto cachedPage;
         if (TryGetCachedPage(sTarget, sPageKey, cachedPage)) return cachedPage;
 
+        EventLevel eLevel = ParseLevelFilter(sLevelFilter);
+        unsigned long long uTotalChannel = m_spReader->GetChannelEventCount(sTarget);
+        unsigned long long uFilteredTotal = GetFilteredTotalCount(m_spReader.Get(), sTarget, eLevel, uTotalChannel);
+
         EventLogResponseDto result;
         result.Channel = sTarget;
         result.Page = nPage > 0 ? nPage : 1;
         result.PageSize = nPageSize > 0 ? nPageSize : 20;
-        result.TotalCount = m_spReader->GetChannelEventCount(sTarget);
+        result.TotalCount = uFilteredTotal;
         result.TotalPages = (result.TotalCount + result.PageSize - 1) / (result.PageSize > 0 ? result.PageSize : 1);
 
         size_t nStartIndex = (result.Page - 1) * result.PageSize;
-        auto rawEvents = m_spReader->ReadEvents(sTarget, result.PageSize * 2, nStartIndex, true);
-        size_t count = 0;
-        for (int i = 0; i < rawEvents.GetCount() && count < result.PageSize; ++i) {
-            if (MatchesLevelFilter(rawEvents[i], sLevelFilter)) {
-                result.Events.Add(MapEventDto(rawEvents[i], nStartIndex + count + 1));
-                count++;
-            }
+        auto rawEvents = m_spReader->ReadEvents(sTarget, result.PageSize, nStartIndex, true, eLevel);
+        for (int i = 0; i < rawEvents.GetCount(); ++i) {
+            result.Events.Add(MapEventDto(rawEvents[i], nStartIndex + i + 1));
         }
         StoreCachedPage(sTarget, sPageKey, result);
         return result;

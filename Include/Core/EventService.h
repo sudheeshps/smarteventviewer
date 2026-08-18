@@ -29,6 +29,7 @@ namespace SmartEventViewer {
 
         EventDto MapEventDto(const EventRecord& record, size_t nIdx);
         void CalculateSummaryCounts(const String& sChannel, EventSummaryResponseDto& dto);
+        void ApplySampledCounts(const String& sChannel, EventSummaryResponseDto& dto);
         bool TryGetCachedSummary(const String& sChannel, unsigned long long uTotal, EventSummaryResponseDto& outSummary);
         bool TryGetCachedPage(const String& sChannel, const String& sPageKey, EventLogResponseDto& outPage);
         void StoreCachedPage(const String& sChannel, const String& sPageKey, const EventLogResponseDto& pageDto);

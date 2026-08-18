@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { EventDto } from '../types';
-import { fetchApiEvents, fetchEventSummary, fetchApiAnalyze, fetchApiAnalyzeStatus } from '../apiClient';
+import { fetchApiEvents, fetchEventSummary, fetchApiAnalyze, fetchApiAnalyzeStatus, formatTo12Hour } from '../apiClient';
 
 interface EventsExplorerProps {
   channelName: string;
@@ -9,7 +9,8 @@ interface EventsExplorerProps {
 
 export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onOpenChat }) => {
   const [events, setEvents] = useState<EventDto[]>([]);
-  const [totalCount, setTotalCount] = useState<number>(0);
+  const [channelTotalCount, setChannelTotalCount] = useState<number>(0);
+  const [filteredCount, setFilteredCount] = useState<number>(0);
   const [isLoadingEvents, setIsLoadingEvents] = useState<boolean>(false);
   const [filterSeverity, setFilterSeverity] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -55,6 +56,9 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onO
       // 1. Fetch channel summary counts
       const summaryData = await fetchEventSummary(channel, baseUrl).catch(() => null);
       if (summaryData) {
+        if (summaryData.totalCount !== undefined && summaryData.totalCount > 0) {
+          setChannelTotalCount(summaryData.totalCount);
+        }
         setServerLevelCounts({
           critical: summaryData.criticalCount || 0,
           error: summaryData.errorCount || 0,
@@ -67,7 +71,10 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onO
       // 2. Fetch page event records list
       const data = await fetchApiEvents(channel, baseUrl, page, pageSize, severity);
       console.log(`[UI-APP DEBUG] Received paged events payload:`, data);
-      setTotalCount(data.totalCount || 0);
+      setFilteredCount(data.totalCount || 0);
+      if (severity === 'ALL' && data.totalCount && data.totalCount > 0) {
+        setChannelTotalCount(data.totalCount);
+      }
       setServerTotalPages(data.totalPages || Math.ceil((data.totalCount || 0) / pageSize) || 1);
 
       const startIndex = (page - 1) * pageSize;
@@ -77,7 +84,7 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onO
         level: ((e.level as string) || 'Information') as EventDto['level'],
         risk: ((e.risk as string) || 'Low') as EventDto['risk'],
         provider: (e.provider as string) || channel,
-        time: e.time ? (typeof e.time === 'string' && e.time.includes('T') ? new Date(e.time).toLocaleString() : (e.time as string)) : '',
+        time: formatTo12Hour(e.time as string),
         desc: (e.message as string) || `Event ID #${e.id} logged by ${e.provider || channel}.`,
         xml: (e.rawXml as string) || '',
       }));
@@ -89,7 +96,8 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onO
     } catch (err) {
       console.error(`[UI-APP DEBUG] Error fetching paged events via apiClient from ${baseUrl}:`, err);
       const mockTotal = channel === 'Security' ? 30638 : channel === 'System' ? 27059 : 12268;
-      setTotalCount(mockTotal);
+      setChannelTotalCount(mockTotal);
+      setFilteredCount(mockTotal);
       const computedTotalPages = Math.ceil(mockTotal / pageSize);
       setServerTotalPages(computedTotalPages);
 
@@ -102,7 +110,7 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onO
           level: (itemIdx % 15 === 0 ? 'Critical' : itemIdx % 5 === 0 ? 'Error' : itemIdx % 3 === 0 ? 'Warning' : 'Information') as EventDto['level'],
           risk: (itemIdx % 15 === 0 ? 'Critical' : itemIdx % 5 === 0 ? 'High' : itemIdx % 3 === 0 ? 'Medium' : 'Low') as EventDto['risk'],
           provider: channel.split('/')[0],
-          time: new Date(Date.now() - itemIdx * 60000).toISOString(),
+          time: formatTo12Hour(new Date(Date.now() - itemIdx * 60000).toISOString()),
           desc: `Event Record #${itemIdx} in source '${channel}'.`,
         };
       });
@@ -195,7 +203,7 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onO
     return matchesSev && matchesSearch;
   });
 
-  const calculatedTotalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const calculatedTotalPages = Math.max(1, Math.ceil(filteredCount / pageSize));
   const displayTotalPages = serverTotalPages > 1 ? serverTotalPages : calculatedTotalPages;
   const pageEvents = filteredEvents;
 
@@ -205,7 +213,7 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onO
     warning: serverLevelCounts.warning,
     info: (serverLevelCounts.info > 0)
       ? serverLevelCounts.info
-      : Math.max(0, totalCount - (serverLevelCounts.critical + serverLevelCounts.error + serverLevelCounts.warning)),
+      : Math.max(0, channelTotalCount - (serverLevelCounts.critical + serverLevelCounts.error + serverLevelCounts.warning)),
   };
 
   return (
@@ -213,7 +221,7 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onO
       {/* Header & Pane Toggles */}
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(30, 41, 59, 0.7)', padding: '6px 12px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)' }}>
         <h1 style={{ fontSize: '0.9rem', color: '#f8fafc', margin: 0, fontWeight: 700 }}>
-          📊 Events Store: <span style={{ color: '#38bdf8' }}>{channelName}</span> ({totalCount.toLocaleString()} Total)
+          📊 Events Store: <span style={{ color: '#38bdf8' }}>{channelName}</span> ({channelTotalCount.toLocaleString()} Total)
         </h1>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button
@@ -245,7 +253,7 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onO
             style={{ background: 'rgba(30, 41, 59, 0.7)', border: filterSeverity === 'ALL' ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer' }}
           >
             <span style={{ fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase' }}>Total Ingested</span>
-            <div style={{ fontSize: '1.05rem', fontWeight: 700 }}>{totalCount.toLocaleString()}</div>
+            <div style={{ fontSize: '1.05rem', fontWeight: 700 }}>{channelTotalCount.toLocaleString()}</div>
           </div>
           <div
             onClick={() => handleFilterChange('Critical')}
@@ -450,7 +458,7 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onO
 
       {/* Pagination Footer */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem', color: '#94a3b8', background: 'rgba(30, 41, 59, 0.7)', padding: '4px 10px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)' }}>
-        <span>Showing Page {currentPage} of {displayTotalPages} ({totalCount.toLocaleString()} Total Records)</span>
+        <span>Showing Page {currentPage} of {displayTotalPages} ({filterSeverity !== 'ALL' ? `${filteredCount.toLocaleString()} Matching Records` : `${channelTotalCount.toLocaleString()} Total Records`})</span>
         <div style={{ display: 'flex', gap: '6px' }}>
           <button
             disabled={currentPage <= 1}

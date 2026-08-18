@@ -191,6 +191,61 @@ TEST(EventServiceTests, GivenMockReaderWithEvents_WhenGetEventSummaryCalled_Then
     EXPECT_EQ(summary.WarningCount, 1ULL);
 }
 
+class MockFallbackEventLogReader : public IEventLogReader {
+public:
+    StringList GetEventChannels() override {
+        StringList channels;
+        channels.Add("Sysmon");
+        return channels;
+    }
+    unsigned long long GetChannelEventCount(const String& sChannelName) override {
+        (void)sChannelName;
+        return 49723ULL;
+    }
+    bool GetChannelLevelCounts(const String& sChannelName, EventLevelCounts& outCounts) override {
+        (void)sChannelName;
+        (void)outCounts;
+        return false;
+    }
+    DotNetDupe::System::Collections::Generic::List<EventRecord> ReadEvents(
+        const String& sChannelName, size_t nMaxCount, size_t nStartIndex = 0, bool bReverseOrder = true, EventLevel eLevel = EventLevel::LogAlways) override {
+        (void)sChannelName;
+        (void)nMaxCount;
+        (void)nStartIndex;
+        (void)bReverseOrder;
+        (void)eLevel;
+        DotNetDupe::System::Collections::Generic::List<EventRecord> results;
+        results.Add(EventRecord(1, EventLevel::Warning, "Sysmon", "Sysmon", "Driver warning", "2026-08-17T10:00:00Z"));
+        return results;
+    }
+};
+
+TEST(EventServiceTests, GivenFallbackReaderWithLargeChannel_WhenGetEventSummaryCalled_ThenInfoCountCalculatedFromTotal) {
+    auto spReader = SmartPtr<MockFallbackEventLogReader>::NewShared();
+    EventService service(spReader);
+    auto summary = service.GetEventSummary("Sysmon");
+
+    EXPECT_EQ(summary.Channel, "Sysmon");
+    EXPECT_EQ(summary.TotalCount, 49723ULL);
+    EXPECT_EQ(summary.WarningCount, 1ULL);
+    EXPECT_EQ(summary.InfoCount, 49722ULL);
+}
+
+TEST(EventServiceTests, GivenSpecificLevelFilter_WhenGetEventsCalled_ThenReturnsLevelFilteredEventsWithAccurateTotalCount) {
+    auto spReader = SmartPtr<MockEventLogReader>::NewShared();
+    spReader->AddEvent("Security", EventRecord(4624, EventLevel::Informational, "Audit", "Security", "Logon ok", "2026-08-18 10:00:00"));
+    spReader->AddEvent("Security", EventRecord(4625, EventLevel::Error, "Audit", "Security", "Logon failed", "2026-08-18 10:01:00"));
+    spReader->AddEvent("Security", EventRecord(1102, EventLevel::Critical, "Audit", "Security", "Audit log cleared", "2026-08-18 10:02:00"));
+
+    EventService service(spReader);
+    auto res = service.GetEvents("Security", 1, 10, "Critical");
+
+    EXPECT_EQ(res.TotalCount, 1ULL);
+    EXPECT_EQ(res.Events.GetCount(), 1);
+    EXPECT_EQ(res.Events[0].Level, "Critical");
+    EXPECT_EQ(res.Events[0].Id, 1102);
+}
+
 // =============================================================================
 // AnalysisService Unit Tests
 // =============================================================================

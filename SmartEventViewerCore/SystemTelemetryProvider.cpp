@@ -6,8 +6,6 @@
 #include "System/Diagnostics/ActiveUserSession.h"
 #include "System/Diagnostics/TerminalSession.h"
 #include "System/Security/Principal/UserPrincipal.h"
-#include "System/Threading/CriticalSection.h"
-#include "System/Threading/Lock.h"
 
 namespace SmartEventViewer {
     using Console = DotNetDupe::System::Console;
@@ -17,13 +15,6 @@ namespace SmartEventViewer {
     using RdpSessionState = DotNetDupe::System::Diagnostics::RdpSessionState;
     using UserPrincipal = DotNetDupe::System::Security::Principal::UserPrincipal;
     using UserClass = DotNetDupe::System::Security::Principal::UserClass;
-    using CriticalSection = DotNetDupe::System::Threading::CriticalSection;
-    using LockCS = DotNetDupe::System::Threading::Lock<CriticalSection>;
-
-    static SystemMetricsResponseDto s_cachedMetrics;
-    static ULONGLONG s_lastMetricsFetchTimeMs = 0;
-    static CriticalSection s_metricsCs;
-    static bool s_hasCachedMetrics = false;
 
     void SystemTelemetryProvider::CalculateDiskRates(const DotNetDupe::System::Diagnostics::DiskInfo& diskInfo, double& outReadMb, double& outWriteMb) {
         static uint64_t s_lastDiskReadBytes = 0;
@@ -31,72 +22,51 @@ namespace SmartEventViewer {
 
         uint64_t curRead = static_cast<uint64_t>(diskInfo.lDiskReadBytes > 0 ? diskInfo.lDiskReadBytes : 0);
         uint64_t curWrite = static_cast<uint64_t>(diskInfo.lDiskWriteBytes > 0 ? diskInfo.lDiskWriteBytes : 0);
-
         if (s_lastDiskReadBytes == 0 && s_lastDiskWriteBytes == 0) {
             s_lastDiskReadBytes = curRead;
             s_lastDiskWriteBytes = curWrite;
         }
-
         uint64_t deltaRead = (curRead >= s_lastDiskReadBytes) ? (curRead - s_lastDiskReadBytes) : 0;
         uint64_t deltaWrite = (curWrite >= s_lastDiskWriteBytes) ? (curWrite - s_lastDiskWriteBytes) : 0;
         s_lastDiskReadBytes = curRead;
         s_lastDiskWriteBytes = curWrite;
-
         outReadMb = static_cast<double>(deltaRead) / (1024.0 * 1024.0);
         outWriteMb = static_cast<double>(deltaWrite) / (1024.0 * 1024.0);
     }
 
     String SystemTelemetryProvider::FormatCommandLine(const String& sPath, const String& sCmd) {
-        if (sCmd.IsEmpty()) return "Access Denied (System Protected)";
-
-        String sResult = sCmd;
-        int iLen = sResult.GetLength();
-        if (!sPath.IsEmpty() && sResult.StartsWith(sPath) && sPath.GetLength() < iLen) {
-            sResult = sResult.Substring(static_cast<int>(sPath.GetLength()));
+        if (sCmd.IsEmpty()) return String("-");
+        try {
+            String sResult = sCmd;
+            int iLen = sResult.GetLength();
+            if (!sPath.IsEmpty() && sResult.StartsWith(sPath) && sPath.GetLength() < iLen) {
+                sResult = sResult.Substring(static_cast<int>(sPath.GetLength()));
+            }
+            sResult = sResult.Trim();
+            if (sResult.IsEmpty()) return String("-");
+            return sResult;
+        } catch (...) {
+            return String("-");
         }
-        else if (sResult.StartsWith("\"") && iLen > 1) {
-            int nextQuote = sResult.IndexOf("\"", 1);
-            if (nextQuote != -1 && nextQuote + 1 < iLen) sResult = sResult.Substring(nextQuote + 1);
-        }
-        else {
-            int spaceIdx = sResult.IndexOf(" ");
-            if (spaceIdx != -1 && spaceIdx + 1 < iLen) sResult = sResult.Substring(spaceIdx);
-        }
-
-        sResult = sResult.Trim();
-        if (sResult.IsEmpty()) return "-";
-        return sResult;
     }
 
     ProcessResourceDto SystemTelemetryProvider::MapProcessResourceDto(const DotNetDupe::System::Diagnostics::ProcessInfo& proc) {
         ProcessResourceDto procDto;
-        procDto.ProcessId = static_cast<unsigned long>(proc.iProcessId);
-        
-        procDto.Name = proc.sName;
-        if (proc.sName.IsEmpty()) {
-            procDto.Name = "Access Denied";
+        try {
+            procDto.ProcessId = static_cast<unsigned long>(proc.iProcessId);
+            procDto.Name = proc.sName.IsEmpty() ? String("System Process") : proc.sName;
+            procDto.Path = proc.sPath.IsEmpty() ? String("System Protected") : proc.sPath;
+            procDto.CommandLine = FormatCommandLine(proc.sPath, proc.sCommandLine);
+            double procCpu = proc.dCpuUsagePercent;
+            procDto.CpuUsagePercent = procCpu < 0.0 ? 0.0 : (procCpu > 100.0 ? 100.0 : procCpu);
+            long long rawRamBytes = proc.memory.lPhysicalMemoryBytes > 0 ? proc.memory.lPhysicalMemoryBytes : proc.memory.lPrivateBytes;
+            procDto.MemoryUsageMB = static_cast<unsigned long long>(rawRamBytes > 0 ? (rawRamBytes / (1024 * 1024)) : 0);
+            procDto.NetworkReadBytes = static_cast<unsigned long long>(proc.network.lNetworkReadBytes > 0 ? proc.network.lNetworkReadBytes : 0);
+            procDto.NetworkWriteBytes = static_cast<unsigned long long>(proc.network.lNetworkWriteBytes > 0 ? proc.network.lNetworkWriteBytes : 0);
+            procDto.OpenPorts = String("-");
+            procDto.ConnectionEstablished = false;
+        } catch (...) {
         }
-        
-        procDto.Path = proc.sPath;
-        if (proc.sPath.IsEmpty()) {
-            procDto.Path = "Access Denied (System Protected)";
-        }
-        
-        procDto.CommandLine = FormatCommandLine(proc.sPath, proc.sCommandLine);
-
-        double procCpu = proc.dCpuUsagePercent;
-        if (procCpu < 0.0) procCpu = 0.0;
-        if (procCpu > 100.0) procCpu = 100.0;
-        procDto.CpuUsagePercent = procCpu;
-
-        long long rawRamBytes = proc.memory.lPhysicalMemoryBytes > 0 ? proc.memory.lPhysicalMemoryBytes : proc.memory.lPrivateBytes;
-        procDto.MemoryUsageMB = static_cast<unsigned long long>(rawRamBytes > 0 ? (rawRamBytes / (1024 * 1024)) : 0);
-
-        procDto.NetworkReadBytes = static_cast<unsigned long long>(proc.network.lNetworkReadBytes > 0 ? proc.network.lNetworkReadBytes : 0);
-        procDto.NetworkWriteBytes = static_cast<unsigned long long>(proc.network.lNetworkWriteBytes > 0 ? proc.network.lNetworkWriteBytes : 0);
-
-        procDto.OpenPorts = "-";
-        procDto.ConnectionEstablished = false;
         return procDto;
     }
 
@@ -172,20 +142,10 @@ namespace SmartEventViewer {
     }
 
     SystemMetricsResponseDto SystemTelemetryProvider::QuerySummary() {
-        ULONGLONG curTimeMs = GetTickCount64();
-        {
-            LockCS lock(s_metricsCs);
-            if (s_hasCachedMetrics && (curTimeMs - s_lastMetricsFetchTimeMs < 2000)) {
-                return s_cachedMetrics;
-            }
-        }
-
         SystemMetricsResponseDto metrics;
         try {
             double sysCpu = SystemMetrics::GetSystemCpuUsage();
-            if (sysCpu < 0.0) sysCpu = 0.0;
-            if (sysCpu > 100.0) sysCpu = 100.0;
-            metrics.CpuUsagePercent = sysCpu;
+            metrics.CpuUsagePercent = (sysCpu < 0.0) ? 0.0 : ((sysCpu > 100.0) ? 100.0 : sysCpu);
 
             auto memInfo = SystemMetrics::GetSystemMemoryUsage();
             metrics.MemoryUsagePercent = memInfo.dMemoryUsagePercent;
@@ -203,136 +163,117 @@ namespace SmartEventViewer {
             for (int i = 0; i < topProcs.GetCount(); ++i) {
                 metrics.TopProcesses.Add(MapProcessResourceDto(topProcs[i]));
             }
-
-            {
-                LockCS lock(s_metricsCs);
-                s_cachedMetrics = metrics;
-                s_lastMetricsFetchTimeMs = curTimeMs;
-                s_hasCachedMetrics = true;
-            }
             return metrics;
-        } catch (const DotNetDupe::System::SystemException& sysEx) {
-            Console::WriteLine(String::Format("[TELEMETRY_PROVIDER_ERROR] QuerySummary DotNetDupe SystemException: {0}", sysEx.What()));
-            LockCS lock(s_metricsCs);
-            return s_hasCachedMetrics ? s_cachedMetrics : metrics;
-        } catch (const DotNetDupe::System::Exception& ex) {
-            Console::WriteLine(String::Format("[TELEMETRY_PROVIDER_ERROR] QuerySummary DotNetDupe Exception: {0}", ex.What()));
-            LockCS lock(s_metricsCs);
-            return s_hasCachedMetrics ? s_cachedMetrics : metrics;
         } catch (...) {
-            Console::WriteLine("[TELEMETRY_PROVIDER_ERROR] QuerySummary unknown exception.");
-            LockCS lock(s_metricsCs);
-            return s_hasCachedMetrics ? s_cachedMetrics : metrics;
+            return metrics;
         }
     }
 
     SystemMetricsResponseDto SystemTelemetryProvider::QueryCpuUsage() {
         SystemMetricsResponseDto metrics;
         double sysCpu = SystemMetrics::GetSystemCpuUsage();
-        if (sysCpu < 0.0) sysCpu = 0.0;
-        if (sysCpu > 100.0) sysCpu = 100.0;
-        metrics.CpuUsagePercent = sysCpu;
+        metrics.CpuUsagePercent = (sysCpu < 0.0) ? 0.0 : ((sysCpu > 100.0) ? 100.0 : sysCpu);
         return metrics;
     }
 
     SystemMetricsResponseDto SystemTelemetryProvider::QueryMemoryUsage() {
         SystemMetricsResponseDto metrics;
-        auto memInfo = SystemMetrics::GetSystemMemoryUsage();
-        metrics.MemoryUsagePercent = memInfo.dMemoryUsagePercent;
-        metrics.MemoryTotalMB = memInfo.uMemoryTotalBytes / (1024 * 1024);
-        metrics.MemoryUsedMB = memInfo.uMemoryUsedBytes / (1024 * 1024);
+        try {
+            auto memInfo = SystemMetrics::GetSystemMemoryUsage();
+            metrics.MemoryUsagePercent = memInfo.dMemoryUsagePercent;
+            metrics.MemoryTotalMB = memInfo.uMemoryTotalBytes / (1024 * 1024);
+            metrics.MemoryUsedMB = memInfo.uMemoryUsedBytes / (1024 * 1024);
+        } catch (...) {
+        }
         return metrics;
     }
 
     SystemMetricsResponseDto SystemTelemetryProvider::QueryDiskUsage() {
         SystemMetricsResponseDto metrics;
-        auto diskInfo = SystemMetrics::GetSystemDiskUsage();
-        double calculatedReadMb = 0.0, calculatedWriteMb = 0.0;
-        CalculateDiskRates(diskInfo, calculatedReadMb, calculatedWriteMb);
-        metrics.DiskReadMBps = calculatedReadMb;
-        metrics.DiskWriteMBps = calculatedWriteMb;
+        try {
+            auto diskInfo = SystemMetrics::GetSystemDiskUsage();
+            double calculatedReadMb = 0.0, calculatedWriteMb = 0.0;
+            CalculateDiskRates(diskInfo, calculatedReadMb, calculatedWriteMb);
+            metrics.DiskReadMBps = calculatedReadMb;
+            metrics.DiskWriteMBps = calculatedWriteMb;
+        } catch (...) {
+        }
         return metrics;
     }
 
     SystemMetricsResponseDto SystemTelemetryProvider::QueryNetworkUsage() {
         SystemMetricsResponseDto metrics;
-        metrics.NetworkUsageMbps = SystemMetrics::GetSystemNetworkUsage();
+        try {
+            metrics.NetworkUsageMbps = SystemMetrics::GetSystemNetworkUsage();
+        } catch (...) {
+        }
         return metrics;
     }
 
     SystemMetricsResponseDto SystemTelemetryProvider::QueryProcesses() {
         SystemMetricsResponseDto metrics;
-        auto topProcs = SystemMetrics::GetTopProcesses(DotNetDupe::System::Diagnostics::SystemResource::Cpu, 20);
-        for (int i = 0; i < topProcs.GetCount(); ++i) {
-            metrics.TopProcesses.Add(MapProcessResourceDto(topProcs[i]));
+        try {
+            auto topProcs = SystemMetrics::GetTopProcesses(DotNetDupe::System::Diagnostics::SystemResource::Cpu, 20);
+            for (int i = 0; i < topProcs.GetCount(); ++i) {
+                metrics.TopProcesses.Add(MapProcessResourceDto(topProcs[i]));
+            }
+        } catch (...) {
         }
         return metrics;
     }
 
     SystemMetricsResponseDto SystemTelemetryProvider::QuerySessions() {
         SystemMetricsResponseDto metrics;
-        PopulateUserSessions(metrics);
+        try {
+            PopulateUserSessions(metrics);
+        } catch (...) {
+        }
         return metrics;
     }
 
     SystemMetricsResponseDto SystemTelemetryProvider::QuerySystemMetrics() {
-        ULONGLONG curTimeMs = GetTickCount64();
-
-        {
-            LockCS lock(s_metricsCs);
-            if (s_hasCachedMetrics && (curTimeMs - s_lastMetricsFetchTimeMs < 2000)) {
-                return s_cachedMetrics;
-            }
-        }
-
-        Console::WriteLine("[TELEMETRY] Refreshing SystemMetrics & ActiveUserSessions cache...");
         SystemMetricsResponseDto metrics;
+        try {
+            double sysCpu = SystemMetrics::GetSystemCpuUsage();
+            metrics.CpuUsagePercent = (sysCpu < 0.0) ? 0.0 : ((sysCpu > 100.0) ? 100.0 : sysCpu);
 
-        double sysCpu = SystemMetrics::GetSystemCpuUsage();
-        if (sysCpu < 0.0) sysCpu = 0.0;
-        if (sysCpu > 100.0) sysCpu = 100.0;
-        metrics.CpuUsagePercent = sysCpu;
+            auto memInfo = SystemMetrics::GetSystemMemoryUsage();
+            metrics.MemoryUsagePercent = memInfo.dMemoryUsagePercent;
+            metrics.MemoryTotalMB = memInfo.uMemoryTotalBytes / (1024 * 1024);
+            metrics.MemoryUsedMB = memInfo.uMemoryUsedBytes / (1024 * 1024);
 
-        auto memInfo = SystemMetrics::GetSystemMemoryUsage();
-        metrics.MemoryUsagePercent = memInfo.dMemoryUsagePercent;
-        metrics.MemoryTotalMB = memInfo.uMemoryTotalBytes / (1024 * 1024);
-        metrics.MemoryUsedMB = memInfo.uMemoryUsedBytes / (1024 * 1024);
+            auto diskInfo = SystemMetrics::GetSystemDiskUsage();
+            double calculatedReadMb = 0.0, calculatedWriteMb = 0.0;
+            CalculateDiskRates(diskInfo, calculatedReadMb, calculatedWriteMb);
 
-        auto diskInfo = SystemMetrics::GetSystemDiskUsage();
-        double calculatedReadMb = 0.0, calculatedWriteMb = 0.0;
-        CalculateDiskRates(diskInfo, calculatedReadMb, calculatedWriteMb);
+            auto topProcs = SystemMetrics::GetTopProcesses(DotNetDupe::System::Diagnostics::SystemResource::Cpu, 20);
+            double processReadMbSum = 0.0, processWriteMbSum = 0.0;
+            for (int i = 0; i < topProcs.GetCount(); ++i) {
+                const auto& proc = topProcs[i];
+                processReadMbSum += static_cast<double>(proc.disk.lDiskReadBytes > 0 ? (proc.disk.lDiskReadBytes / (1024.0 * 1024.0)) : 0.0);
+                processWriteMbSum += static_cast<double>(proc.disk.lDiskWriteBytes > 0 ? (proc.disk.lDiskWriteBytes / (1024.0 * 1024.0)) : 0.0);
+                metrics.TopProcesses.Add(MapProcessResourceDto(proc));
+            }
 
-        auto topProcs = SystemMetrics::GetTopProcesses(DotNetDupe::System::Diagnostics::SystemResource::Cpu, 20);
-        double processReadMbSum = 0.0, processWriteMbSum = 0.0;
-        for (int i = 0; i < topProcs.GetCount(); ++i) {
-            const auto& proc = topProcs[i];
-            processReadMbSum += static_cast<double>(proc.disk.lDiskReadBytes > 0 ? (proc.disk.lDiskReadBytes / (1024.0 * 1024.0)) : 0.0);
-            processWriteMbSum += static_cast<double>(proc.disk.lDiskWriteBytes > 0 ? (proc.disk.lDiskWriteBytes / (1024.0 * 1024.0)) : 0.0);
-            metrics.TopProcesses.Add(MapProcessResourceDto(proc));
+            metrics.DiskReadMBps = (calculatedReadMb > 0.0) ? calculatedReadMb : processReadMbSum;
+            metrics.DiskWriteMBps = (calculatedWriteMb > 0.0) ? calculatedWriteMb : processWriteMbSum;
+            metrics.NetworkUsageMbps = SystemMetrics::GetSystemNetworkUsage();
+
+            PopulateUserSessions(metrics);
+        } catch (...) {
         }
-
-        metrics.DiskReadMBps = (calculatedReadMb > 0.0) ? calculatedReadMb : processReadMbSum;
-        metrics.DiskWriteMBps = (calculatedWriteMb > 0.0) ? calculatedWriteMb : processWriteMbSum;
-        metrics.NetworkUsageMbps = SystemMetrics::GetSystemNetworkUsage();
-
-        PopulateUserSessions(metrics);
-
-        {
-            LockCS lock(s_metricsCs);
-            s_cachedMetrics = metrics;
-            s_lastMetricsFetchTimeMs = curTimeMs;
-            s_hasCachedMetrics = true;
-        }
-
         return metrics;
     }
 
     ServicesResponseDto SystemTelemetryProvider::QueryServices() {
         ServicesResponseDto dto;
-        auto rawServices = SystemMetrics::GetAllServices();
-        for (int i = 0; i < rawServices.GetCount(); ++i) {
-            const auto& svc = rawServices[i];
-            dto.Services.Add(ServiceInfoDto(svc.sServiceName, svc.sDisplayName, svc.sStatus, svc.sStartType, svc.iProcessId));
+        try {
+            auto rawServices = SystemMetrics::GetAllServices();
+            for (int i = 0; i < rawServices.GetCount(); ++i) {
+                const auto& svc = rawServices[i];
+                dto.Services.Add(ServiceInfoDto(svc.sServiceName, svc.sDisplayName, svc.sStatus, svc.sStartType, svc.iProcessId));
+            }
+        } catch (...) {
         }
         return dto;
     }
