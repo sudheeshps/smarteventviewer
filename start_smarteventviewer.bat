@@ -33,11 +33,11 @@ if %errorlevel% neq 0 (
 echo [LAUNCH] Starting Native C++ REST API Server: %SERVER_EXE%
 start "" "%SERVER_EXE%" 8080
 
-echo [WAIT] Waiting 2 seconds for server to initialize on http://localhost:8080/ ...
+echo [WAIT] Waiting 2 seconds for server to initialize on http://127.0.0.1:8080/ ...
 timeout /t 2 /nobreak >nul
 
-echo [BROWSER] Opening SIEM Dashboard at http://localhost:8080/ ...
-start "" "http://localhost:8080/"
+echo [BROWSER] Opening SIEM Dashboard at http://127.0.0.1:8080/ ...
+start "" "http://127.0.0.1:8080/"
 
 echo.
 echo SmartEventViewer SIEM is running!

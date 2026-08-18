@@ -1,20 +1,82 @@
 #include "pch.h"
+#if defined(_WIN32) || defined(_WIN64)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
+
 #include "Core/SystemTelemetryProvider.h"
 #include "Dto/TelemetryDtos.h"
 #include "System/Console.h"
+#include "System/DateTime.h"
 #include "System/Diagnostics/SystemMetrics.h"
+#include "System/Diagnostics/ProcessStreamer.h"
+#include "System/Diagnostics/ProcessStreamOptions.h"
 #include "System/Diagnostics/ActiveUserSession.h"
 #include "System/Diagnostics/TerminalSession.h"
 #include "System/Security/Principal/UserPrincipal.h"
+#include "System/Threading/CriticalSection.h"
+#include "System/Threading/Lock.h"
+#include "System/Collections/Generic/Dictionary.h"
 
 namespace SmartEventViewer {
     using Console = DotNetDupe::System::Console;
     using SystemMetrics = DotNetDupe::System::Diagnostics::SystemMetrics;
+    using ProcessStreamer = DotNetDupe::System::Diagnostics::ProcessStreamer;
+    using ProcessStreamOptions = DotNetDupe::System::Diagnostics::ProcessStreamOptions;
+    using ProcessMetricsDetail = DotNetDupe::System::Diagnostics::ProcessMetricsDetail;
     using ActiveUserSession = DotNetDupe::System::Diagnostics::ActiveUserSession;
     using TerminalSession = DotNetDupe::System::Diagnostics::TerminalSession;
     using RdpSessionState = DotNetDupe::System::Diagnostics::RdpSessionState;
     using UserPrincipal = DotNetDupe::System::Security::Principal::UserPrincipal;
     using UserClass = DotNetDupe::System::Security::Principal::UserClass;
+    using CriticalSection = DotNetDupe::System::Threading::CriticalSection;
+    using LockCS = DotNetDupe::System::Threading::Lock<CriticalSection>;
+
+    static DotNetDupe::System::Collections::Generic::Dictionary<unsigned long, ProcessResourceDto> s_processCache;
+    static CriticalSection s_processCacheCs;
+    static DotNetDupe::System::SmartPointer<ProcessStreamer> s_pProcessStreamer = nullptr;
+    static unsigned long long s_lastProcessStreamStartMs = 0;
+
+    static unsigned long long GetTickMs() {
+#if defined(_WIN32) || defined(_WIN64)
+        return static_cast<unsigned long long>(GetTickCount64());
+#else
+        return static_cast<unsigned long long>(DotNetDupe::System::DateTime::UtcNow().GetTicks() / 10000);
+#endif
+    }
+
+    static void UpdateBatchInCache(const DotNetDupe::System::Collections::Generic::List<DotNetDupe::System::Diagnostics::ProcessInfo>& batch) {
+        LockCS lock(s_processCacheCs);
+        for (int i = 0; i < batch.GetCount(); ++i) {
+            auto dto = SystemTelemetryProvider::MapProcessResourceDto(batch[i]);
+            s_processCache[dto.ProcessId] = dto;
+        }
+    }
+
+    static void EnsureProcessStreamerActive() {
+        LockCS lock(s_processCacheCs);
+        unsigned long long cur = GetTickMs();
+        if (!s_pProcessStreamer.IsNull() && (s_pProcessStreamer->IsRunning() || cur - s_lastProcessStreamStartMs < 2500)) return;
+        s_lastProcessStreamStartMs = cur;
+        ProcessStreamOptions options;
+        options.eDetailLevel = ProcessMetricsDetail::Progressive;
+        options.iBatchSize = 25;
+        options.iBatchIntervalMs = 50;
+        options.bIncludeNetworkInfo = true;
+
+        s_pProcessStreamer = DotNetDupe::System::SmartPointer<ProcessStreamer>::NewShared(options);
+        s_pProcessStreamer->OnBatch([](const DotNetDupe::System::Collections::Generic::List<DotNetDupe::System::Diagnostics::ProcessInfo>& batch) {
+            UpdateBatchInCache(batch);
+        });
+        s_pProcessStreamer->OnProcessUpdated([](const DotNetDupe::System::Diagnostics::ProcessInfo& proc) {
+            LockCS innerLock(s_processCacheCs);
+            auto dto = SystemTelemetryProvider::MapProcessResourceDto(proc);
+            s_processCache[dto.ProcessId] = dto;
+        });
+        s_pProcessStreamer->Start();
+    }
 
     void SystemTelemetryProvider::CalculateDiskRates(const DotNetDupe::System::Diagnostics::DiskInfo& diskInfo, double& outReadMb, double& outWriteMb) {
         static uint64_t s_lastDiskReadBytes = 0;
@@ -142,6 +204,7 @@ namespace SmartEventViewer {
     }
 
     SystemMetricsResponseDto SystemTelemetryProvider::QuerySummary() {
+        EnsureProcessStreamerActive();
         SystemMetricsResponseDto metrics;
         try {
             double sysCpu = SystemMetrics::GetSystemCpuUsage();
@@ -159,9 +222,10 @@ namespace SmartEventViewer {
             metrics.DiskWriteMBps = calculatedWriteMb;
             metrics.NetworkUsageMbps = SystemMetrics::GetSystemNetworkUsage();
 
-            auto topProcs = SystemMetrics::GetTopProcesses(DotNetDupe::System::Diagnostics::SystemResource::Cpu, 5);
-            for (int i = 0; i < topProcs.GetCount(); ++i) {
-                metrics.TopProcesses.Add(MapProcessResourceDto(topProcs[i]));
+            LockCS lock(s_processCacheCs);
+            auto values = s_processCache.GetValues();
+            for (int i = 0; i < values.GetLength(); ++i) {
+                metrics.TopProcesses.Add(values[i]);
             }
             return metrics;
         } catch (...) {
@@ -211,13 +275,12 @@ namespace SmartEventViewer {
     }
 
     SystemMetricsResponseDto SystemTelemetryProvider::QueryProcesses() {
+        EnsureProcessStreamerActive();
         SystemMetricsResponseDto metrics;
-        try {
-            auto topProcs = SystemMetrics::GetTopProcesses(DotNetDupe::System::Diagnostics::SystemResource::Cpu, 20);
-            for (int i = 0; i < topProcs.GetCount(); ++i) {
-                metrics.TopProcesses.Add(MapProcessResourceDto(topProcs[i]));
-            }
-        } catch (...) {
+        LockCS lock(s_processCacheCs);
+        auto values = s_processCache.GetValues();
+        for (int i = 0; i < values.GetLength(); ++i) {
+            metrics.TopProcesses.Add(values[i]);
         }
         return metrics;
     }
@@ -232,6 +295,7 @@ namespace SmartEventViewer {
     }
 
     SystemMetricsResponseDto SystemTelemetryProvider::QuerySystemMetrics() {
+        EnsureProcessStreamerActive();
         SystemMetricsResponseDto metrics;
         try {
             double sysCpu = SystemMetrics::GetSystemCpuUsage();
@@ -245,19 +309,15 @@ namespace SmartEventViewer {
             auto diskInfo = SystemMetrics::GetSystemDiskUsage();
             double calculatedReadMb = 0.0, calculatedWriteMb = 0.0;
             CalculateDiskRates(diskInfo, calculatedReadMb, calculatedWriteMb);
-
-            auto topProcs = SystemMetrics::GetTopProcesses(DotNetDupe::System::Diagnostics::SystemResource::Cpu, 20);
-            double processReadMbSum = 0.0, processWriteMbSum = 0.0;
-            for (int i = 0; i < topProcs.GetCount(); ++i) {
-                const auto& proc = topProcs[i];
-                processReadMbSum += static_cast<double>(proc.disk.lDiskReadBytes > 0 ? (proc.disk.lDiskReadBytes / (1024.0 * 1024.0)) : 0.0);
-                processWriteMbSum += static_cast<double>(proc.disk.lDiskWriteBytes > 0 ? (proc.disk.lDiskWriteBytes / (1024.0 * 1024.0)) : 0.0);
-                metrics.TopProcesses.Add(MapProcessResourceDto(proc));
-            }
-
-            metrics.DiskReadMBps = (calculatedReadMb > 0.0) ? calculatedReadMb : processReadMbSum;
-            metrics.DiskWriteMBps = (calculatedWriteMb > 0.0) ? calculatedWriteMb : processWriteMbSum;
+            metrics.DiskReadMBps = calculatedReadMb;
+            metrics.DiskWriteMBps = calculatedWriteMb;
             metrics.NetworkUsageMbps = SystemMetrics::GetSystemNetworkUsage();
+
+            LockCS lock(s_processCacheCs);
+            auto values = s_processCache.GetValues();
+            for (int i = 0; i < values.GetLength(); ++i) {
+                metrics.TopProcesses.Add(values[i]);
+            }
 
             PopulateUserSessions(metrics);
         } catch (...) {

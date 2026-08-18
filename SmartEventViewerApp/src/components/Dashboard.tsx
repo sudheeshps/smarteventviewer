@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { fetchApiChannels, fetchApiEvents, fetchEventSummary, fetchMetricsSummary, formatTo12Hour } from '../apiClient';
 import type { EventSummaryData } from '../apiClient';
 import { ServerLogsViewer } from './ServerLogsViewer';
@@ -57,6 +57,73 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
 
   const [metrics, setMetrics] = useState<SystemMetricsData>(defaultMetrics);
   const [serviceSearchQuery, setServiceSearchQuery] = useState<string>('');
+  const [processSearchQuery, setProcessSearchQuery] = useState<string>('');
+  const [processSortBy, setProcessSortBy] = useState<'cpu' | 'ram' | 'netRead' | 'netWrite' | 'pid' | 'name'>('cpu');
+  const [processSortOrder, setProcessSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [processFilterMode, setProcessFilterMode] = useState<'all' | 'high_cpu' | 'high_ram' | 'active_net'>('all');
+
+  const filteredAndSortedProcesses = useMemo(() => {
+    if (!metrics || !metrics.topProcesses) return [];
+    let list = [...metrics.topProcesses];
+
+    if (processFilterMode === 'high_cpu') {
+      list = list.filter((p) => p.cpuUsagePercent > 1.0);
+    } else if (processFilterMode === 'high_ram') {
+      list = list.filter((p) => p.memoryUsageMB > 100);
+    } else if (processFilterMode === 'active_net') {
+      list = list.filter((p) => (p.networkReadBytes > 0 || p.networkWriteBytes > 0));
+    }
+
+    if (processSearchQuery.trim()) {
+      const q = processSearchQuery.toLowerCase();
+      list = list.filter((p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.processId.toString().includes(q) ||
+        p.path.toLowerCase().includes(q) ||
+        p.commandLine.toLowerCase().includes(q)
+      );
+    }
+
+    list.sort((a, b) => {
+      let valA: number | string = 0;
+      let valB: number | string = 0;
+      if (processSortBy === 'cpu') {
+        valA = a.cpuUsagePercent;
+        valB = b.cpuUsagePercent;
+      } else if (processSortBy === 'ram') {
+        valA = a.memoryUsageMB;
+        valB = b.memoryUsageMB;
+      } else if (processSortBy === 'netRead') {
+        valA = a.networkReadBytes || 0;
+        valB = b.networkReadBytes || 0;
+      } else if (processSortBy === 'netWrite') {
+        valA = a.networkWriteBytes || 0;
+        valB = b.networkWriteBytes || 0;
+      } else if (processSortBy === 'pid') {
+        valA = a.processId;
+        valB = b.processId;
+      } else if (processSortBy === 'name') {
+        valA = a.name.toLowerCase();
+        valB = b.name.toLowerCase();
+      }
+
+      if (typeof valA === 'string' && typeof valB === 'string') {
+        return processSortOrder === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+      }
+      return processSortOrder === 'asc' ? ((valA as number) - (valB as number)) : ((valB as number) - (valA as number));
+    });
+
+    return list;
+  }, [metrics?.topProcesses, processSearchQuery, processSortBy, processSortOrder, processFilterMode]);
+
+  const toggleProcessSort = (field: 'cpu' | 'ram' | 'netRead' | 'netWrite' | 'pid' | 'name') => {
+    if (processSortBy === field) {
+      setProcessSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setProcessSortBy(field);
+      setProcessSortOrder('desc');
+    }
+  };
 
   const workerRef = React.useRef<Worker | null>(null);
   const isFetchingDashboardRef = React.useRef<boolean>(false);
@@ -559,63 +626,158 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
 
       {/* Sub-Tab 2: PROCESS ACTIVITY */}
       {activeDashboardTab === 'processes' && (
-        <section style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <h3 style={{ color: '#38bdf8', margin: 0, fontSize: '0.85rem', fontWeight: 700 }}>
-            🔥 Top Resource Consuming System Processes
-          </h3>
-          <div style={{ overflowX: 'auto' }}>
+        <section style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h3 style={{ color: '#38bdf8', margin: 0, fontSize: '0.85rem', fontWeight: 700 }}>
+                ⚡ System Process Telemetry
+              </h3>
+              <span style={{ fontSize: '0.68rem', color: '#94a3b8', background: 'rgba(15, 23, 42, 0.6)', padding: '2px 8px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                Total: <strong style={{ color: '#f8fafc' }}>{metrics?.topProcesses?.length || 0}</strong> | Showing: <strong style={{ color: '#38bdf8' }}>{filteredAndSortedProcesses.length}</strong>
+              </span>
+            </div>
+
+            {/* Quick Filter Pills */}
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+              {[
+                { id: 'all', label: 'All' },
+                { id: 'high_cpu', label: '🔥 High CPU (>1%)' },
+                { id: 'high_ram', label: '💾 High RAM (>100MB)' },
+                { id: 'active_net', label: '🌐 Active Net' },
+              ].map((filter) => (
+                <button
+                  key={filter.id}
+                  onClick={() => setProcessFilterMode(filter.id as typeof processFilterMode)}
+                  style={{
+                    padding: '3px 8px',
+                    fontSize: '0.65rem',
+                    fontWeight: 600,
+                    borderRadius: '4px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    background: processFilterMode === filter.id ? '#0284c7' : 'rgba(15, 23, 42, 0.7)',
+                    color: processFilterMode === filter.id ? '#ffffff' : '#94a3b8',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Process Search Input */}
+            <div style={{ position: 'relative', width: '220px' }}>
+              <input
+                type="text"
+                placeholder="Search name, PID, path..."
+                value={processSearchQuery}
+                onChange={(e) => setProcessSearchQuery(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '4px 24px 4px 8px',
+                  fontSize: '0.68rem',
+                  background: 'rgba(15, 23, 42, 0.8)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  borderRadius: '4px',
+                  color: '#f8fafc',
+                  outline: 'none',
+                }}
+              />
+              {processSearchQuery && (
+                <button
+                  onClick={() => setProcessSearchQuery('')}
+                  style={{
+                    position: 'absolute',
+                    right: '6px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#94a3b8',
+                    cursor: 'pointer',
+                    fontSize: '0.7rem',
+                    padding: 0,
+                  }}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div style={{ overflowX: 'auto', maxHeight: '520px', overflowY: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.72rem' }}>
               <thead>
-                <tr style={{ background: 'rgba(15, 23, 42, 0.9)', color: '#94a3b8', fontSize: '0.68rem' }}>
-                  <th style={{ padding: '6px', resize: 'horizontal', overflow: 'hidden' }}>PID</th>
-                  <th style={{ padding: '6px', resize: 'horizontal', overflow: 'hidden' }}>Process Name</th>
-                  <th style={{ padding: '6px', resize: 'horizontal', overflow: 'hidden' }}>CPU %</th>
-                  <th style={{ padding: '6px', resize: 'horizontal', overflow: 'hidden' }}>RAM (MB)</th>
-                  <th style={{ padding: '6px', resize: 'horizontal', overflow: 'hidden' }}>Net Read (Bytes)</th>
-                  <th style={{ padding: '6px', resize: 'horizontal', overflow: 'hidden' }}>Net Write (Bytes)</th>
-                  <th style={{ padding: '6px', resize: 'horizontal', overflow: 'hidden' }}>Open Ports</th>
-                  <th style={{ padding: '6px', resize: 'horizontal', overflow: 'hidden' }}>Conn Status</th>
-                  <th style={{ padding: '6px', resize: 'horizontal', overflow: 'hidden' }}>Executable Path</th>
-                  <th style={{ padding: '6px', resize: 'horizontal', overflow: 'hidden' }}>Command Line</th>
+                <tr style={{ background: 'rgba(15, 23, 42, 0.95)', color: '#94a3b8', fontSize: '0.68rem', position: 'sticky', top: 0, zIndex: 2 }}>
+                  <th onClick={() => toggleProcessSort('pid')} style={{ padding: '6px', cursor: 'pointer', userSelect: 'none' }}>
+                    PID {processSortBy === 'pid' ? (processSortOrder === 'asc' ? '▲' : '▼') : ''}
+                  </th>
+                  <th onClick={() => toggleProcessSort('name')} style={{ padding: '6px', cursor: 'pointer', userSelect: 'none' }}>
+                    Process Name {processSortBy === 'name' ? (processSortOrder === 'asc' ? '▲' : '▼') : ''}
+                  </th>
+                  <th onClick={() => toggleProcessSort('cpu')} style={{ padding: '6px', cursor: 'pointer', userSelect: 'none' }}>
+                    CPU % {processSortBy === 'cpu' ? (processSortOrder === 'asc' ? '▲' : '▼') : ''}
+                  </th>
+                  <th onClick={() => toggleProcessSort('ram')} style={{ padding: '6px', cursor: 'pointer', userSelect: 'none' }}>
+                    RAM (MB) {processSortBy === 'ram' ? (processSortOrder === 'asc' ? '▲' : '▼') : ''}
+                  </th>
+                  <th onClick={() => toggleProcessSort('netRead')} style={{ padding: '6px', cursor: 'pointer', userSelect: 'none' }}>
+                    Net Read {processSortBy === 'netRead' ? (processSortOrder === 'asc' ? '▲' : '▼') : ''}
+                  </th>
+                  <th onClick={() => toggleProcessSort('netWrite')} style={{ padding: '6px', cursor: 'pointer', userSelect: 'none' }}>
+                    Net Write {processSortBy === 'netWrite' ? (processSortOrder === 'asc' ? '▲' : '▼') : ''}
+                  </th>
+                  <th style={{ padding: '6px' }}>Open Ports</th>
+                  <th style={{ padding: '6px' }}>Conn Status</th>
+                  <th style={{ padding: '6px' }}>Executable Path</th>
+                  <th style={{ padding: '6px' }}>Command Line</th>
                 </tr>
               </thead>
               <tbody>
-                {metrics.topProcesses.map((p, idx) => {
-                  const isProtected = p.path.includes('Access Denied') || p.commandLine.includes('Access Denied');
-                  const cpuDisplay = (p.cpuUsagePercent < 0 || (isProtected && p.cpuUsagePercent === 0)) ? 'Protected' : p.cpuUsagePercent.toFixed(1);
-                  const ramDisplay = (p.memoryUsageMB <= 0 || (isProtected && p.memoryUsageMB === 0)) ? 'Protected' : p.memoryUsageMB.toString();
-                  
-                  const netReadDisplay = isProtected ? 'Protected' : (p.networkReadBytes ? p.networkReadBytes.toLocaleString() : '0 B');
-                  const netWriteDisplay = isProtected ? 'Protected' : (p.networkWriteBytes ? p.networkWriteBytes.toLocaleString() : '0 B');
-                  const portsDisplay = isProtected ? 'Protected' : (p.openPorts || '-');
+                {filteredAndSortedProcesses.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} style={{ padding: '16px', textAlign: 'center', color: '#94a3b8' }}>
+                      {processSearchQuery ? `No processes match "${processSearchQuery}"` : 'No processes available.'}
+                    </td>
+                  </tr>
+                ) : (
+                  filteredAndSortedProcesses.map((p, idx) => {
+                    const isProtected = p.path.includes('Access Denied') || p.commandLine.includes('Access Denied');
+                    const cpuDisplay = (p.cpuUsagePercent < 0 || (isProtected && p.cpuUsagePercent === 0)) ? 'Protected' : p.cpuUsagePercent.toFixed(1);
+                    const ramDisplay = (p.memoryUsageMB <= 0 || (isProtected && p.memoryUsageMB === 0)) ? 'Protected' : p.memoryUsageMB.toString();
+                    
+                    const netReadDisplay = isProtected ? 'Protected' : (p.networkReadBytes ? p.networkReadBytes.toLocaleString() + ' B' : '0 B');
+                    const netWriteDisplay = isProtected ? 'Protected' : (p.networkWriteBytes ? p.networkWriteBytes.toLocaleString() + ' B' : '0 B');
+                    const portsDisplay = isProtected ? 'Protected' : (p.openPorts || '-');
 
-                  return (
-                    <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                      <td style={{ padding: '5px', fontWeight: 700, color: '#38bdf8' }}>{p.processId}</td>
-                      <td style={{ padding: '5px', fontWeight: 600, color: '#f8fafc' }}>{p.name}</td>
-                      <td style={{ padding: '5px', color: cpuDisplay === 'Protected' ? '#94a3b8' : (p.cpuUsagePercent > 5 ? '#f87171' : '#e2e8f0'), fontWeight: 700, fontStyle: cpuDisplay === 'Protected' ? 'italic' : 'normal' }}>{cpuDisplay}</td>
-                      <td style={{ padding: '5px', color: ramDisplay === 'Protected' ? '#94a3b8' : '#c084fc', fontWeight: 600, fontStyle: ramDisplay === 'Protected' ? 'italic' : 'normal' }}>{ramDisplay}</td>
-                      <td style={{ padding: '5px', color: netReadDisplay === 'Protected' ? '#94a3b8' : '#38bdf8', fontStyle: netReadDisplay === 'Protected' ? 'italic' : 'normal' }}>{netReadDisplay}</td>
-                      <td style={{ padding: '5px', color: netWriteDisplay === 'Protected' ? '#94a3b8' : '#fbbf24', fontStyle: netWriteDisplay === 'Protected' ? 'italic' : 'normal' }}>{netWriteDisplay}</td>
-                      <td style={{ padding: '5px', color: portsDisplay === 'Protected' ? '#94a3b8' : '#38bdf8', fontWeight: 600, fontStyle: portsDisplay === 'Protected' ? 'italic' : 'normal' }}>{portsDisplay}</td>
-                      <td style={{ padding: '5px' }}>
-                        {isProtected ? (
-                          <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>Protected</span>
-                        ) : p.connectionEstablished ? (
-                          <span style={{ background: 'rgba(74,222,128,0.2)', color: '#4ade80', padding: '1px 6px', borderRadius: '3px', fontWeight: 700, fontSize: '0.62rem' }}>
-                            ESTABLISHED
-                          </span>
-                        ) : (
-                          <span style={{ background: 'rgba(148,163,184,0.15)', color: '#94a3b8', padding: '1px 6px', borderRadius: '3px', fontWeight: 600, fontSize: '0.62rem' }}>
-                            LISTEN / CLOSED
-                          </span>
-                        )}
-                      </td>
-                      <td style={{ padding: '5px', fontFamily: 'monospace', fontSize: '0.65rem', color: isProtected ? '#f87171' : '#94a3b8', wordBreak: 'break-all', whiteSpace: 'normal', maxWidth: '200px' }}>{p.path}</td>
-                      <td style={{ padding: '5px', fontFamily: 'monospace', fontSize: '0.65rem', color: isProtected ? '#f87171' : '#cbd5e1', wordBreak: 'break-all', whiteSpace: 'normal', maxWidth: '240px' }}>{p.commandLine}</td>
-                    </tr>
-                  );
-                })}
+                    return (
+                      <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={{ padding: '5px', fontWeight: 700, color: '#38bdf8' }}>{p.processId}</td>
+                        <td style={{ padding: '5px', fontWeight: 600, color: '#f8fafc' }}>{p.name}</td>
+                        <td style={{ padding: '5px', color: cpuDisplay === 'Protected' ? '#94a3b8' : (p.cpuUsagePercent > 5 ? '#f87171' : '#e2e8f0'), fontWeight: 700, fontStyle: cpuDisplay === 'Protected' ? 'italic' : 'normal' }}>{cpuDisplay}</td>
+                        <td style={{ padding: '5px', color: ramDisplay === 'Protected' ? '#94a3b8' : '#c084fc', fontWeight: 600, fontStyle: ramDisplay === 'Protected' ? 'italic' : 'normal' }}>{ramDisplay}</td>
+                        <td style={{ padding: '5px', color: netReadDisplay === 'Protected' ? '#94a3b8' : '#38bdf8', fontStyle: netReadDisplay === 'Protected' ? 'italic' : 'normal' }}>{netReadDisplay}</td>
+                        <td style={{ padding: '5px', color: netWriteDisplay === 'Protected' ? '#94a3b8' : '#fbbf24', fontStyle: netWriteDisplay === 'Protected' ? 'italic' : 'normal' }}>{netWriteDisplay}</td>
+                        <td style={{ padding: '5px', color: portsDisplay === 'Protected' ? '#94a3b8' : '#38bdf8', fontWeight: 600, fontStyle: portsDisplay === 'Protected' ? 'italic' : 'normal' }}>{portsDisplay}</td>
+                        <td style={{ padding: '5px' }}>
+                          {isProtected ? (
+                            <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>Protected</span>
+                          ) : p.connectionEstablished ? (
+                            <span style={{ background: 'rgba(74,222,128,0.2)', color: '#4ade80', padding: '1px 6px', borderRadius: '3px', fontWeight: 700, fontSize: '0.62rem' }}>
+                              ESTABLISHED
+                            </span>
+                          ) : (
+                            <span style={{ background: 'rgba(148,163,184,0.15)', color: '#94a3b8', padding: '1px 6px', borderRadius: '3px', fontWeight: 600, fontSize: '0.62rem' }}>
+                              LISTEN / CLOSED
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ padding: '5px', fontFamily: 'monospace', fontSize: '0.65rem', color: isProtected ? '#f87171' : '#94a3b8', wordBreak: 'break-all', whiteSpace: 'normal', maxWidth: '200px' }}>{p.path}</td>
+                        <td style={{ padding: '5px', fontFamily: 'monospace', fontSize: '0.65rem', color: isProtected ? '#f87171' : '#cbd5e1', wordBreak: 'break-all', whiteSpace: 'normal', maxWidth: '240px' }}>{p.commandLine}</td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
