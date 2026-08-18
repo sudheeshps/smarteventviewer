@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchApiChannels, fetchApiEvents, fetchEventSummary, formatTo12Hour } from '../apiClient';
+import { fetchApiChannels, fetchApiEvents, fetchEventSummary, fetchMetricsSummary, formatTo12Hour } from '../apiClient';
 import type { EventSummaryData } from '../apiClient';
 import { ServerLogsViewer } from './ServerLogsViewer';
 import type { SystemMetricsData, EventsData } from '../apiClient';
@@ -59,6 +59,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
   const [serviceSearchQuery, setServiceSearchQuery] = useState<string>('');
 
   const workerRef = React.useRef<Worker | null>(null);
+  const isFetchingDashboardRef = React.useRef<boolean>(false);
 
   useEffect(() => {
     const baseUrl = window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080';
@@ -120,9 +121,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
       }
     };
 
+    const channelRefreshInterval = setInterval(() => {
+      fetchDashboardChannelsAndEvents(baseUrl);
+    }, 15000);
+
     worker.postMessage({ type: 'START_POLLING', baseUrl, subTab: activeDashboardTab });
 
     return () => {
+      clearInterval(channelRefreshInterval);
       worker.postMessage({ type: 'STOP_POLLING' });
       worker.terminate();
       workerRef.current = null;
@@ -136,6 +142,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
   }, [activeDashboardTab]);
 
   const fetchDashboardChannelsAndEvents = async (baseUrl: string) => {
+    if (isFetchingDashboardRef.current) return;
+    isFetchingDashboardRef.current = true;
     try {
       // 1. Fetch channel count from native backend
       const channelsData = await fetchApiChannels(baseUrl).catch(() => ({ channels: [] }));
@@ -190,8 +198,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
         desc: (e.message as string) || `Event #${e.id} in Security`,
       }));
       setRecentEvents(mappedEvents);
+
+      // 4. Fetch initial system metrics immediately so gauges populate upon load
+      const initialMetrics = await fetchMetricsSummary(baseUrl).catch(() => null);
+      if (initialMetrics) {
+        setMetrics((prev) => ({
+          ...(prev || defaultMetrics),
+          ...initialMetrics,
+          topProcesses: (initialMetrics.topProcesses && initialMetrics.topProcesses.length > 0) ? initialMetrics.topProcesses : (prev?.topProcesses || []),
+        }));
+      }
     } catch (err) {
       console.error('[DASHBOARD DEBUG] Error fetching dashboard channels and events:', err);
+    } finally {
+      isFetchingDashboardRef.current = false;
     }
   };
 

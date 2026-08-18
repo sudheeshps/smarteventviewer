@@ -36,6 +36,8 @@ namespace SmartEventViewer {
         void SampleSessionsAndServices(unsigned long long curTimeMs);
 
     public:
+        static DotNetDupe::System::SmartPointer<ITelemetryService> GetDefault();
+
         TelemetryService();
         explicit TelemetryService(
             const DotNetDupe::System::SmartPointer<ISystemTelemetryProvider>& spProvider,

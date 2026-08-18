@@ -3,6 +3,7 @@
 
 let socket: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let heartbeatIntervalId: ReturnType<typeof setInterval> | null = null;
 let currentAbortController: AbortController | null = null;
 let currentBaseUrl: string = '';
 let currentActiveSubTab: string = 'overview';
@@ -19,6 +20,9 @@ self.onmessage = (event: MessageEvent) => {
     fetchActiveSubTab(false);
     if (pollingIntervalId !== null) clearInterval(pollingIntervalId);
     pollingIntervalId = setInterval(() => {
+      if (!socket || socket.readyState === WebSocket.CLOSED || socket.readyState === WebSocket.CLOSING) {
+        scheduleReconnect();
+      }
       fetchActiveSubTab(false);
     }, 2000);
   } else if (type === 'STOP_POLLING') {
@@ -30,9 +34,16 @@ self.onmessage = (event: MessageEvent) => {
       clearTimeout(reconnectTimer);
       reconnectTimer = null;
     }
+    if (heartbeatIntervalId !== null) {
+      clearInterval(heartbeatIntervalId);
+      heartbeatIntervalId = null;
+    }
     if (socket) {
       socket.onclose = null;
-      socket.close();
+      socket.onerror = null;
+      socket.onmessage = null;
+      socket.onopen = null;
+      try { socket.close(); } catch {}
       socket = null;
     }
     if (currentAbortController) {
@@ -48,25 +59,77 @@ self.onmessage = (event: MessageEvent) => {
   }
 };
 
+function getWebSocketUrl(): string {
+  if (currentBaseUrl) {
+    return currentBaseUrl.replace(/^http/, 'ws') + '/ws/telemetry';
+  }
+  const origin = self.location.origin;
+  if (origin && origin.includes('://')) {
+    const normalizedOrigin = origin.replace('localhost', '127.0.0.1');
+    return normalizedOrigin.replace(/^http/, 'ws') + '/ws/telemetry';
+  }
+  return 'ws://127.0.0.1:8080/ws/telemetry';
+}
+
+function scheduleReconnect() {
+  if (heartbeatIntervalId !== null) {
+    clearInterval(heartbeatIntervalId);
+    heartbeatIntervalId = null;
+  }
+  if (socket) {
+    socket.onclose = null;
+    socket.onerror = null;
+    socket.onmessage = null;
+    socket.onopen = null;
+    try { socket.close(); } catch {}
+    socket = null;
+  }
+  if (!reconnectTimer) {
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      connectWebSocket();
+    }, 2000);
+  }
+}
+
 function connectWebSocket() {
   if (socket) {
     socket.onclose = null;
-    socket.close();
+    socket.onerror = null;
+    socket.onmessage = null;
+    socket.onopen = null;
+    try { socket.close(); } catch {}
     socket = null;
   }
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
   }
+  if (heartbeatIntervalId !== null) {
+    clearInterval(heartbeatIntervalId);
+    heartbeatIntervalId = null;
+  }
 
-  const urlPrefix = currentBaseUrl || (self.location.origin.includes(':') ? self.location.origin : 'http://127.0.0.1:8080');
-  const wsUrl = urlPrefix.replace(/^http/, 'ws') + '/ws/telemetry';
+  const wsUrl = getWebSocketUrl();
 
   try {
     socket = new WebSocket(wsUrl);
 
     socket.onopen = () => {
-      console.log('[TelemetryWorker] Push WebSocket connected:', wsUrl);
+      console.log('[TelemetryWorker] WebSocket connected:', wsUrl);
+      fetchActiveSubTab(true);
+      if (heartbeatIntervalId !== null) clearInterval(heartbeatIntervalId);
+      heartbeatIntervalId = setInterval(() => {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          try {
+            socket.send(JSON.stringify({ type: 'PING' }));
+          } catch {
+            scheduleReconnect();
+          }
+        } else {
+          scheduleReconnect();
+        }
+      }, 10000);
     };
 
     socket.onmessage = (event: MessageEvent) => {
@@ -80,15 +143,14 @@ function connectWebSocket() {
     };
 
     socket.onerror = () => {
+      scheduleReconnect();
     };
 
     socket.onclose = () => {
-      socket = null;
-      reconnectTimer = setTimeout(() => {
-        connectWebSocket();
-      }, 5000);
+      scheduleReconnect();
     };
   } catch {
+    scheduleReconnect();
   }
 }
 
@@ -132,6 +194,11 @@ async function fetchActiveSubTab(forceAbort: boolean = false) {
   isFetching = true;
   currentAbortController = new AbortController();
   const signal = currentAbortController.signal;
+  const timeoutId = setTimeout(() => {
+    if (currentAbortController) {
+      currentAbortController.abort();
+    }
+  }, 4000);
   const urlPrefix = currentBaseUrl ? currentBaseUrl : (self.location.origin.includes(':') ? self.location.origin : 'http://127.0.0.1:8080');
 
   try {
@@ -235,6 +302,7 @@ async function fetchActiveSubTab(forceAbort: boolean = false) {
       console.warn('[TelemetryWorker] Fetch error for category:', currentActiveSubTab, err);
     }
   } finally {
+    clearTimeout(timeoutId);
     currentAbortController = null;
     isFetching = false;
   }

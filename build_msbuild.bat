@@ -55,8 +55,31 @@ if not exist "%MODEL_FILE%" (
     echo [INFO] Verified local LLM model binary exists at .\%MODEL_FILE%.
 )
 
+:: Locate MSBuild executable
+where msbuild >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+    set "MSBUILD_EXE=msbuild"
+) else (
+    set "MSBUILD_EXE="
+    if exist "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" (
+        for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe 2^>nul`) do (
+            if not defined MSBUILD_EXE set "MSBUILD_EXE=%%i"
+        )
+    )
+    if exist "%ProgramFiles%\Microsoft Visual Studio\Installer\vswhere.exe" (
+        for /f "usebackq tokens=*" %%i in (`"%ProgramFiles%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe 2^>nul`) do (
+            if not defined MSBUILD_EXE set "MSBUILD_EXE=%%i"
+        )
+    )
+)
+
+if not defined MSBUILD_EXE (
+    echo [ERROR] MSBuild.exe could not be found. Please run from a Developer Command Prompt.
+    exit /b 1
+)
+
 echo [INFO] Running MSBuild (Configuration=%CONFIG%, Platform=%PLATFORM%, Target=%TARGET%)...
-msbuild SmartEventViewer.sln /t:%TARGET% /p:Configuration=%CONFIG% /p:Platform=%PLATFORM% /m
+"%MSBUILD_EXE%" SmartEventViewer.sln /t:%TARGET% /p:Configuration=%CONFIG% /p:Platform=%PLATFORM% /m
 
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] MSBuild failed with error code %ERRORLEVEL%.
@@ -71,8 +94,10 @@ if "%TARGET%"=="Clean" (
 echo [INFO] Copying runtime dependencies to root binary directory...
 if not exist bin\%PLATFORM%\%CONFIG% mkdir bin\%PLATFORM%\%CONFIG%
 
-if exist packages\DotNetDupe.4.0.0\runtimes\win-x64\native (
-    copy /y packages\DotNetDupe.4.0.0\runtimes\win-x64\native\*.dll bin\%PLATFORM%\%CONFIG%\ >nul 2>&1
+for /d %%d in (packages\DotNetDupe.*) do (
+    if exist "%%d\runtimes\win-x64\native" (
+        copy /y "%%d\runtimes\win-x64\native\*.dll" bin\%PLATFORM%\%CONFIG%\ >nul 2>&1
+    )
 )
 
 if exist vcpkg_installed\x64-windows\x64-windows\bin (

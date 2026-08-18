@@ -159,7 +159,7 @@ namespace SmartEventViewer {
             metrics.DiskWriteMBps = calculatedWriteMb;
             metrics.NetworkUsageMbps = SystemMetrics::GetSystemNetworkUsage();
 
-            auto topProcs = SystemMetrics::GetTopProcesses(DotNetDupe::System::Diagnostics::SystemResource::Cpu, 10);
+            auto topProcs = SystemMetrics::GetTopProcesses(DotNetDupe::System::Diagnostics::SystemResource::Cpu, 5);
             for (int i = 0; i < topProcs.GetCount(); ++i) {
                 metrics.TopProcesses.Add(MapProcessResourceDto(topProcs[i]));
             }

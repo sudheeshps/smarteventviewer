@@ -4,6 +4,7 @@
 #include "System/Threading/Thread.h"
 #include "System/Net/Sockets/TcpClient.h"
 #include "System/Net/WebSockets/WebSocket.h"
+#include "System/Net/WebSockets/WebSocketException.h"
 #include "System/Text/Json/JsonSerializer.h"
 
 using namespace DotNetDupe::System;
@@ -70,6 +71,12 @@ public:
             m_spWebSocket = SmartPtr<WebSocket>::NewShared(stream);
             m_spWebSocket->SetState(WebSocketState::Open);
             return true;
+        } catch (const WebSocketException& ex) {
+            Console::WriteLine("[TEST_WS] Connect WebSocketException: {0}", ex.What());
+            return false;
+        } catch (const DotNetDupe::System::Exception& ex) {
+            Console::WriteLine("[TEST_WS] Connect Exception: {0}", ex.What());
+            return false;
         } catch (...) {
             return false;
         }
@@ -102,14 +109,30 @@ public:
                 return m_spWebSocket->ReceiveText(sOutMessage);
             }
             return false;
+        } catch (const WebSocketException& ex) {
+            Console::WriteLine("[TEST_WS] Receive WebSocketException: {0}", ex.What());
+            return false;
+        } catch (const DotNetDupe::System::Exception& ex) {
+            Console::WriteLine("[TEST_WS] Receive Exception: {0}", ex.What());
+            return false;
         } catch (...) {
             return false;
         }
     }
 
     void Close() {
-        if (!m_spWebSocket.IsNull()) m_spWebSocket->Close();
-        m_tcpClient.Close();
+        try {
+            if (!m_spWebSocket.IsNull()) m_spWebSocket->Close();
+        } catch (const WebSocketException& ex) {
+            Console::WriteLine("[TEST_WS] Close WebSocketException: {0}", ex.What());
+        } catch (const DotNetDupe::System::Exception& ex) {
+            Console::WriteLine("[TEST_WS] Close Exception: {0}", ex.What());
+        } catch (...) {
+        }
+        try {
+            m_tcpClient.Close();
+        } catch (...) {
+        }
     }
 };
 
@@ -166,4 +189,9 @@ TEST(PushNotificationTests, GivenConnectedWebSocketClient_WhenBackgroundTelemetr
         EXPECT_FALSE(sNotification.IsEmpty());
         EXPECT_TRUE(sNotification.Contains("TELEMETRY_UPDATED"));
     }
+}
+
+TEST(PushNotificationTests, GivenClosedWebSocket_WhenCloseCalled_ThenHandlesWebSocketExceptionSafely) {
+    TestWebSocketClient wsClient;
+    EXPECT_NO_THROW(wsClient.Close());
 }

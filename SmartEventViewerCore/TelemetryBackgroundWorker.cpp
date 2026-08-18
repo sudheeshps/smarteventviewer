@@ -17,7 +17,7 @@ namespace SmartEventViewer {
         if (s_bRunning) return;
         s_bRunning = true;
         s_spTelemetryService = spService.IsNull() 
-            ? DotNetDupe::System::SmartPointer<ITelemetryService>(DotNetDupe::System::SmartPointer<TelemetryService>::NewShared()) 
+            ? TelemetryService::GetDefault() 
             : spService;
 
         s_spWorkerThread = DotNetDupe::System::SmartPointer<Thread>::NewShared(ThreadStart([]() {

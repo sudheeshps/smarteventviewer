@@ -16,6 +16,7 @@ namespace SmartEventViewer {
     struct EventChannelCacheEntry {
         String ChannelName{};
         unsigned long long LastEventCount{ 0 };
+        unsigned long long FetchTimeMs{ 0 };
         EventSummaryResponseDto SummaryDto{};
         DotNetDupe::System::Collections::Generic::Dictionary<String, EventLogResponseDto> CachedPages{};
     };
@@ -35,6 +36,8 @@ namespace SmartEventViewer {
         void StoreCachedPage(const String& sChannel, const String& sPageKey, const EventLogResponseDto& pageDto);
 
     public:
+        static DotNetDupe::System::SmartPointer<IEventService> GetDefault();
+
         EventService();
         explicit EventService(
             const DotNetDupe::System::SmartPointer<IEventLogReader>& spReader,

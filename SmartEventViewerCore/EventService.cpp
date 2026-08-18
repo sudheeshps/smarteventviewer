@@ -1,13 +1,19 @@
 #include "pch.h"
+#if defined(_WIN32) || defined(_WIN64)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
+
 #include "Core/EventService.h"
 #include "Platform/WindowsEtwLogReader.h"
 #include "Core/AnomalyEngine.h"
-#include "System/Diagnostics/Stopwatch.h"
+#include "System/DateTime.h"
 #include "System/Console.h"
 #include "Logging/AppLoggerManager.h"
 
 using Console = DotNetDupe::System::Console;
-using Stopwatch = DotNetDupe::System::Diagnostics::Stopwatch;
 using DotNetDupe::System::SmartPointer;
 
 namespace SmartEventViewer {
@@ -32,6 +38,25 @@ namespace SmartEventViewer {
         }
     }
 
+    static unsigned long long GetCurrentTickMs() {
+#if defined(_WIN32) || defined(_WIN64)
+        return static_cast<unsigned long long>(GetTickCount64());
+#else
+        return static_cast<unsigned long long>(DotNetDupe::System::DateTime::UtcNow().GetTicks() / 10000);
+#endif
+    }
+
+    static DotNetDupe::System::SmartPointer<IEventService> s_spDefaultEventService = nullptr;
+    static CriticalSection s_defaultEventServiceCs;
+
+    DotNetDupe::System::SmartPointer<IEventService> EventService::GetDefault() {
+        LockCS lock(s_defaultEventServiceCs);
+        if (s_spDefaultEventService.IsNull()) {
+            s_spDefaultEventService = DotNetDupe::System::SmartPointer<EventService>::NewShared();
+        }
+        return s_spDefaultEventService;
+    }
+
     EventService::EventService()
         : m_spReader(SmartPointer<IEventLogReader>(SmartPointer<WindowsEtwLogReader>::NewShared())),
           m_spAnomalyEngine(SmartPointer<IAnomalyEngine>(SmartPointer<AnomalyEngine>::NewShared())) {
@@ -50,9 +75,15 @@ namespace SmartEventViewer {
     }
 
     ChannelsResponseDto EventService::GetChannels() {
+        static ChannelsResponseDto s_cachedChannels;
+        static unsigned long long s_lastChannelsFetchMs = 0;
+        unsigned long long cur = GetCurrentTickMs();
+        if (cur - s_lastChannelsFetchMs < 30000 && s_cachedChannels.Channels.GetCount() > 0) return s_cachedChannels;
         ChannelsResponseDto dto;
         try {
             dto.Channels = m_spReader->GetEventChannels();
+            s_cachedChannels = dto;
+            s_lastChannelsFetchMs = cur;
         } catch (const DotNetDupe::System::Exception& ex) {
             AppLoggerManager::Error("SERVER", String::Format("[EVENTS_SVC] GetChannels error: {0}", ex.What()));
         }
@@ -62,7 +93,8 @@ namespace SmartEventViewer {
     bool EventService::TryGetCachedSummary(const String& sChannel, unsigned long long uTotal, EventSummaryResponseDto& outSummary) {
         LockCS lock(m_cacheCs);
         EventChannelCacheEntry entry;
-        if (m_cache.TryGet(sChannel, entry) && entry.LastEventCount == uTotal && uTotal > 0) {
+        unsigned long long cur = GetCurrentTickMs();
+        if (m_cache.TryGet(sChannel, entry) && (cur - entry.FetchTimeMs < 10000 || (entry.LastEventCount == uTotal && uTotal > 0))) {
             outSummary = entry.SummaryDto;
             return true;
         }
@@ -99,14 +131,16 @@ namespace SmartEventViewer {
 
     EventSummaryResponseDto EventService::GetEventSummary(const String& sChannelName) {
         String sTarget = sChannelName.IsEmpty() ? String("Application") : sChannelName;
+        EventSummaryResponseDto cached;
         unsigned long long uTotal = m_spReader->GetChannelEventCount(sTarget);
-        EventSummaryResponseDto dto;
-        if (TryGetCachedSummary(sTarget, uTotal, dto)) return dto;
+        if (TryGetCachedSummary(sTarget, uTotal, cached)) return cached;
 
+        EventSummaryResponseDto dto;
         CalculateSummaryCounts(sTarget, dto);
         EventChannelCacheEntry entry;
         entry.ChannelName = sTarget;
         entry.LastEventCount = uTotal;
+        entry.FetchTimeMs = GetCurrentTickMs();
         entry.SummaryDto = dto;
 
         LockCS lock(m_cacheCs);
@@ -139,10 +173,12 @@ namespace SmartEventViewer {
     void EventService::StoreCachedPage(const String& sChannel, const String& sPageKey, const EventLogResponseDto& pageDto) {
         LockCS lock(m_cacheCs);
         EventChannelCacheEntry entry;
-        if (m_cache.TryGet(sChannel, entry)) {
-            entry.CachedPages[sPageKey] = pageDto;
-            m_cache.Put(sChannel, entry);
+        if (!m_cache.TryGet(sChannel, entry)) {
+            entry.ChannelName = sChannel;
+            entry.FetchTimeMs = GetCurrentTickMs();
         }
+        entry.CachedPages[sPageKey] = pageDto;
+        m_cache.Put(sChannel, entry);
     }
 
     static bool CaseInsensitiveEqual(const String& s1, const String& s2) {

@@ -22,6 +22,17 @@ namespace SmartEventViewer {
 #endif
     }
 
+    static DotNetDupe::System::SmartPointer<ITelemetryService> s_spDefaultTelemetryService = nullptr;
+    static CriticalSection s_defaultTelemetryServiceCs;
+
+    DotNetDupe::System::SmartPointer<ITelemetryService> TelemetryService::GetDefault() {
+        LockCS lock(s_defaultTelemetryServiceCs);
+        if (s_spDefaultTelemetryService.IsNull()) {
+            s_spDefaultTelemetryService = DotNetDupe::System::SmartPointer<TelemetryService>::NewShared();
+        }
+        return s_spDefaultTelemetryService;
+    }
+
     TelemetryService::TelemetryService()
         : m_spProvider(DotNetDupe::System::SmartPointer<ISystemTelemetryProvider>(DotNetDupe::System::SmartPointer<WindowsSystemTelemetryProvider>::NewShared())),
           m_spNotifier(nullptr),
@@ -106,9 +117,9 @@ namespace SmartEventViewer {
 
     SystemMetricsResponseDto TelemetryService::GetProcesses() {
         SystemMetricsResponseDto cached;
-        if (TryGetCached("processes", 1000, cached)) return cached;
+        if (TryGetCached("processes", 2500, cached)) return cached;
         auto fresh = m_spProvider->QueryProcesses();
-        PutCached("processes", 1000, fresh);
+        PutCached("processes", 2500, fresh);
         return fresh;
     }
 
@@ -121,7 +132,13 @@ namespace SmartEventViewer {
     }
 
     ServicesResponseDto TelemetryService::GetServices() {
-        return m_spProvider->QueryServices();
+        static ServicesResponseDto s_cachedServices;
+        static unsigned long long s_lastFetchMs = 0;
+        unsigned long long cur = GetCurrentTickMs();
+        if (cur - s_lastFetchMs < 10000 && s_cachedServices.Services.GetCount() > 0) return s_cachedServices;
+        s_cachedServices = m_spProvider->QueryServices();
+        s_lastFetchMs = cur;
+        return s_cachedServices;
     }
 
     SystemMetricsResponseDto TelemetryService::GetFullMetrics() {
@@ -144,11 +161,11 @@ namespace SmartEventViewer {
 
     void TelemetryService::SampleSummaryAndProcesses() {
         try {
-            auto summary = m_spProvider->QuerySummary();
+            auto summary = GetSummary();
             if (m_spChangeDetector->HasSummaryChanged(summary)) {
                 m_spNotifier->BroadcastCategoryUpdate("summary");
             }
-            auto processes = m_spProvider->QueryProcesses();
+            auto processes = GetProcesses();
             if (m_spChangeDetector->HaveProcessesChanged(processes)) {
                 m_spNotifier->BroadcastCategoryUpdate("processes");
             }

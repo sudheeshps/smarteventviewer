@@ -32,6 +32,14 @@ copy /y bin\x64\Release\SmartEventViewerServer.exe "%DIST_DIR%\bin\"
 copy /y bin\x64\Release\SmartEventViewerTests.exe "%DIST_DIR%\bin\"
 copy /y bin\x64\Release\SmartEventViewerIntegrationTests.exe "%DIST_DIR%\bin\" 2>nul
 
+:: Copy vcpkg dependencies (llama.dll, ggml.dll, etc.)
+if exist vcpkg_installed\x64-windows\x64-windows\bin (
+    copy /y vcpkg_installed\x64-windows\x64-windows\bin\*.dll "%DIST_DIR%\bin\" >nul 2>&1
+)
+if exist vcpkg_installed\x64-windows\bin (
+    copy /y vcpkg_installed\x64-windows\bin\*.dll "%DIST_DIR%\bin\" >nul 2>&1
+)
+
 :: Dynamically detect the latest installed DotNetDupe package directory in packages\
 set DOTNETDUPE_DIR=
 for /d %%d in (packages\DotNetDupe.*) do (
@@ -53,24 +61,38 @@ cd SmartEventViewerApp
 call npm run build
 cd ..
 
-echo [INFO] Copying Front-end React + Vite Assets...
-xcopy /s /e /y SmartEventViewerApp\dist "%DIST_DIR%\UI\"
+echo [INFO] Copying Front-end React + Vite Assets to UI and Package...
+if not exist "%DIST_DIR%\UI" mkdir "%DIST_DIR%\UI"
+if not exist "UI" mkdir "UI"
+xcopy /s /e /y /i "SmartEventViewerApp\dist\*" "%DIST_DIR%\UI\"
+xcopy /s /e /y /i "SmartEventViewerApp\dist\*" "UI\"
 
-echo [INFO] Copying Local GGUF LLM Model Files (models/Llama-3-8B-Instruct.Q4_K_M.gguf)...
+if exist "SmartEventViewerApp\public\favicon.ico" (
+    copy /y "SmartEventViewerApp\public\favicon.ico" "%DIST_DIR%\UI\" >nul 2>&1
+    copy /y "SmartEventViewerApp\public\favicon.ico" "UI\" >nul 2>&1
+)
+
+echo [INFO] Copying Local GGUF LLM Model Files (models/)...
 if exist models (
-    xcopy /s /e /y models "%DIST_DIR%\models\"
+    xcopy /s /e /y /i "models\*" "%DIST_DIR%\models\"
 )
 
 echo [INFO] Creating Launcher Script (start_smarteventviewer.bat)...
 (
     echo @echo off
+    echo setlocal enabledelayedexpansion
+    echo cd /d "%%~dp0"
     echo echo Starting SmartEventViewer SIEM REST API Server and React Dashboard...
     echo start "" "bin\SmartEventViewerServer.exe" 8080
     echo timeout /t 2 /nobreak ^>nul
-    echo start "" "http://localhost:8080/"
-    echo echo SmartEventViewer is running at http://localhost:8080/
+    echo start "" "http://127.0.0.1:8080/"
+    echo echo SmartEventViewer is running at http://127.0.0.1:8080/
 ) > "%DIST_DIR%\start_smarteventviewer.bat"
+
+rem echo [INFO] Creating ZIP Archive: %ZIP_NAME%...
+rem powershell -NoProfile -Command "Compress-Archive -Path '%DIST_DIR%\*' -DestinationPath '%ZIP_NAME%' -Force"
 
 echo ===================================================
 echo [SUCCESS] Package created successfully in %DIST_DIR%!
+echo [SUCCESS] Release ZIP archive: %ZIP_NAME%
 echo ===================================================

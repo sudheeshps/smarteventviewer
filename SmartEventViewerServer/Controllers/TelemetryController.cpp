@@ -3,11 +3,11 @@
 
 namespace SmartEventViewer {
     TelemetryController::TelemetryController()
-        : m_spTelemetryService(DotNetDupe::System::SmartPointer<TelemetryService>::NewShared()) {
+        : m_spTelemetryService(TelemetryService::GetDefault()) {
     }
 
     TelemetryController::TelemetryController(const DotNetDupe::System::SmartPointer<ITelemetryService>& spService)
-        : m_spTelemetryService(spService.IsNull() ? DotNetDupe::System::SmartPointer<ITelemetryService>(DotNetDupe::System::SmartPointer<TelemetryService>::NewShared()) : spService) {
+        : m_spTelemetryService(spService.IsNull() ? TelemetryService::GetDefault() : spService) {
     }
 
     SystemMetricsResponseDto TelemetryController::GetSummary() {

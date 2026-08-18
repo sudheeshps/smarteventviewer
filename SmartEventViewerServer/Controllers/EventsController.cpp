@@ -14,11 +14,11 @@ namespace SmartEventViewer {
     }
 
     EventsController::EventsController()
-        : m_spEventService(DotNetDupe::System::SmartPointer<EventService>::NewShared()) {
+        : m_spEventService(EventService::GetDefault()) {
     }
 
     EventsController::EventsController(const DotNetDupe::System::SmartPointer<IEventService>& spService)
-        : m_spEventService(spService.IsNull() ? DotNetDupe::System::SmartPointer<IEventService>(DotNetDupe::System::SmartPointer<EventService>::NewShared()) : spService) {
+        : m_spEventService(spService.IsNull() ? EventService::GetDefault() : spService) {
     }
 
     ChannelsResponseDto EventsController::GetChannels() {
