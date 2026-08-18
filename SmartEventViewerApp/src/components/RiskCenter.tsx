@@ -115,7 +115,7 @@ export const RiskCenter: React.FC<RiskCenterProps> = ({ onSelectChannel }) => {
 
           if (statusRes.status === 'COMPLETED') {
             clearInterval(pollInterval);
-            setAiReport(statusRes.analysis);
+            setAiReport(statusRes.analysis || '');
             setIsAnalyzing(false);
           } else if (statusRes.status === 'FAILED' || pollCount > 30) {
             clearInterval(pollInterval);
@@ -141,10 +141,10 @@ export const RiskCenter: React.FC<RiskCenterProps> = ({ onSelectChannel }) => {
   };
 
   const allEventsCombined: Array<EventDto & { channelTag: string }> = [
-    ...anomalies.securityEvents.map((e) => ({ ...e, channelTag: 'Security' })),
-    ...anomalies.systemEvents.map((e) => ({ ...e, channelTag: 'System' })),
-    ...anomalies.applicationEvents.map((e) => ({ ...e, channelTag: 'Application' })),
-    ...anomalies.sysmonEvents.map((e) => ({ ...e, channelTag: 'Sysmon' })),
+    ...anomalies.securityEvents.map((e) => ({ ...e, time: formatTo12Hour(e.time), channelTag: 'Security' })),
+    ...anomalies.systemEvents.map((e) => ({ ...e, time: formatTo12Hour(e.time), channelTag: 'System' })),
+    ...anomalies.applicationEvents.map((e) => ({ ...e, time: formatTo12Hour(e.time), channelTag: 'Application' })),
+    ...anomalies.sysmonEvents.map((e) => ({ ...e, time: formatTo12Hour(e.time), channelTag: 'Sysmon' })),
   ];
 
   const filteredEvents = selectedChannelFilter === 'ALL'
