@@ -72,4 +72,19 @@ namespace SmartEventViewer {
     EventLogResponseDto EventsController::GetEvents(const String& channelName) {
         return GetEvents(channelName, 1, 20);
     }
+
+    MultiChannelAnomaliesDto EventsController::GetAnomalies() {
+        size_t limit = 15;
+        if (!m_httpContext.IsNull() && !Request().IsNull()) {
+            String val;
+            if (Request()->GetQuery().TryGetValue("limit", val) && !val.IsEmpty()) {
+                limit = static_cast<size_t>(DotNetDupe::System::Convert::ToUInt64(val));
+            }
+        }
+        return GetAnomalies(limit);
+    }
+
+    MultiChannelAnomaliesDto EventsController::GetAnomalies(size_t limit) {
+        return m_spEventService->GetCrossChannelAnomalies(limit);
+    }
 }

@@ -22,5 +22,8 @@ namespace SmartEventViewer {
         EventLogResponseDto GetEvents(const String& channelName, size_t page, size_t pageSize, const String& sLevelFilter);
         EventLogResponseDto GetEvents(const String& channelName, size_t page, size_t pageSize);
         EventLogResponseDto GetEvents(const String& channelName);
+
+        MultiChannelAnomaliesDto GetAnomalies();
+        MultiChannelAnomaliesDto GetAnomalies(size_t limit);
     };
 }

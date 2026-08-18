@@ -51,6 +51,7 @@ namespace SmartEventViewer {
             size_t nPage,
             size_t nPageSize,
             const String& sLevelFilter = "ALL") override;
+        MultiChannelAnomaliesDto GetCrossChannelAnomalies(size_t maxPerChannel = 10) override;
         void ClearCache() override;
     };
 }

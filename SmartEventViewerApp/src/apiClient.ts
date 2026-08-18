@@ -1,4 +1,6 @@
 export { formatUtcToLocal, formatTo12Hour } from './utils/timeUtils';
+import { formatTo12Hour } from './utils/timeUtils';
+import type { MultiChannelAnomaliesDto, EventDto } from './types';
 
 export interface ChannelData {
   channels?: string[];
@@ -180,6 +182,35 @@ export async function fetchApiEvents(channel: string, baseUrl: string = '', page
     pageSize: data.pageSize ?? data.PageSize ?? pageSize,
     totalPages: data.totalPages ?? data.TotalPages ?? 1,
     events
+  };
+}
+
+export async function fetchCrossChannelAnomalies(limit: number = 15, baseUrl: string = ''): Promise<MultiChannelAnomaliesDto> {
+  const urlPrefix = baseUrl ? baseUrl : (window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080');
+  const resp = await fetch(`${urlPrefix}/api/events/anomalies?limit=${limit}`);
+  if (!resp.ok) {
+    throw new Error(`HTTP Error: ${resp.status}`);
+  }
+  const data = await resp.json();
+  const mapEvent = (e: Record<string, unknown>, idx: number): EventDto => ({
+    idx: (e.index ?? e.Index ?? idx + 1) as number,
+    id: (e.id ?? e.Id ?? 0) as number,
+    level: ((e.level ?? e.Level ?? 'Information') as string) as EventDto['level'],
+    risk: ((e.risk ?? e.Risk ?? 'Low') as string) as EventDto['risk'],
+    provider: (e.provider ?? e.Provider ?? '') as string,
+    time: formatTo12Hour((e.time ?? e.Time ?? '') as string),
+    desc: (e.message ?? e.Message ?? '') as string,
+    xml: (e.rawXml ?? e.RawXml ?? '') as string,
+  });
+
+  return {
+    securityEvents: ((data.securityEvents || data.SecurityEvents || []) as Array<Record<string, unknown>>).map(mapEvent),
+    systemEvents: ((data.systemEvents || data.SystemEvents || []) as Array<Record<string, unknown>>).map(mapEvent),
+    applicationEvents: ((data.applicationEvents || data.ApplicationEvents || []) as Array<Record<string, unknown>>).map(mapEvent),
+    sysmonEvents: ((data.sysmonEvents || data.SysmonEvents || []) as Array<Record<string, unknown>>).map(mapEvent),
+    totalCriticalCount: (data.totalCriticalCount ?? data.TotalCriticalCount ?? 0) as number,
+    totalErrorCount: (data.totalErrorCount ?? data.TotalErrorCount ?? 0) as number,
+    totalWarningCount: (data.totalWarningCount ?? data.TotalWarningCount ?? 0) as number,
   };
 }
 

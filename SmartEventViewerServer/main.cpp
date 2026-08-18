@@ -105,7 +105,8 @@ static void RegisterControllers(WebApplicationBuilder& builder) {
     builder.AddController<SmartEventViewer::EventsController>("/api")
         .MapGet("/channels", &SmartEventViewer::EventsController::GetChannels)
         .MapGet("/events/summary", static_cast<SmartEventViewer::EventSummaryResponseDto (SmartEventViewer::EventsController::*)()>(&SmartEventViewer::EventsController::GetEventSummary))
-        .MapGet("/events", static_cast<SmartEventViewer::EventLogResponseDto (SmartEventViewer::EventsController::*)(const String&, size_t, size_t)>(&SmartEventViewer::EventsController::GetEvents));
+        .MapGet("/events", static_cast<SmartEventViewer::EventLogResponseDto (SmartEventViewer::EventsController::*)(const String&, size_t, size_t)>(&SmartEventViewer::EventsController::GetEvents))
+        .MapGet("/events/anomalies", static_cast<SmartEventViewer::MultiChannelAnomaliesDto (SmartEventViewer::EventsController::*)()>(&SmartEventViewer::EventsController::GetAnomalies));
 
     builder.AddController<SmartEventViewer::DiagnosticsController>("/api")
         .MapGet("/logs/format", &SmartEventViewer::DiagnosticsController::GetLogFormat)

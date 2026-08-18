@@ -46,6 +46,16 @@ namespace SmartEventViewer {
         size_t TotalPages{ 0 };
         DotNetDupe::System::Collections::Generic::List<EventDto> Events{};
     };
+
+    struct MultiChannelAnomaliesDto {
+        DotNetDupe::System::Collections::Generic::List<EventDto> SecurityEvents{};
+        DotNetDupe::System::Collections::Generic::List<EventDto> SystemEvents{};
+        DotNetDupe::System::Collections::Generic::List<EventDto> ApplicationEvents{};
+        DotNetDupe::System::Collections::Generic::List<EventDto> SysmonEvents{};
+        unsigned long long TotalCriticalCount{ 0 };
+        unsigned long long TotalErrorCount{ 0 };
+        unsigned long long TotalWarningCount{ 0 };
+    };
 }
 
 namespace DotNetDupe {
@@ -144,6 +154,33 @@ namespace DotNetDupe {
                         if (element.TryGetProperty("pageSize", prop)) dto.PageSize = static_cast<size_t>(prop.GetDouble());
                         if (element.TryGetProperty("totalPages", prop)) dto.TotalPages = static_cast<size_t>(prop.GetDouble());
                         if (element.TryGetProperty("events", prop)) dto.Events = JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::EventDto>>::Read(prop);
+                        return dto;
+                    }
+                };
+
+                template <typename Enable>
+                struct JsonConverter<SmartEventViewer::MultiChannelAnomaliesDto, Enable> {
+                    static JsonElement Write(const SmartEventViewer::MultiChannelAnomaliesDto& value) {
+                        JsonElement obj(JsonValueKind::Object);
+                        obj.SetProperty("securityEvents", JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::EventDto>>::Write(value.SecurityEvents));
+                        obj.SetProperty("systemEvents", JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::EventDto>>::Write(value.SystemEvents));
+                        obj.SetProperty("applicationEvents", JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::EventDto>>::Write(value.ApplicationEvents));
+                        obj.SetProperty("sysmonEvents", JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::EventDto>>::Write(value.SysmonEvents));
+                        obj.SetProperty("totalCriticalCount", JsonElement(static_cast<double>(value.TotalCriticalCount)));
+                        obj.SetProperty("totalErrorCount", JsonElement(static_cast<double>(value.TotalErrorCount)));
+                        obj.SetProperty("totalWarningCount", JsonElement(static_cast<double>(value.TotalWarningCount)));
+                        return obj;
+                    }
+                    static SmartEventViewer::MultiChannelAnomaliesDto Read(const JsonElement& element) {
+                        SmartEventViewer::MultiChannelAnomaliesDto dto;
+                        JsonElement prop;
+                        if (element.TryGetProperty("securityEvents", prop)) dto.SecurityEvents = JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::EventDto>>::Read(prop);
+                        if (element.TryGetProperty("systemEvents", prop)) dto.SystemEvents = JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::EventDto>>::Read(prop);
+                        if (element.TryGetProperty("applicationEvents", prop)) dto.ApplicationEvents = JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::EventDto>>::Read(prop);
+                        if (element.TryGetProperty("sysmonEvents", prop)) dto.SysmonEvents = JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::EventDto>>::Read(prop);
+                        if (element.TryGetProperty("totalCriticalCount", prop)) dto.TotalCriticalCount = static_cast<unsigned long long>(prop.GetDouble());
+                        if (element.TryGetProperty("totalErrorCount", prop)) dto.TotalErrorCount = static_cast<unsigned long long>(prop.GetDouble());
+                        if (element.TryGetProperty("totalWarningCount", prop)) dto.TotalWarningCount = static_cast<unsigned long long>(prop.GetDouble());
                         return dto;
                     }
                 };

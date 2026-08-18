@@ -19,6 +19,7 @@ namespace SmartEventViewer {
             size_t nPage,
             size_t nPageSize,
             const String& sLevelFilter = "ALL") = 0;
+        virtual MultiChannelAnomaliesDto GetCrossChannelAnomalies(size_t maxPerChannel = 10) = 0;
         virtual void ClearCache() = 0;
     };
 }

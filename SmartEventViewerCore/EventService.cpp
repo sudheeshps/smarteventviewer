@@ -236,4 +236,65 @@ namespace SmartEventViewer {
         StoreCachedPage(sTarget, sPageKey, result);
         return result;
     }
+
+    static void AppendIfAnomaly(
+        const EventRecord& rec,
+        IAnomalyEngine* pEngine,
+        DotNetDupe::System::Collections::Generic::List<EventDto>& outList,
+        unsigned long long& outCrit,
+        unsigned long long& outErr,
+        unsigned long long& outWarn) {
+        EventLevel lvl = rec.GetLevel();
+        RiskLevel rsk = pEngine ? pEngine->EvaluateRisk(rec) : RiskLevel::Low;
+        if (lvl == EventLevel::Critical || lvl == EventLevel::Error || lvl == EventLevel::Warning || rsk == RiskLevel::Critical || rsk == RiskLevel::High) {
+            EventDto dto;
+            dto.Index = outList.GetCount() + 1;
+            dto.Id = rec.GetEventId();
+            dto.Level = EventLevelToString(lvl);
+            dto.Provider = rec.GetProviderName();
+            dto.Time = rec.GetTimeCreated();
+            dto.Message = rec.GetEventMessage();
+            dto.RawXml = rec.GetRawXml();
+            dto.Risk = RiskLevelToString(rsk);
+            outList.Add(dto);
+            if (lvl == EventLevel::Critical || rsk == RiskLevel::Critical) outCrit++;
+            else if (lvl == EventLevel::Error || rsk == RiskLevel::High) outErr++;
+            else if (lvl == EventLevel::Warning) outWarn++;
+        }
+    }
+
+    static void CollectChannelAnomalies(
+        IEventLogReader* pReader,
+        IAnomalyEngine* pEngine,
+        const String& sChannel,
+        size_t maxEvents,
+        DotNetDupe::System::Collections::Generic::List<EventDto>& outList,
+        unsigned long long& outCrit,
+        unsigned long long& outErr,
+        unsigned long long& outWarn) {
+        if (!pReader) return;
+        try {
+            auto events = pReader->ReadEvents(sChannel, maxEvents * 3, 0, true, EventLevel::LogAlways);
+            for (int i = 0; i < events.GetCount() && outList.GetCount() < maxEvents; ++i) {
+                AppendIfAnomaly(events[i], pEngine, outList, outCrit, outErr, outWarn);
+            }
+        } catch (...) {
+        }
+    }
+
+    MultiChannelAnomaliesDto EventService::GetCrossChannelAnomalies(size_t maxPerChannel) {
+        MultiChannelAnomaliesDto dto;
+        size_t limit = (maxPerChannel > 0 && maxPerChannel <= 100) ? maxPerChannel : 15;
+        unsigned long long crit = 0, err = 0, warn = 0;
+
+        CollectChannelAnomalies(m_spReader.Get(), m_spAnomalyEngine.Get(), "Security", limit, dto.SecurityEvents, crit, err, warn);
+        CollectChannelAnomalies(m_spReader.Get(), m_spAnomalyEngine.Get(), "System", limit, dto.SystemEvents, crit, err, warn);
+        CollectChannelAnomalies(m_spReader.Get(), m_spAnomalyEngine.Get(), "Application", limit, dto.ApplicationEvents, crit, err, warn);
+        CollectChannelAnomalies(m_spReader.Get(), m_spAnomalyEngine.Get(), "Microsoft-Windows-Sysmon/Operational", limit, dto.SysmonEvents, crit, err, warn);
+
+        dto.TotalCriticalCount = crit;
+        dto.TotalErrorCount = err;
+        dto.TotalWarningCount = warn;
+        return dto;
+    }
 }

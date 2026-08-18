@@ -15,6 +15,16 @@ export interface EventLogResponseDto {
   events: EventDto[];
 }
 
+export interface MultiChannelAnomaliesDto {
+  securityEvents: EventDto[];
+  systemEvents: EventDto[];
+  applicationEvents: EventDto[];
+  sysmonEvents: EventDto[];
+  totalCriticalCount: number;
+  totalErrorCount: number;
+  totalWarningCount: number;
+}
+
 export interface ChannelTreeData {
   windowsLogs: string[];
   appServicesLogs: string[];

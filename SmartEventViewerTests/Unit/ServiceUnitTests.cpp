@@ -325,3 +325,19 @@ TEST(ServiceUnitTests, GivenInjectedTelemetryService_WhenGetSummaryCalled_ThenRe
     auto summary = spService->GetSummary();
     EXPECT_DOUBLE_EQ(summary.CpuUsagePercent, 18.2);
 }
+
+TEST(ServiceUnitTests, GivenEventService_WhenGetCrossChannelAnomaliesCalled_ThenAggregatesAcrossCoreChannels) {
+    auto spReader = SmartPtr<MockEventLogReader>::NewShared();
+    EventRecord secRec(101, EventLevel::Error, "Microsoft-Windows-Security-Auditing", "2026-08-18 10:00:00", "Failed login attempt", "");
+    EventRecord sysRec(102, EventLevel::Warning, "Service Control Manager", "2026-08-18 10:01:00", "Service timed out", "");
+    spReader->AddEvent("Security", secRec);
+    spReader->AddEvent("System", sysRec);
+
+    auto spService = SmartPtr<IEventService>(SmartPtr<EventService>::NewShared(spReader));
+    auto anomalies = spService->GetCrossChannelAnomalies(10);
+
+    EXPECT_GT(anomalies.SecurityEvents.GetCount(), 0);
+    EXPECT_GT(anomalies.SystemEvents.GetCount(), 0);
+    EXPECT_GE(anomalies.TotalErrorCount, 1);
+    EXPECT_GE(anomalies.TotalWarningCount, 1);
+}
