@@ -72,18 +72,19 @@ namespace SmartEventViewer {
     void EventService::ClearCache() {
         LockCS lock(m_cacheCs);
         m_cache.Clear();
+        m_cachedChannels = ChannelsResponseDto{};
+        m_uLastChannelsFetchMs = 0;
     }
 
     ChannelsResponseDto EventService::GetChannels() {
-        static ChannelsResponseDto s_cachedChannels;
-        static unsigned long long s_lastChannelsFetchMs = 0;
+        LockCS lock(m_cacheCs);
         unsigned long long cur = GetCurrentTickMs();
-        if (cur - s_lastChannelsFetchMs < 30000 && s_cachedChannels.Channels.GetCount() > 0) return s_cachedChannels;
+        if (cur - m_uLastChannelsFetchMs < 30000 && m_cachedChannels.Channels.GetCount() > 0) return m_cachedChannels;
         ChannelsResponseDto dto;
         try {
             dto.Channels = m_spReader->GetEventChannels();
-            s_cachedChannels = dto;
-            s_lastChannelsFetchMs = cur;
+            m_cachedChannels = dto;
+            m_uLastChannelsFetchMs = cur;
         } catch (const DotNetDupe::System::Exception& ex) {
             AppLoggerManager::Error("SERVER", String::Format("[EVENTS_SVC] GetChannels error: {0}", ex.What()));
         }

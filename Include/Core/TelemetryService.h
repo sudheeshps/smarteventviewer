@@ -54,6 +54,7 @@ namespace SmartEventViewer {
         SystemMetricsResponseDto GetSessions() override;
         ServicesResponseDto GetServices() override;
         SystemMetricsResponseDto GetFullMetrics() override;
+        TelemetryPostureReportDto GetPostureReport() override;
         void SampleAndDetectChanges() override;
         void ClearCache() override;
     };

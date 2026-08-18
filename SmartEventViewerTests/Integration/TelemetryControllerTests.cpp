@@ -140,3 +140,15 @@ TEST(TelemetryControllerTests, GivenRunningServer_WhenGetServicesCalled_ThenRetu
         LogAndAssertServiceInfo(response.Services[i]);
     }
 }
+
+TEST(TelemetryControllerTests, GivenRunningServer_WhenGetPostureCalled_ThenReturnsPostureReport) {
+    Console::WriteLine("[TEST] Invoking GET /api/metrics/posture...");
+    TestRestClient client;
+    TelemetryPostureReportDto response = client.GetPosture();
+    Console::WriteLine("[POSTURE_DTO] ThreatScore={0} | OverallRisk={1} | Procs={2} | Sessions={3} | Users={4} | Services={5}",
+        response.ThreatScore, response.OverallRisk, response.FlaggedProcesses.GetCount(), response.SuspiciousSessions.GetCount(),
+        response.FlaggedUsers.GetCount(), response.SuspiciousServices.GetCount());
+    EXPECT_GE(response.ThreatScore, 0);
+    EXPECT_LE(response.ThreatScore, 100);
+    EXPECT_FALSE(response.OverallRisk.IsEmpty());
+}

@@ -50,6 +50,7 @@ namespace SmartEventViewer {
     static void UpdateBatchInCache(const DotNetDupe::System::Collections::Generic::List<DotNetDupe::System::Diagnostics::ProcessInfo>& batch) {
         LockCS lock(s_processCacheCs);
         for (int i = 0; i < batch.GetCount(); ++i) {
+            if (batch[i].iProcessId <= 0) continue;
             auto dto = SystemTelemetryProvider::MapProcessResourceDto(batch[i]);
             s_processCache[dto.ProcessId] = dto;
         }
@@ -71,6 +72,7 @@ namespace SmartEventViewer {
             UpdateBatchInCache(batch);
         });
         s_pProcessStreamer->OnProcessUpdated([](const DotNetDupe::System::Diagnostics::ProcessInfo& proc) {
+            if (proc.iProcessId <= 0) return;
             LockCS innerLock(s_processCacheCs);
             auto dto = SystemTelemetryProvider::MapProcessResourceDto(proc);
             s_processCache[dto.ProcessId] = dto;

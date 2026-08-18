@@ -307,3 +307,89 @@ TEST(EventRecordTest, GivenUtcEtwEvent_WhenFromEtwEventCalled_ThenConvertsToLoca
     EXPECT_EQ(record.GetDateTime().GetKind(), DotNetDupe::System::DateTimeKind::Local);
     Console::WriteLine("[PASS] GivenUtcEtwEvent_WhenFromEtwEventCalled_ThenConvertsToLocalTime: {0}", record.GetTimeCreated());
 }
+
+// --- AnomalyEngine Telemetry Evaluation Tests ---
+TEST(AnomalyEngineTest, GivenLolbinProcess_WhenEvaluateProcessCalled_ThenFlagsHighRisk) {
+    SmartEventViewer::ProcessResourceDto proc;
+    proc.ProcessId = 4412;
+    proc.Name = "powershell.exe";
+    proc.Path = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
+    proc.CommandLine = "powershell.exe -enc SQBFAFgA...";
+    
+    SmartEventViewer::ProcessAnomalyDto anomaly;
+    bool bFlagged = SmartEventViewer::AnomalyEngine::StaticEvaluateProcess(proc, anomaly);
+    EXPECT_TRUE(bFlagged);
+    EXPECT_EQ(anomaly.Risk, "High");
+    EXPECT_TRUE(anomaly.Reason.Contains("LOLBin"));
+}
+
+TEST(AnomalyEngineTest, GivenPublicFolderBinary_WhenEvaluateProcessCalled_ThenFlagsHighRisk) {
+    SmartEventViewer::ProcessResourceDto proc;
+    proc.ProcessId = 5120;
+    proc.Name = "miner.exe";
+    proc.Path = "C:\\Users\\Public\\miner.exe";
+    proc.CommandLine = "miner.exe --pool xmr";
+
+    SmartEventViewer::ProcessAnomalyDto anomaly;
+    bool bFlagged = SmartEventViewer::AnomalyEngine::StaticEvaluateProcess(proc, anomaly);
+    EXPECT_TRUE(bFlagged);
+    EXPECT_EQ(anomaly.Risk, "High");
+}
+
+TEST(AnomalyEngineTest, GivenExternalRdpSession_WhenEvaluateSessionCalled_ThenFlagsCriticalRisk) {
+    SmartEventViewer::RdpSessionDto rdp;
+    rdp.SessionId = 2;
+    rdp.SessionName = "RDP-Tcp#1";
+    rdp.UserName = "Administrator";
+    rdp.ClientIpAddress = "203.0.113.50";
+    rdp.IsRdpSession = true;
+
+    SmartEventViewer::SessionAnomalyDto anomaly;
+    bool bFlagged = SmartEventViewer::AnomalyEngine::StaticEvaluateSession(rdp, anomaly);
+    EXPECT_TRUE(bFlagged);
+    EXPECT_EQ(anomaly.Risk, "Critical");
+}
+
+TEST(AnomalyEngineTest, GivenEnabledGuestUser_WhenEvaluateUserCalled_ThenFlagsHighRisk) {
+    SmartEventViewer::UserPrincipalDto user;
+    user.Username = "Guest";
+    user.IsDisabled = false;
+    user.UserClass = "Standard";
+
+    SmartEventViewer::UserAnomalyDto anomaly;
+    bool bFlagged = SmartEventViewer::AnomalyEngine::StaticEvaluateUser(user, anomaly);
+    EXPECT_TRUE(bFlagged);
+    EXPECT_EQ(anomaly.Risk, "High");
+}
+
+TEST(AnomalyEngineTest, GivenNonStandardAdmin_WhenEvaluateUserCalled_ThenFlagsMediumRisk) {
+    SmartEventViewer::UserPrincipalDto user;
+    user.Username = "backdoor_admin";
+    user.IsDisabled = false;
+    user.UserClass = "Admin";
+
+    SmartEventViewer::UserAnomalyDto anomaly;
+    bool bFlagged = SmartEventViewer::AnomalyEngine::StaticEvaluateUser(user, anomaly);
+    EXPECT_TRUE(bFlagged);
+    EXPECT_EQ(anomaly.Risk, "Medium");
+}
+
+TEST(AnomalyEngineTest, GivenSuspiciousTelemetry_WhenEvaluatePostureCalled_ThenCalculatesThreatScoreAndOverallRisk) {
+    SmartEventViewer::SystemMetricsResponseDto metrics;
+    SmartEventViewer::ProcessResourceDto proc;
+    proc.Name = "powershell.exe";
+    proc.CommandLine = "powershell -enc AAAA";
+    metrics.TopProcesses.Add(proc);
+
+    SmartEventViewer::RdpSessionDto rdp;
+    rdp.ClientIpAddress = "198.51.100.1";
+    metrics.RdpSessions.Add(rdp);
+
+    SmartEventViewer::ServicesResponseDto services;
+    auto report = SmartEventViewer::AnomalyEngine::StaticEvaluatePosture(metrics, services);
+
+    EXPECT_GT(report.ThreatScore, 0);
+    EXPECT_GT(report.FlaggedProcesses.GetCount(), 0);
+    EXPECT_GT(report.SuspiciousSessions.GetCount(), 0);
+    EXPECT_TRUE(report.OverallRisk == "HIGH" || report.OverallRisk == "CRITICAL" || report.OverallRisk == "MEDIUM");
+}

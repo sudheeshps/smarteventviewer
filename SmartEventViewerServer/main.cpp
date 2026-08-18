@@ -122,7 +122,8 @@ static void RegisterTelemetryAndAnalysisControllers(WebApplicationBuilder& build
         .MapGet("/metrics/network", &SmartEventViewer::TelemetryController::GetNetworkUsage)
         .MapGet("/metrics/processes", &SmartEventViewer::TelemetryController::GetProcesses)
         .MapGet("/metrics/sessions", &SmartEventViewer::TelemetryController::GetSessions)
-        .MapGet("/metrics/services", &SmartEventViewer::TelemetryController::GetServices);
+        .MapGet("/metrics/services", &SmartEventViewer::TelemetryController::GetServices)
+        .MapGet("/metrics/posture", &SmartEventViewer::TelemetryController::GetPosture);
 
     builder.AddController<SmartEventViewer::LlmAnalysisController>("/api")
         .MapPost("/analyze", &SmartEventViewer::LlmAnalysisController::AnalyzeEvents)

@@ -138,6 +138,39 @@ export interface SystemMetricsData {
   systemServices?: ServiceInfoData[];
 }
 
+export interface ProcessAnomalyData {
+  process: ProcessResourceData;
+  reason: string;
+  risk: string;
+}
+
+export interface SessionAnomalyData {
+  session: RdpSessionData;
+  reason: string;
+  risk: string;
+}
+
+export interface UserAnomalyData {
+  user: UserPrincipalData;
+  reason: string;
+  risk: string;
+}
+
+export interface ServiceAnomalyData {
+  service: ServiceInfoData;
+  reason: string;
+  risk: string;
+}
+
+export interface TelemetryPostureReportData {
+  flaggedProcesses: ProcessAnomalyData[];
+  suspiciousSessions: SessionAnomalyData[];
+  flaggedUsers: UserAnomalyData[];
+  suspiciousServices: ServiceAnomalyData[];
+  threatScore: number;
+  overallRisk: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+}
+
 export async function fetchApiChannels(baseUrl: string = ''): Promise<ChannelData> {
   const urlPrefix = baseUrl ? baseUrl : (window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080');
   const resp = await fetch(`${urlPrefix}/api/channels`);
@@ -618,6 +651,79 @@ export function subscribeTelemetryPushStream(
   return () => {
     isSubscribed = false;
     clearInterval(timerId);
+  };
+}
+
+export async function fetchPostureReport(baseUrl: string = ''): Promise<TelemetryPostureReportData> {
+  const urlPrefix = baseUrl ? baseUrl : (window.location.origin.includes(':') ? window.location.origin : 'http://127.0.0.1:8080');
+  const resp = await fetch(`${urlPrefix}/api/metrics/posture`);
+  if (!resp.ok) {
+    throw new Error(`HTTP Error: ${resp.status}`);
+  }
+  const data = await resp.json();
+  const rawProcs = data.flaggedProcesses || data.FlaggedProcesses || [];
+  const rawSessions = data.suspiciousSessions || data.SuspiciousSessions || [];
+  const rawUsers = data.flaggedUsers || data.FlaggedUsers || [];
+  const rawServices = data.suspiciousServices || data.SuspiciousServices || [];
+
+  return {
+    flaggedProcesses: rawProcs.map((p: any) => ({
+      process: {
+        processId: p.process?.processId ?? p.process?.ProcessId ?? 0,
+        name: p.process?.name ?? p.process?.Name ?? '',
+        path: p.process?.path ?? p.process?.Path ?? '',
+        commandLine: p.process?.commandLine ?? p.process?.CommandLine ?? '',
+        cpuUsagePercent: p.process?.cpuUsagePercent ?? p.process?.CpuUsagePercent ?? 0,
+        memoryUsageMB: p.process?.memoryUsageMB ?? p.process?.MemoryUsageMB ?? 0,
+        networkReadBytes: p.process?.networkReadBytes ?? p.process?.NetworkReadBytes ?? 0,
+        networkWriteBytes: p.process?.networkWriteBytes ?? p.process?.NetworkWriteBytes ?? 0,
+        openPorts: p.process?.openPorts ?? p.process?.OpenPorts ?? '',
+        connectionEstablished: p.process?.connectionEstablished ?? p.process?.ConnectionEstablished ?? false,
+      },
+      reason: p.reason ?? p.Reason ?? '',
+      risk: p.risk ?? p.Risk ?? 'Medium',
+    })),
+    suspiciousSessions: rawSessions.map((s: any) => ({
+      session: {
+        sessionId: s.session?.sessionId ?? s.session?.SessionId ?? 0,
+        sessionName: s.session?.sessionName ?? s.session?.SessionName ?? '',
+        userName: s.session?.userName ?? s.session?.UserName ?? '',
+        domainName: s.session?.domainName ?? s.session?.DomainName ?? '',
+        clientName: s.session?.clientName ?? s.session?.ClientName ?? '',
+        clientIpAddress: s.session?.clientIpAddress ?? s.session?.ClientIpAddress ?? '',
+        state: s.session?.state ?? s.session?.State ?? '',
+        isRdpSession: s.session?.isRdpSession ?? s.session?.IsRdpSession ?? false,
+      },
+      reason: s.reason ?? s.Reason ?? '',
+      risk: s.risk ?? s.Risk ?? 'High',
+    })),
+    flaggedUsers: rawUsers.map((u: any) => ({
+      user: {
+        username: u.user?.username ?? u.user?.Username ?? '',
+        domain: u.user?.domain ?? u.user?.Domain ?? '',
+        sidOrUid: u.user?.sidOrUid ?? u.user?.SidOrUid ?? '',
+        userClass: u.user?.userClass ?? u.user?.UserClass ?? '',
+        isDisabled: u.user?.isDisabled ?? u.user?.IsDisabled ?? false,
+        isAccountLocked: u.user?.isAccountLocked ?? u.user?.IsAccountLocked ?? false,
+        groups: u.user?.groups ?? u.user?.Groups ?? [],
+        permissions: u.user?.permissions ?? u.user?.Permissions ?? [],
+      },
+      reason: u.reason ?? u.Reason ?? '',
+      risk: u.risk ?? u.Risk ?? 'Medium',
+    })),
+    suspiciousServices: rawServices.map((srv: any) => ({
+      service: {
+        serviceName: srv.service?.serviceName ?? srv.service?.ServiceName ?? '',
+        displayName: srv.service?.displayName ?? srv.service?.DisplayName ?? '',
+        status: srv.service?.status ?? srv.service?.Status ?? '',
+        startType: srv.service?.startType ?? srv.service?.StartType ?? '',
+        processId: srv.service?.processId ?? srv.service?.ProcessId ?? 0,
+      },
+      reason: srv.reason ?? srv.Reason ?? '',
+      risk: srv.risk ?? srv.Risk ?? 'Low',
+    })),
+    threatScore: data.threatScore ?? data.ThreatScore ?? 0,
+    overallRisk: data.overallRisk || data.OverallRisk || 'LOW',
   };
 }
 

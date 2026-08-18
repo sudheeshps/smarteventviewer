@@ -27,6 +27,8 @@ namespace SmartEventViewer {
         DotNetDupe::System::SmartPointer<IAnomalyEngine> m_spAnomalyEngine{ nullptr };
         LruCache<String, EventChannelCacheEntry> m_cache{ 10 };
         mutable CriticalSection m_cacheCs{};
+        ChannelsResponseDto m_cachedChannels{};
+        unsigned long long m_uLastChannelsFetchMs{ 0 };
 
         EventDto MapEventDto(const EventRecord& record, size_t nIdx);
         void CalculateSummaryCounts(const String& sChannel, EventSummaryResponseDto& dto);

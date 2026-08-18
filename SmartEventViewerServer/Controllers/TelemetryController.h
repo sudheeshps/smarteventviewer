@@ -24,5 +24,6 @@ namespace SmartEventViewer {
         SystemMetricsResponseDto GetSessions();
         ServicesResponseDto GetServices();
         SystemMetricsResponseDto GetMetrics();
+        TelemetryPostureReportDto GetPosture();
     };
 }

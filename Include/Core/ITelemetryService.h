@@ -18,6 +18,7 @@ namespace SmartEventViewer {
         virtual SystemMetricsResponseDto GetSessions() = 0;
         virtual ServicesResponseDto GetServices() = 0;
         virtual SystemMetricsResponseDto GetFullMetrics() = 0;
+        virtual TelemetryPostureReportDto GetPostureReport() = 0;
         virtual void SampleAndDetectChanges() = 0;
         virtual void ClearCache() = 0;
     };

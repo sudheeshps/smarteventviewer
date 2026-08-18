@@ -100,6 +100,39 @@ namespace SmartEventViewer {
         DotNetDupe::System::Collections::Generic::List<UserPrincipalDto> SystemUsers{};
         DotNetDupe::System::Collections::Generic::List<RdpSessionDto> RdpSessions{};
     };
+
+    struct ProcessAnomalyDto {
+        ProcessResourceDto Process{};
+        String Reason{};
+        String Risk{};
+    };
+
+    struct SessionAnomalyDto {
+        RdpSessionDto Session{};
+        String Reason{};
+        String Risk{};
+    };
+
+    struct UserAnomalyDto {
+        UserPrincipalDto User{};
+        String Reason{};
+        String Risk{};
+    };
+
+    struct ServiceAnomalyDto {
+        ServiceInfoDto Service{};
+        String Reason{};
+        String Risk{};
+    };
+
+    struct TelemetryPostureReportDto {
+        DotNetDupe::System::Collections::Generic::List<ProcessAnomalyDto> FlaggedProcesses{};
+        DotNetDupe::System::Collections::Generic::List<SessionAnomalyDto> SuspiciousSessions{};
+        DotNetDupe::System::Collections::Generic::List<UserAnomalyDto> FlaggedUsers{};
+        DotNetDupe::System::Collections::Generic::List<ServiceAnomalyDto> SuspiciousServices{};
+        int ThreatScore{ 0 };
+        String OverallRisk{ "LOW" };
+    };
 }
 
 namespace DotNetDupe {
@@ -293,6 +326,107 @@ namespace DotNetDupe {
                         SmartEventViewer::ServicesResponseDto dto;
                         JsonElement prop;
                         if (element.TryGetProperty("services", prop) && prop.GetValueKind() == JsonValueKind::Array) dto.Services = JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::ServiceInfoDto>>::Read(prop);
+                        return dto;
+                    }
+                };
+
+                template <typename Enable>
+                struct JsonConverter<SmartEventViewer::ProcessAnomalyDto, Enable> {
+                    static JsonElement Write(const SmartEventViewer::ProcessAnomalyDto& value) {
+                        JsonElement obj(JsonValueKind::Object);
+                        obj.SetProperty("process", JsonConverter<SmartEventViewer::ProcessResourceDto>::Write(value.Process));
+                        obj.SetProperty("reason", JsonElement(value.Reason));
+                        obj.SetProperty("risk", JsonElement(value.Risk));
+                        return obj;
+                    }
+                    static SmartEventViewer::ProcessAnomalyDto Read(const JsonElement& element) {
+                        SmartEventViewer::ProcessAnomalyDto dto;
+                        JsonElement prop;
+                        if (element.TryGetProperty("process", prop)) dto.Process = JsonConverter<SmartEventViewer::ProcessResourceDto>::Read(prop);
+                        if (element.TryGetProperty("reason", prop) && prop.GetValueKind() == JsonValueKind::String) dto.Reason = prop.GetString();
+                        if (element.TryGetProperty("risk", prop) && prop.GetValueKind() == JsonValueKind::String) dto.Risk = prop.GetString();
+                        return dto;
+                    }
+                };
+
+                template <typename Enable>
+                struct JsonConverter<SmartEventViewer::SessionAnomalyDto, Enable> {
+                    static JsonElement Write(const SmartEventViewer::SessionAnomalyDto& value) {
+                        JsonElement obj(JsonValueKind::Object);
+                        obj.SetProperty("session", JsonConverter<SmartEventViewer::RdpSessionDto>::Write(value.Session));
+                        obj.SetProperty("reason", JsonElement(value.Reason));
+                        obj.SetProperty("risk", JsonElement(value.Risk));
+                        return obj;
+                    }
+                    static SmartEventViewer::SessionAnomalyDto Read(const JsonElement& element) {
+                        SmartEventViewer::SessionAnomalyDto dto;
+                        JsonElement prop;
+                        if (element.TryGetProperty("session", prop)) dto.Session = JsonConverter<SmartEventViewer::RdpSessionDto>::Read(prop);
+                        if (element.TryGetProperty("reason", prop) && prop.GetValueKind() == JsonValueKind::String) dto.Reason = prop.GetString();
+                        if (element.TryGetProperty("risk", prop) && prop.GetValueKind() == JsonValueKind::String) dto.Risk = prop.GetString();
+                        return dto;
+                    }
+                };
+
+                template <typename Enable>
+                struct JsonConverter<SmartEventViewer::UserAnomalyDto, Enable> {
+                    static JsonElement Write(const SmartEventViewer::UserAnomalyDto& value) {
+                        JsonElement obj(JsonValueKind::Object);
+                        obj.SetProperty("user", JsonConverter<SmartEventViewer::UserPrincipalDto>::Write(value.User));
+                        obj.SetProperty("reason", JsonElement(value.Reason));
+                        obj.SetProperty("risk", JsonElement(value.Risk));
+                        return obj;
+                    }
+                    static SmartEventViewer::UserAnomalyDto Read(const JsonElement& element) {
+                        SmartEventViewer::UserAnomalyDto dto;
+                        JsonElement prop;
+                        if (element.TryGetProperty("user", prop)) dto.User = JsonConverter<SmartEventViewer::UserPrincipalDto>::Read(prop);
+                        if (element.TryGetProperty("reason", prop) && prop.GetValueKind() == JsonValueKind::String) dto.Reason = prop.GetString();
+                        if (element.TryGetProperty("risk", prop) && prop.GetValueKind() == JsonValueKind::String) dto.Risk = prop.GetString();
+                        return dto;
+                    }
+                };
+
+                template <typename Enable>
+                struct JsonConverter<SmartEventViewer::ServiceAnomalyDto, Enable> {
+                    static JsonElement Write(const SmartEventViewer::ServiceAnomalyDto& value) {
+                        JsonElement obj(JsonValueKind::Object);
+                        obj.SetProperty("service", JsonConverter<SmartEventViewer::ServiceInfoDto>::Write(value.Service));
+                        obj.SetProperty("reason", JsonElement(value.Reason));
+                        obj.SetProperty("risk", JsonElement(value.Risk));
+                        return obj;
+                    }
+                    static SmartEventViewer::ServiceAnomalyDto Read(const JsonElement& element) {
+                        SmartEventViewer::ServiceAnomalyDto dto;
+                        JsonElement prop;
+                        if (element.TryGetProperty("service", prop)) dto.Service = JsonConverter<SmartEventViewer::ServiceInfoDto>::Read(prop);
+                        if (element.TryGetProperty("reason", prop) && prop.GetValueKind() == JsonValueKind::String) dto.Reason = prop.GetString();
+                        if (element.TryGetProperty("risk", prop) && prop.GetValueKind() == JsonValueKind::String) dto.Risk = prop.GetString();
+                        return dto;
+                    }
+                };
+
+                template <typename Enable>
+                struct JsonConverter<SmartEventViewer::TelemetryPostureReportDto, Enable> {
+                    static JsonElement Write(const SmartEventViewer::TelemetryPostureReportDto& value) {
+                        JsonElement obj(JsonValueKind::Object);
+                        obj.SetProperty("flaggedProcesses", JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::ProcessAnomalyDto>>::Write(value.FlaggedProcesses));
+                        obj.SetProperty("suspiciousSessions", JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::SessionAnomalyDto>>::Write(value.SuspiciousSessions));
+                        obj.SetProperty("flaggedUsers", JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::UserAnomalyDto>>::Write(value.FlaggedUsers));
+                        obj.SetProperty("suspiciousServices", JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::ServiceAnomalyDto>>::Write(value.SuspiciousServices));
+                        obj.SetProperty("threatScore", JsonElement(static_cast<double>(value.ThreatScore)));
+                        obj.SetProperty("overallRisk", JsonElement(value.OverallRisk));
+                        return obj;
+                    }
+                    static SmartEventViewer::TelemetryPostureReportDto Read(const JsonElement& element) {
+                        SmartEventViewer::TelemetryPostureReportDto dto;
+                        JsonElement prop;
+                        if (element.TryGetProperty("flaggedProcesses", prop)) dto.FlaggedProcesses = JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::ProcessAnomalyDto>>::Read(prop);
+                        if (element.TryGetProperty("suspiciousSessions", prop)) dto.SuspiciousSessions = JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::SessionAnomalyDto>>::Read(prop);
+                        if (element.TryGetProperty("flaggedUsers", prop)) dto.FlaggedUsers = JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::UserAnomalyDto>>::Read(prop);
+                        if (element.TryGetProperty("suspiciousServices", prop)) dto.SuspiciousServices = JsonConverter<DotNetDupe::System::Collections::Generic::List<SmartEventViewer::ServiceAnomalyDto>>::Read(prop);
+                        if (element.TryGetProperty("threatScore", prop) && prop.GetValueKind() == JsonValueKind::Number) dto.ThreatScore = static_cast<int>(prop.GetDouble());
+                        if (element.TryGetProperty("overallRisk", prop) && prop.GetValueKind() == JsonValueKind::String) dto.OverallRisk = prop.GetString();
                         return dto;
                     }
                 };

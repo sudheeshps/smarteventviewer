@@ -7,6 +7,7 @@
 #endif
 
 #include "Core/TelemetryService.h"
+#include "Core/AnomalyEngine.h"
 #include "Platform/WindowsSystemTelemetryProvider.h"
 #include "System/DateTime.h"
 #include "System/Console.h"
@@ -147,6 +148,16 @@ namespace SmartEventViewer {
         auto fresh = m_spProvider->QuerySystemMetrics();
         PutCached("full", 2000, fresh);
         return fresh;
+    }
+
+    TelemetryPostureReportDto TelemetryService::GetPostureReport() {
+        auto metrics = GetProcesses();
+        auto sessions = GetSessions();
+        metrics.RdpSessions = sessions.RdpSessions;
+        metrics.SystemUsers = sessions.SystemUsers;
+        metrics.ActiveUserSessions = sessions.ActiveUserSessions;
+        auto services = GetServices();
+        return AnomalyEngine::StaticEvaluatePosture(metrics, services);
     }
 
     void TelemetryService::CheckHeartbeat(unsigned long long curTimeMs) {

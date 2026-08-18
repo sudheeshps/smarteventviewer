@@ -81,4 +81,12 @@ namespace SmartEventViewer {
             return SystemMetricsResponseDto{};
         }
     }
+
+    TelemetryPostureReportDto TelemetryController::GetPosture() {
+        try {
+            return m_spTelemetryService->GetPostureReport();
+        } catch (...) {
+            return TelemetryPostureReportDto{};
+        }
+    }
 }

@@ -51,6 +51,11 @@ namespace IntegrationTests {
             return restClient.Get(sEndpoint);
         }
 
+        MultiChannelAnomaliesDto GetAnomalies(size_t limit = 15) {
+            RestClient<MultiChannelAnomaliesDto> restClient(m_sBaseUrl + "/api/events");
+            return restClient.Get("anomalies?limit=" + String::Format("{0}", static_cast<double>(limit)));
+        }
+
         SystemMetricsResponseDto GetMetricsSummary() {
             RestClient<SystemMetricsResponseDto> restClient(m_sBaseUrl + "/api/metrics");
             return restClient.Get("summary");
@@ -89,6 +94,11 @@ namespace IntegrationTests {
         ServicesResponseDto GetServices() {
             RestClient<ServicesResponseDto> restClient(m_sBaseUrl + "/api/metrics");
             return restClient.Get("services");
+        }
+
+        TelemetryPostureReportDto GetPosture() {
+            RestClient<TelemetryPostureReportDto> restClient(m_sBaseUrl + "/api/metrics");
+            return restClient.Get("posture");
         }
 
         LogFormatResponseDto GetLogFormat() {

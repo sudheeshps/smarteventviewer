@@ -166,3 +166,16 @@ TEST(EventsControllerTests, GivenNonExistentChannel_WhenGetEventsCalled_ThenRetu
     Console::WriteLine("[ASSERT] Events.Count == 0 (Actual: {0})", response.Events.GetCount());
     EXPECT_EQ(response.Events.GetCount(), 0);
 }
+
+TEST(EventsControllerTests, GivenRunningServer_WhenGetAnomaliesCalled_ThenReturnsCrossChannelAnomalies) {
+    Console::WriteLine("[TEST] Invoking GET /api/events/anomalies...");
+    TestRestClient client;
+    MultiChannelAnomaliesDto response = client.GetAnomalies(10);
+    Console::WriteLine("[ANOMALIES_DTO] Security={0} | System={1} | App={2} | Sysmon={3} | Crit={4} | Err={5} | Warn={6}",
+        response.SecurityEvents.GetCount(), response.SystemEvents.GetCount(), response.ApplicationEvents.GetCount(),
+        response.SysmonEvents.GetCount(), response.TotalCriticalCount, response.TotalErrorCount, response.TotalWarningCount);
+    EXPECT_GE(response.SecurityEvents.GetCount(), 0);
+    EXPECT_GE(response.SystemEvents.GetCount(), 0);
+    EXPECT_GE(response.ApplicationEvents.GetCount(), 0);
+    EXPECT_GE(response.SysmonEvents.GetCount(), 0);
+}
