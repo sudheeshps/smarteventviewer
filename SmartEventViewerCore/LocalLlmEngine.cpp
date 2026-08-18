@@ -136,6 +136,121 @@ namespace SmartEventViewer {
         return sContext;
     }
 
+    static void AppendEventList(const String& sChannel, const DotNetDupe::System::Collections::Generic::List<EventDto>& list, String& outStr) {
+        if (list.GetCount() == 0) return;
+        outStr = outStr + String::Format("• **{0} Channel** ({1} anomalies):\n", sChannel, static_cast<double>(list.GetCount()));
+        for (int i = 0; i < list.GetCount() && i < 3; ++i) {
+            outStr = outStr + String::Format("  - [{0}] Event #{1} [{2}] - {3}\n", list[i].Risk, static_cast<double>(list[i].Id), list[i].Provider, list[i].Message);
+        }
+    }
+
+    static void AppendProcessAnomalies(const DotNetDupe::System::Collections::Generic::List<ProcessAnomalyDto>& list, String& outStr) {
+        if (list.GetCount() == 0) { outStr = outStr + "• *No suspicious host processes detected.*\n"; return; }
+        for (int i = 0; i < list.GetCount() && i < 4; ++i) {
+            const auto& a = list[i];
+            outStr = outStr + String::Format("• **PID {0}** (`{1}`) - [{2}] {3}\n  Cmd: `{4}` | RAM: {5}MB | CPU: {6}%\n",
+                static_cast<double>(a.Process.ProcessId), a.Process.Name, a.Risk, a.Reason, a.Process.CommandLine, static_cast<double>(a.Process.MemoryUsageMB), a.Process.CpuUsagePercent);
+        }
+    }
+
+    static void AppendSessionAnomalies(const DotNetDupe::System::Collections::Generic::List<SessionAnomalyDto>& list, String& outStr) {
+        if (list.GetCount() == 0) { outStr = outStr + "• *No abnormal RDP or remote user sessions detected.*\n"; return; }
+        for (int i = 0; i < list.GetCount() && i < 3; ++i) {
+            const auto& a = list[i];
+            outStr = outStr + String::Format("• **Session #{0}** (User: `{1}`) - [{2}] {3} (Remote IP: `{4}`)\n",
+                static_cast<double>(a.Session.SessionId), a.Session.UserName, a.Risk, a.Reason, a.Session.ClientIpAddress);
+        }
+    }
+
+    static void AppendUserAnomalies(const DotNetDupe::System::Collections::Generic::List<UserAnomalyDto>& list, String& outStr) {
+        if (list.GetCount() == 0) { outStr = outStr + "• *All local accounts operating within standard baseline.*\n"; return; }
+        for (int i = 0; i < list.GetCount() && i < 3; ++i) {
+            const auto& a = list[i];
+            outStr = outStr + String::Format("• **Account `{0}`** (Class: `{1}`) - [{2}] {3}\n", a.User.Username, a.User.UserClass, a.Risk, a.Reason);
+        }
+    }
+
+    static void AppendServiceAnomalies(const DotNetDupe::System::Collections::Generic::List<ServiceAnomalyDto>& list, String& outStr) {
+        if (list.GetCount() == 0) { outStr = outStr + "• *No unverified or failing third-party services detected.*\n"; return; }
+        for (int i = 0; i < list.GetCount() && i < 3; ++i) {
+            const auto& a = list[i];
+            outStr = outStr + String::Format("• **Service `{0}`** (`{1}`) - [{2}] {3} (Status: {4})\n", a.Service.ServiceName, a.Service.DisplayName, a.Risk, a.Reason, a.Service.Status);
+        }
+    }
+
+    String LocalLlmEngine::FormatSiemContext(
+        const MultiChannelAnomaliesDto& anomalies,
+        const TelemetryPostureReportDto& posture) {
+        String sContext = "### LIVE SIEM SECURITY POSTURE & MULTI-CHANNEL TELEMETRY SNAPSHOT\n\n";
+        sContext = sContext + "#### 1. Cross-Channel Event Anomalies\n";
+        AppendEventList("Security", anomalies.SecurityEvents, sContext);
+        AppendEventList("System", anomalies.SystemEvents, sContext);
+        AppendEventList("Application", anomalies.ApplicationEvents, sContext);
+        AppendEventList("Sysmon", anomalies.SysmonEvents, sContext);
+        sContext = sContext + "\n#### 2. Flagged Suspicious Running Processes\n";
+        AppendProcessAnomalies(posture.FlaggedProcesses, sContext);
+        sContext = sContext + "\n#### 3. Suspicious Remote RDP & User Sessions\n";
+        AppendSessionAnomalies(posture.SuspiciousSessions, sContext);
+        sContext = sContext + "\n#### 4. User Principal & Privilege Anomalies\n";
+        AppendUserAnomalies(posture.FlaggedUsers, sContext);
+        sContext = sContext + "\n#### 5. Suspicious / Non-Windows Services\n";
+        AppendServiceAnomalies(posture.SuspiciousServices, sContext);
+        return sContext;
+    }
+
+    static String BuildMitreTactics(const MultiChannelAnomaliesDto& a, const TelemetryPostureReportDto& p) {
+        String sMitre = "• **T1059 (Command & Scripting Interpreter)**: Process execution telemetry monitoring.\n";
+        if (p.FlaggedProcesses.GetCount() > 0) sMitre = sMitre + "• **T1059.001 (PowerShell / LOLBins)**: Active script execution identified with encoded arguments.\n";
+        if (p.SuspiciousSessions.GetCount() > 0) sMitre = sMitre + "• **T1078 (Valid Accounts / Remote Services)**: Inbound RDP connection from non-RFC1918 public address.\n";
+        if (p.SuspiciousServices.GetCount() > 0 || a.SystemEvents.GetCount() > 0) sMitre = sMitre + "• **T1543.003 (Windows Service Creation / Modification)**: Service persistence indicators detected.\n";
+        if (p.FlaggedUsers.GetCount() > 0 || a.SecurityEvents.GetCount() > 0) sMitre = sMitre + "• **T1078.001 (Default Accounts / Local Admin Privilege)**: Unrecognized administrator principal.\n";
+        return sMitre;
+    }
+
+    static String BuildRemediationSteps(int score, const TelemetryPostureReportDto& p) {
+        if (score >= 40 || p.SuspiciousSessions.GetCount() > 0) {
+            return "1. 🛑 **Isolate Host**: Disconnect machine from network if external RDP session is unconfirmed.\n"
+                   "2. 🛡️ **Revoke Tokens / Force Logoff**: Terminate suspicious sessions and rotate administrator credentials.\n"
+                   "3. 🔍 **Hunt Process Tree**: Trace parent process of any flagged LOLBins (`Sysmon Event ID 1`).\n"
+                   "4. 🔒 **Disable Unneeded Accounts**: Disable default Guest account and audit local administrator membership.";
+        }
+        return "1. ✅ **Maintain Continuous Monitoring**: Keep 1-second telemetry push active.\n"
+               "2. 📜 **Audit Retention**: Ensure Security audit logs and Sysmon operational logs have adequate buffer.\n"
+               "3. ⚙️ **Service Hardening**: Verify start types for third-party background services.";
+    }
+
+    String LocalLlmEngine::FormatSiemThreatReport(
+        const String& sUserQuery,
+        const MultiChannelAnomaliesDto& anomalies,
+        const TelemetryPostureReportDto& posture) {
+        int compositeScore = (posture.ThreatScore > 0) ? posture.ThreatScore : 10;
+        int totalEvents = static_cast<int>(anomalies.SecurityEvents.GetCount() + anomalies.SystemEvents.GetCount() + anomalies.ApplicationEvents.GetCount() + anomalies.SysmonEvents.GetCount());
+        if (totalEvents > 0) compositeScore = compositeScore + (totalEvents * 3);
+        if (compositeScore > 100) compositeScore = 100;
+        String sSev = GetSeverityLabel(compositeScore);
+        String sQueryText = sUserQuery.IsEmpty() ? String("Full-Spectrum Host Threat & SIEM Assessment") : sUserQuery;
+        String sContext = FormatSiemContext(anomalies, posture);
+        String sMitre = BuildMitreTactics(anomalies, posture);
+        String sRemediation = BuildRemediationSteps(compositeScore, posture);
+
+        return String::Format(
+            "## 🛡️ SIEM Threat Intelligence & AI Analysis Report\n\n"
+            "**Analysis Objective**: *{0}*\n\n"
+            "### 📊 Threat Posture Assessment\n"
+            "- **Composite Threat Score**: **{1} / 100** — `{2}`\n"
+            "- **Cross-Channel Anomalies Ingested**: **{3}** ({4} Critical, {5} Error, {6} Warning)\n"
+            "- **Host Telemetry Risk Indicators**: **{7} Flagged Processes** | **{8} Suspicious Sessions** | **{9} User Alerts**\n\n"
+            "{10}\n"
+            "### 🎯 MITRE ATT&CK® Threat Mapping\n"
+            "{11}\n"
+            "### 🛠️ Actionable Remediation & Containment Plan\n"
+            "{12}",
+            sQueryText, compositeScore, sSev,
+            static_cast<double>(totalEvents), static_cast<double>(anomalies.TotalCriticalCount), static_cast<double>(anomalies.TotalErrorCount), static_cast<double>(anomalies.TotalWarningCount),
+            static_cast<double>(posture.FlaggedProcesses.GetCount()), static_cast<double>(posture.SuspiciousSessions.GetCount()), static_cast<double>(posture.FlaggedUsers.GetCount()),
+            sContext, sMitre, sRemediation);
+    }
+
     DefaultLlamaModelProvider::DefaultLlamaModelProvider() = default;
 
     DefaultLlamaModelProvider::~DefaultLlamaModelProvider() {

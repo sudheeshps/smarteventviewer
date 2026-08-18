@@ -393,3 +393,40 @@ TEST(AnomalyEngineTest, GivenSuspiciousTelemetry_WhenEvaluatePostureCalled_ThenC
     EXPECT_GT(report.SuspiciousSessions.GetCount(), 0);
     EXPECT_TRUE(report.OverallRisk == "HIGH" || report.OverallRisk == "CRITICAL" || report.OverallRisk == "MEDIUM");
 }
+
+TEST(LocalLlmEngineSiemTests, GivenSiemAnomaliesAndPosture_WhenFormatSiemContextCalled_ThenBuildsStructuredSnapshot) {
+    SmartEventViewer::MultiChannelAnomaliesDto anomalies;
+    SmartEventViewer::EventDto evt;
+    evt.Id = 4625;
+    evt.Level = "Error";
+    evt.Risk = "High";
+    evt.Provider = "Security-Auditing";
+    evt.Message = "Failed login attempt";
+    anomalies.SecurityEvents.Add(evt);
+
+    SmartEventViewer::TelemetryPostureReportDto posture;
+    SmartEventViewer::ProcessAnomalyDto procAnom;
+    procAnom.Process.ProcessId = 1234;
+    procAnom.Process.Name = "powershell.exe";
+    procAnom.Reason = "LOLBin execution";
+    procAnom.Risk = "High";
+    posture.FlaggedProcesses.Add(procAnom);
+
+    String sContext = SmartEventViewer::LocalLlmEngine::FormatSiemContext(anomalies, posture);
+    EXPECT_FALSE(sContext.IsEmpty());
+    EXPECT_TRUE(sContext.Contains("LIVE SIEM SECURITY POSTURE"));
+    EXPECT_TRUE(sContext.Contains("Security-Auditing"));
+    EXPECT_TRUE(sContext.Contains("powershell.exe"));
+}
+
+TEST(LocalLlmEngineSiemTests, GivenSiemAnomaliesAndPosture_WhenFormatSiemThreatReportCalled_ThenGeneratesMitreAndRemediationPlan) {
+    SmartEventViewer::MultiChannelAnomaliesDto anomalies;
+    SmartEventViewer::TelemetryPostureReportDto posture;
+    posture.ThreatScore = 45;
+
+    String sReport = SmartEventViewer::LocalLlmEngine::FormatSiemThreatReport("Analyze overall posture", anomalies, posture);
+    EXPECT_FALSE(sReport.IsEmpty());
+    EXPECT_TRUE(sReport.Contains("SIEM Threat Intelligence"));
+    EXPECT_TRUE(sReport.Contains("MITRE ATT&CK"));
+    EXPECT_TRUE(sReport.Contains("Remediation"));
+}

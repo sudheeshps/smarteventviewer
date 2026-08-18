@@ -10,6 +10,8 @@
 #include "System/Threading/Thread.h"
 #include "Ai/ILlamaModelProvider.h"
 #include "Ai/LlamaMessageDtos.h"
+#include "Dto/EventDtos.h"
+#include "Dto/TelemetryDtos.h"
 
 // Forward declaration of internal llama context structures
 struct llama_model;
@@ -59,6 +61,14 @@ namespace SmartEventViewer {
         SMARTEVENTVIEWER_API static String FormatThreatAnalysisResponse(const List<EventRecord>& events);
         SMARTEVENTVIEWER_API static String BuildLlamaSystemPrompt();
         SMARTEVENTVIEWER_API static String FormatEventContextForLlama(const List<EventRecord>& events);
+
+        SMARTEVENTVIEWER_API static String FormatSiemContext(
+            const MultiChannelAnomaliesDto& anomalies,
+            const TelemetryPostureReportDto& posture);
+        SMARTEVENTVIEWER_API static String FormatSiemThreatReport(
+            const String& sUserQuery,
+            const MultiChannelAnomaliesDto& anomalies,
+            const TelemetryPostureReportDto& posture);
 
         SMARTEVENTVIEWER_API LocalLlmEngine();
         SMARTEVENTVIEWER_API explicit LocalLlmEngine(const SmartPointer<ILlamaModelProvider>& spProvider);

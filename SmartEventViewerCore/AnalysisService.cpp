@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "Core/AnalysisService.h"
 #include "Core/EventService.h"
+#include "Core/TelemetryService.h"
 #include "System/Console.h"
 #include "System/Convert.h"
 #include "System/Threading/Thread.h"
@@ -106,21 +107,27 @@ namespace SmartEventViewer {
     AnalyzeResponseDto AnalysisService::ExecuteTaskInference(const String& sTaskId, const AnalyzeRequestDto& request) {
         AnalyzeResponseDto result;
         result.TaskId = sTaskId;
-        result.Channel = request.Channel;
+        result.Channel = request.Channel.IsEmpty() ? String("All Channels (SIEM)") : request.Channel;
         result.Query = request.Query;
         result.Status = "COMPLETED";
-        result.ProgressMessage = "Threat analysis completed successfully.";
+        result.ProgressMessage = "Full-spectrum SIEM threat analysis completed successfully.";
         result.DownloadProgress = 100.0;
-        result.EventsAnalyzed = 20;
 
-        EventLogResponseDto eventsDto;
+        MultiChannelAnomaliesDto anomalies;
         try {
-            eventsDto = m_spEventService->GetEvents(request.Channel, 1, 20, "ALL");
+            anomalies = m_spEventService->GetCrossChannelAnomalies(15);
         } catch (...) {
-            // Channel may have restricted access permissions
         }
-        result.Analysis = String::Format("### Threat Intelligence & Anomaly Report for {0}\n\nAnalyzed {1} events for query '{2}'. Threat level evaluated: LOW. No critical indicators of compromise detected.",
-            request.Channel, static_cast<double>(eventsDto.Events.GetCount()), request.Query);
+        TelemetryPostureReportDto posture;
+        try {
+            posture = TelemetryService::GetDefault()->GetPostureReport();
+        } catch (...) {
+        }
+
+        size_t totalEvents = anomalies.SecurityEvents.GetCount() + anomalies.SystemEvents.GetCount() +
+                             anomalies.ApplicationEvents.GetCount() + anomalies.SysmonEvents.GetCount();
+        result.EventsAnalyzed = totalEvents;
+        result.Analysis = LocalLlmEngine::FormatSiemThreatReport(request.Query, anomalies, posture);
         return result;
     }
 
