@@ -38,11 +38,15 @@ jobs:
           npm run build
           cd ..
 
+      - name: Setup vcpkg & Install llama.cpp Dependencies
+        run: |
+          vcpkg install --triplet x64-windows
+
       - name: Restore NuGet Packages
         run: nuget restore SmartEventViewer.sln
 
       - name: Build C++ Solution (Release x64)
-        run: msbuild SmartEventViewer.sln /p:Configuration=Release /p:Platform=x64 /p:RestorePackages=false /t:Rebuild
+        run: msbuild SmartEventViewer.sln /p:Configuration=Release /p:Platform=x64 /p:RestorePackages=false /p:VcpkgEnableManifest=true /t:Rebuild
 
       - name: Run Unit Tests
         run: .\bin\x64\Release\SmartEventViewerTests.exe
@@ -59,20 +63,36 @@ jobs:
           type nul > "%DIST_DIR%\models\.gitkeep"
           type nul > "%DIST_DIR%\logs\.gitkeep"
 
+          :: Copy C++ compiled binaries and libraries
           copy /y bin\x64\Release\*.dll "%DIST_DIR%\bin\"
+          copy /y bin\x64\Release\*.lib "%DIST_DIR%\bin\" 2>nul
           copy /y bin\x64\Release\SmartEventViewerServer.exe "%DIST_DIR%\bin\"
           copy /y bin\x64\Release\SmartEventViewerTests.exe "%DIST_DIR%\bin\"
 
+          :: Copy DotNetDupe runtime binaries and OpenSSL DLLs
           for /d %%d in (packages\DotNetDupe.*) do (
               copy /y "%%d\runtimes\win-x64\native\DotNetDupe.dll" "%DIST_DIR%\bin\"
               copy /y "%%d\runtimes\win-x64\native\libcrypto-4-x64.dll" "%DIST_DIR%\bin\"
               copy /y "%%d\runtimes\win-x64\native\libssl-4-x64.dll" "%DIST_DIR%\bin\"
           )
 
+          :: Copy llama.cpp and GGML native runtime binaries (llama.dll, ggml.dll, ggml-base.dll, ggml-cpu.dll)
+          if exist vcpkg_installed\x64-windows\x64-windows\bin (
+              copy /y vcpkg_installed\x64-windows\x64-windows\bin\*.dll "%DIST_DIR%\bin\" >nul 2>&1
+          )
+          if exist vcpkg_installed\x64-windows\bin (
+              copy /y vcpkg_installed\x64-windows\bin\*.dll "%DIST_DIR%\bin\" >nul 2>&1
+          )
+          if exist "%VCPKG_INSTALLATION_ROOT%\installed\x64-windows\bin" (
+              copy /y "%VCPKG_INSTALLATION_ROOT%\installed\x64-windows\bin\*.dll" "%DIST_DIR%\bin\" >nul 2>&1
+          )
+
+          :: Copy precompiled React SPA assets
           xcopy /s /e /y /i "SmartEventViewerApp\dist\*" "%DIST_DIR%\UI\"
           copy /y "README.md" "%DIST_DIR%\"
           copy /y "LICENSE" "%DIST_DIR%\"
 
+          :: Create single-click UAC auto-elevating launcher
           (
               echo @echo off
               echo setlocal
