@@ -89,16 +89,58 @@ static void WaitForServerReady(int iMaxAttempts) {
     Console::WriteLine("[INTEGRATION_TEST] Server listener wait completed.");
 }
 
+static void SendCtrlCToServer(DWORD dwPid) {
+#if defined(_WIN32) || defined(_WIN64)
+    if (dwPid > 0) {
+        Console::WriteLine("[INTEGRATION_TEST] Sending Ctrl+C signal to server (PID: {0})...", static_cast<int>(dwPid));
+        ::SetConsoleCtrlHandler(NULL, TRUE);
+        ::GenerateConsoleCtrlEvent(CTRL_C_EVENT, dwPid);
+        ::GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT, dwPid);
+        ::GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0);
+        ::SetConsoleCtrlHandler(NULL, FALSE);
+    }
+#endif
+}
+
 static void StopServerProcess() {
-    if (!s_pServerProcess.IsNull() && !s_pServerProcess->GetHasExited()) {
+    Console::WriteLine("[INTEGRATION_TEST] Checking server process handle...");
+    if (!s_pServerProcess.IsNull()) {
         Console::WriteLine("[INTEGRATION_TEST] Stopping background server process...");
-        s_pServerProcess->Kill();
+        try {
+            //SendCtrlCToServer(static_cast<DWORD>(s_pServerProcess->GetId()));
+            if (!s_pServerProcess->WaitForExit(2500) && !s_pServerProcess->GetHasExited()) {
+                s_pServerProcess->Kill();
+                s_pServerProcess->WaitForExit(1000);
+            }
+        } catch (const Exception& ex) {
+            Console::WriteLine("[INTEGRATION_TEST] Server stop exception: {0}", ex.What());
+        }
         s_pServerProcess = nullptr;
     }
 }
 
+bool g_bEnableModelDownloadTest = false;
+
+static void ParseTestFlags(int argc, char** argv) {
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--test-download") == 0 || std::strcmp(argv[i], "--test-model-download") == 0) {
+            g_bEnableModelDownloadTest = true;
+            Console::WriteLine(String::Format("[TEST_RUNNER] Model download live test enabled via '{0}'.", String(argv[i])));
+        }
+    }
+}
+
+static bool ShouldPauseAfterRun(int argc, char** argv) {
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--pause") == 0) return true;
+    }
+    return false;
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
+    ParseTestFlags(argc, argv);
+    bool bPause = ShouldPauseAfterRun(argc, argv);
 
     String sExePath = ResolveServerExePath();
     LaunchServerProcess(sExePath);
@@ -107,5 +149,10 @@ int main(int argc, char** argv) {
     int iResult = RUN_ALL_TESTS();
 
     StopServerProcess();
+
+    if (bPause) {
+        Console::WriteLine("\nPress Enter to continue . . .");
+        Console::Read();
+    }
     return iResult;
 }

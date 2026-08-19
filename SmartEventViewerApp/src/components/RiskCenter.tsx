@@ -47,6 +47,7 @@ export const RiskCenter: React.FC<RiskCenterProps> = ({ onSelectChannel }) => {
   const [aiQuery, setAiQuery] = useState<string>('Full-Spectrum Host Threat & SIEM Assessment');
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [aiProgressMessage, setAiProgressMessage] = useState<string>('');
+  const [aiDownloadProgress, setAiDownloadProgress] = useState<number>(0);
   const [aiReport, setAiReport] = useState<string>('');
   const [copiedReport, setCopiedReport] = useState<boolean>(false);
 
@@ -91,6 +92,7 @@ export const RiskCenter: React.FC<RiskCenterProps> = ({ onSelectChannel }) => {
     const q = queryToRun || aiQuery || 'Full-Spectrum Host Threat & SIEM Assessment';
     setIsAnalyzing(true);
     setAiProgressMessage('Enqueuing full-spectrum SIEM cross-correlation task...');
+    setAiDownloadProgress(0);
     setAiReport('');
     setActiveSubtab('ai');
 
@@ -105,31 +107,40 @@ export const RiskCenter: React.FC<RiskCenterProps> = ({ onSelectChannel }) => {
         return;
       }
 
-      // Poll task status
+      // Poll task status continuously until completion or explicit failure
       let pollCount = 0;
       const pollInterval = setInterval(async () => {
         pollCount++;
         try {
           const statusRes = await fetchApiAnalyzeStatus(taskId, baseUrl);
           setAiProgressMessage(statusRes.progressMessage || 'Synthesizing MITRE ATT&CK mappings and telemetry...');
+          if (statusRes.downloadProgress !== undefined) {
+            setAiDownloadProgress(statusRes.downloadProgress);
+          }
 
           if (statusRes.status === 'COMPLETED') {
             clearInterval(pollInterval);
             setAiReport(statusRes.analysis || '');
             setIsAnalyzing(false);
-          } else if (statusRes.status === 'FAILED' || pollCount > 30) {
+            setAiDownloadProgress(0);
+          } else if (statusRes.status === 'FAILED') {
             clearInterval(pollInterval);
-            setAiReport(statusRes.analysis || 'Inference completed or timed out.');
+            setAiReport(statusRes.analysis || 'Inference failed or encountered an error.');
             setIsAnalyzing(false);
+            setAiDownloadProgress(0);
           }
         } catch {
-          clearInterval(pollInterval);
-          setIsAnalyzing(false);
+          if (pollCount > 1200) {
+            clearInterval(pollInterval);
+            setIsAnalyzing(false);
+            setAiDownloadProgress(0);
+          }
         }
-      }, 600);
+      }, 500);
     } catch (err) {
       setAiReport(`Failed to initiate AI SIEM investigation: ${err}`);
       setIsAnalyzing(false);
+      setAiDownloadProgress(0);
     }
   };
 
@@ -726,9 +737,14 @@ export const RiskCenter: React.FC<RiskCenterProps> = ({ onSelectChannel }) => {
           {isAnalyzing && (
             <div style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid #f43f5e', borderRadius: '8px', padding: '16px', textAlign: 'center' }}>
               <div style={{ fontSize: '0.85rem', color: '#f43f5e', fontWeight: 700, marginBottom: '6px' }}>
-                ⚡ SIEM Correlation & AI Inference in Progress
+                {aiDownloadProgress > 0 && aiDownloadProgress <= 100 ? '📥 Downloading AI Model Weights...' : '⚡ SIEM Correlation & AI Inference in Progress'}
               </div>
-              <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{aiProgressMessage}</div>
+              <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: aiDownloadProgress > 0 ? '10px' : '0' }}>{aiProgressMessage}</div>
+              {aiDownloadProgress > 0 && aiDownloadProgress <= 100 && (
+                <div style={{ width: '80%', margin: '0 auto', background: 'rgba(15, 23, 42, 0.8)', borderRadius: '4px', overflow: 'hidden', border: '1px solid rgba(56, 189, 248, 0.3)', height: '8px' }}>
+                  <div style={{ width: `${Math.min(100, Math.max(0, aiDownloadProgress))}%`, height: '100%', background: 'linear-gradient(90deg, #38bdf8, #818cf8)', transition: 'width 0.2s ease-out' }} />
+                </div>
+              )}
             </div>
           )}
 

@@ -33,6 +33,8 @@ namespace SmartEventViewer {
         void StartWorker();
         void WorkerLoop();
         void ProcessSingleTask(const DotNetDupe::System::SmartPointer<AnalysisTaskItem>& pItem);
+        bool EnsureModelDownloaded(const String& sTaskId, AnalyzeResponseDto& taskDto);
+        void InitializeLlmEngine(const String& sTaskId, AnalyzeResponseDto& taskDto);
         void UpdateTaskResult(const String& sTaskId, const AnalyzeResponseDto& result);
         void NotifyAnalysisUpdate();
         AnalyzeResponseDto ExecuteTaskInference(const String& sTaskId, const AnalyzeRequestDto& request);

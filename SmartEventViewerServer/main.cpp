@@ -163,7 +163,6 @@ static void RunServerLoop(const SmartPointer<WebAppServer>& spWebServer, const S
     Console::WriteLine("[SERVER] Server is actively running at http://127.0.0.1:8080/");
     Console::WriteLine("[SERVER] Press Ctrl+C to stop.\n");
     spWebServer->Run("http://127.0.0.1:8080");
-    Console::Read();
 }
 
 int main(int argc, char* argv[]) {

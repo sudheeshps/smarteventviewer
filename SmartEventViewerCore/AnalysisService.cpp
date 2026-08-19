@@ -104,50 +104,86 @@ namespace SmartEventViewer {
         return pendingDto;
     }
 
+    bool AnalysisService::EnsureModelDownloaded(const String& sTaskId, AnalyzeResponseDto& taskDto) {
+        if (m_spLlmEngine->IsModelFilePresent()) return true;
+        AppLoggerManager::Info("AI_ENGINE", String::Format("[AnalysisService] Task '{0}': Model missing on disk. Starting HuggingFace download...", sTaskId));
+        taskDto.Status = "DOWNLOADING";
+        taskDto.ProgressMessage = "Model not found. Downloading Qwen 1.5 GGUF weights from HuggingFace...";
+        taskDto.DownloadProgress = 0.0;
+        UpdateTaskResult(sTaskId, taskDto);
+
+        m_spLlmEngine->DownloadModelWithProgress("", DotNetDupe::System::Action<double, double, long long, long long>(
+            [this, sTaskId, &taskDto](double pct, double rate, long long dl, long long total) {
+                taskDto.Status = "DOWNLOADING";
+                taskDto.DownloadProgress = pct;
+                taskDto.DownloadedBytes = static_cast<unsigned long long>(dl);
+                taskDto.TotalBytes = static_cast<unsigned long long>(total);
+                taskDto.DownloadRateBytesPerSec = rate;
+                taskDto.ProgressMessage = String::Format("Downloading model: {0:F1}% ({1} MB / {2} MB)", pct, dl / (1024 * 1024), total / (1024 * 1024));
+                UpdateTaskResult(sTaskId, taskDto);
+            }
+        ));
+        return m_spLlmEngine->IsModelFilePresent();
+    }
+
+    void AnalysisService::InitializeLlmEngine(const String& sTaskId, AnalyzeResponseDto& taskDto) {
+        if (m_spLlmEngine->IsModelLoaded()) return;
+        taskDto.Status = "INITIALIZING";
+        taskDto.ProgressMessage = "Loading GGUF model weights into llama.cpp context...";
+        taskDto.DownloadProgress = 100.0;
+        UpdateTaskResult(sTaskId, taskDto);
+        m_spLlmEngine->Initialize("models/Qwen1.5-4B-Chat-Q4_K_M.gguf");
+    }
+
     AnalyzeResponseDto AnalysisService::ExecuteTaskInference(const String& sTaskId, const AnalyzeRequestDto& request) {
         AnalyzeResponseDto result;
         result.TaskId = sTaskId;
         result.Channel = request.Channel.IsEmpty() ? String("All Channels (SIEM)") : request.Channel;
         result.Query = request.Query;
-        result.Status = "COMPLETED";
-        result.ProgressMessage = "Full-spectrum SIEM threat analysis completed successfully.";
         result.DownloadProgress = 100.0;
 
         MultiChannelAnomaliesDto anomalies;
-        try {
-            anomalies = m_spEventService->GetCrossChannelAnomalies(15);
-        } catch (...) {
+        if (m_spEventService) {
+            try { anomalies = m_spEventService->GetCrossChannelAnomalies(15); } catch (...) {}
         }
         TelemetryPostureReportDto posture;
-        try {
-            posture = TelemetryService::GetDefault()->GetPostureReport();
-        } catch (...) {
+        if (TelemetryService::GetDefault()) {
+            try { posture = TelemetryService::GetDefault()->GetPostureReport(); } catch (...) {}
         }
 
         size_t totalEvents = anomalies.SecurityEvents.GetCount() + anomalies.SystemEvents.GetCount() +
                              anomalies.ApplicationEvents.GetCount() + anomalies.SysmonEvents.GetCount();
         result.EventsAnalyzed = totalEvents;
         result.Analysis = LocalLlmEngine::FormatSiemThreatReport(request.Query, anomalies, posture);
+        result.Status = "COMPLETED";
+        result.ProgressMessage = "Full-spectrum SIEM threat analysis completed successfully.";
         return result;
     }
 
     void AnalysisService::ProcessSingleTask(const DotNetDupe::System::SmartPointer<AnalysisTaskItem>& pItem) {
         if (pItem.IsNull()) return;
-        AnalyzeResponseDto procDto;
-        procDto.TaskId = pItem->TaskId;
-        procDto.Channel = pItem->Request.Channel;
-        procDto.Query = pItem->Request.Query;
-        procDto.Status = "PROCESSING";
-        procDto.ProgressMessage = "Executing inference on events context...";
-        UpdateTaskResult(pItem->TaskId, procDto);
+        AnalyzeResponseDto taskDto;
+        taskDto.TaskId = pItem->TaskId;
+        taskDto.Channel = pItem->Request.Channel;
+        taskDto.Query = pItem->Request.Query;
+        taskDto.Status = "PROCESSING";
+        taskDto.ProgressMessage = "Synthesizing cross-channel anomalies and telemetry...";
+        UpdateTaskResult(pItem->TaskId, taskDto);
 
         try {
+            if (m_spLlmEngine && m_spLlmEngine->IsModelFilePresent()) {
+                InitializeLlmEngine(pItem->TaskId, taskDto);
+            }
             auto finalDto = ExecuteTaskInference(pItem->TaskId, pItem->Request);
             UpdateTaskResult(pItem->TaskId, finalDto);
         } catch (const DotNetDupe::System::Exception& ex) {
-            procDto.Status = "FAILED";
-            procDto.ProgressMessage = String::Format("Inference failed: {0}", ex.What());
-            UpdateTaskResult(pItem->TaskId, procDto);
+            taskDto.Status = "FAILED";
+            taskDto.ProgressMessage = String::Format("Inference failed: {0}", ex.What());
+            UpdateTaskResult(pItem->TaskId, taskDto);
+        } catch (const std::exception& ex) {
+            taskDto.Status = "FAILED";
+            taskDto.ProgressMessage = String::Format("Inference failed: {0}", String(ex.what()));
+            UpdateTaskResult(pItem->TaskId, taskDto);
         }
     }
 

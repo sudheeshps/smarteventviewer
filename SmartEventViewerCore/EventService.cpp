@@ -190,11 +190,11 @@ namespace SmartEventViewer {
     }
 
     static EventLevel ParseLevelFilter(const String& sFilter) {
-        if (CaseInsensitiveEqual(sFilter, "Critical")) return EventLevel::Critical;
-        if (CaseInsensitiveEqual(sFilter, "Error")) return EventLevel::Error;
-        if (CaseInsensitiveEqual(sFilter, "Warning")) return EventLevel::Warning;
-        if (CaseInsensitiveEqual(sFilter, "Information") || CaseInsensitiveEqual(sFilter, "Informational")) return EventLevel::Informational;
-        if (CaseInsensitiveEqual(sFilter, "Verbose")) return EventLevel::Verbose;
+        if (CaseInsensitiveEqual(sFilter, "Critical") || CaseInsensitiveEqual(sFilter, "Crit")) return EventLevel::Critical;
+        if (CaseInsensitiveEqual(sFilter, "Error") || CaseInsensitiveEqual(sFilter, "Err")) return EventLevel::Error;
+        if (CaseInsensitiveEqual(sFilter, "Warning") || CaseInsensitiveEqual(sFilter, "Warn")) return EventLevel::Warning;
+        if (CaseInsensitiveEqual(sFilter, "Information") || CaseInsensitiveEqual(sFilter, "Informational") || CaseInsensitiveEqual(sFilter, "Info")) return EventLevel::Informational;
+        if (CaseInsensitiveEqual(sFilter, "Verbose") || CaseInsensitiveEqual(sFilter, "Verb")) return EventLevel::Verbose;
         return EventLevel::LogAlways;
     }
 
