@@ -430,3 +430,40 @@ TEST(LocalLlmEngineSiemTests, GivenSiemAnomaliesAndPosture_WhenFormatSiemThreatR
     EXPECT_TRUE(sReport.Contains("MITRE ATT&CK"));
     EXPECT_TRUE(sReport.Contains("Remediation"));
 }
+
+TEST(AnomalyEngineTest, GivenCleanTelemetry_WhenEvaluatePostureCalled_ThenReturnsZeroThreatScoreAndLowRisk) {
+    SmartEventViewer::SystemMetricsResponseDto metrics;
+    SmartEventViewer::ServicesResponseDto services;
+    auto report = SmartEventViewer::AnomalyEngine::StaticEvaluatePosture(metrics, services);
+
+    EXPECT_EQ(report.ThreatScore, 0);
+    EXPECT_EQ(report.OverallRisk, "LOW");
+    EXPECT_EQ(report.FlaggedProcesses.GetCount(), 0);
+    EXPECT_EQ(report.SuspiciousSessions.GetCount(), 0);
+    EXPECT_EQ(report.FlaggedUsers.GetCount(), 0);
+    EXPECT_EQ(report.SuspiciousServices.GetCount(), 0);
+}
+
+TEST(AnomalyEngineTest, GivenStandardWindowsServices_WhenEvaluateServiceCalled_ThenDoesNotFlagFalsePositives) {
+    SmartEventViewer::ServiceInfoDto svc1("Dhcp", "DHCP Client", "Running", "Auto", 100);
+    SmartEventViewer::ServiceInfoDto svc2("EventLog", "Windows Event Log", "Running", "Auto", 200);
+    SmartEventViewer::ServiceAnomalyDto anom;
+
+    EXPECT_FALSE(SmartEventViewer::AnomalyEngine::StaticEvaluateService(svc1, anom));
+    EXPECT_FALSE(SmartEventViewer::AnomalyEngine::StaticEvaluateService(svc2, anom));
+}
+
+TEST(AnomalyEngineTest, GivenStandardAdminUser_WhenEvaluateUserCalled_ThenDoesNotFlagAnomaly) {
+    SmartEventViewer::UserPrincipalDto user;
+    user.Username = "john_doe";
+    user.IsDisabled = false;
+    user.UserClass = "Admin";
+    SmartEventViewer::UserAnomalyDto anom;
+
+    EXPECT_FALSE(SmartEventViewer::AnomalyEngine::StaticEvaluateUser(user, anom));
+}
+
+TEST(LocalLlmEngineSiemTests, GivenZeroAnomalies_WhenComputeThreatScoreCalled_ThenReturnsZeroWithoutFallback) {
+    int iScore = SmartEventViewer::LocalLlmEngine::ComputeThreatScore(0, 0, 0, 0, 0);
+    EXPECT_EQ(iScore, 0);
+}

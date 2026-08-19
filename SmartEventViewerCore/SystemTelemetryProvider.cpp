@@ -19,6 +19,8 @@
 #include "System/Threading/CriticalSection.h"
 #include "System/Threading/Lock.h"
 #include "System/Collections/Generic/Dictionary.h"
+#include "System/Collections/Generic/HashSet.h"
+#include "Logging/AppLoggerManager.h"
 
 namespace SmartEventViewer {
     using Console = DotNetDupe::System::Console;
@@ -35,6 +37,7 @@ namespace SmartEventViewer {
     using LockCS = DotNetDupe::System::Threading::Lock<CriticalSection>;
 
     static DotNetDupe::System::Collections::Generic::Dictionary<unsigned long, ProcessResourceDto> s_processCache;
+    static DotNetDupe::System::Collections::Generic::HashSet<unsigned long> s_seenPids;
     static CriticalSection s_processCacheCs;
     static DotNetDupe::System::SmartPointer<ProcessStreamer> s_pProcessStreamer = nullptr;
     static unsigned long long s_lastProcessStreamStartMs = 0;
@@ -47,35 +50,102 @@ namespace SmartEventViewer {
 #endif
     }
 
-    static void UpdateBatchInCache(const DotNetDupe::System::Collections::Generic::List<DotNetDupe::System::Diagnostics::ProcessInfo>& batch) {
+    static void LogBatchSample(const DotNetDupe::System::Collections::Generic::List<DotNetDupe::System::Diagnostics::ProcessInfo>& batch) {
+        if (batch.GetCount() == 0) return;
+        const auto& p = batch[0];
+        double dRamMb = static_cast<double>(p.memory.lPhysicalMemoryBytes / (1024 * 1024));
+        AppLoggerManager::Info("TELEMETRY", String::Format("[DotNetDupe:OnBatch] BatchSize={0} | Sample PID={1} ({2}) CPU={3}% RAM={4}MB NetR={5} NetW={6}",
+            static_cast<double>(batch.GetCount()), static_cast<double>(p.iProcessId), p.sName, p.dCpuUsagePercent, dRamMb, static_cast<double>(p.network.lNetworkReadBytes), static_cast<double>(p.network.lNetworkWriteBytes)));
+    }
+
+    static void LogProcessUpdated(const DotNetDupe::System::Diagnostics::ProcessInfo& proc) {
+        double dRamMb = static_cast<double>(proc.memory.lPhysicalMemoryBytes / (1024 * 1024));
+        AppLoggerManager::Info("TELEMETRY", String::Format("[DotNetDupe:OnProcessUpdated] PID={0} ({1}) CPU={2}% RAM={3}MB NetR={4} NetW={5} Ports={6} Estab={7}",
+            static_cast<double>(proc.iProcessId), proc.sName, proc.dCpuUsagePercent, dRamMb, static_cast<double>(proc.network.lNetworkReadBytes), static_cast<double>(proc.network.lNetworkWriteBytes), static_cast<double>(proc.lstOpenPorts.GetCount()), proc.bHasEstablishedConnection ? 1.0 : 0.0));
+    }
+
+    static void LogStreamCompleted(int iCacheCount, int iSeenCount) {
+        AppLoggerManager::Info("TELEMETRY", String::Format("[DotNetDupe:OnCompleted] Stream cycle completed. Cached={0}, ActiveSeen={1}",
+            static_cast<double>(iCacheCount), static_cast<double>(iSeenCount)));
+    }
+
+    static void MergeExistingProcessMetrics(const ProcessResourceDto& existing, ProcessResourceDto& dto) {
+        if (dto.CpuUsagePercent == 0.0 && existing.CpuUsagePercent > 0.0) {
+            dto.CpuUsagePercent = existing.CpuUsagePercent;
+        }
+        if (dto.NetworkReadBytes == 0 && existing.NetworkReadBytes > 0) {
+            dto.NetworkReadBytes = existing.NetworkReadBytes;
+        }
+        if (dto.NetworkWriteBytes == 0 && existing.NetworkWriteBytes > 0) {
+            dto.NetworkWriteBytes = existing.NetworkWriteBytes;
+        }
+        if (dto.OpenPorts == "-" && existing.OpenPorts != "-") {
+            dto.OpenPorts = existing.OpenPorts;
+        }
+        if (!dto.ConnectionEstablished && existing.ConnectionEstablished) {
+            dto.ConnectionEstablished = existing.ConnectionEstablished;
+        }
+    }
+
+    static void MergeBatchInCache(const DotNetDupe::System::Collections::Generic::List<DotNetDupe::System::Diagnostics::ProcessInfo>& batch) {
         LockCS lock(s_processCacheCs);
+        LogBatchSample(batch);
         for (int i = 0; i < batch.GetCount(); ++i) {
             if (batch[i].iProcessId <= 0) continue;
+            unsigned long uPid = static_cast<unsigned long>(batch[i].iProcessId);
+            s_seenPids.Add(uPid);
             auto dto = SystemTelemetryProvider::MapProcessResourceDto(batch[i]);
-            s_processCache[dto.ProcessId] = dto;
+            if (s_processCache.ContainsKey(uPid)) {
+                MergeExistingProcessMetrics(s_processCache[uPid], dto);
+            }
+            s_processCache[uPid] = dto;
         }
+    }
+
+    static void UpdateProcessInCache(const DotNetDupe::System::Diagnostics::ProcessInfo& proc) {
+        if (proc.iProcessId <= 0) return;
+        unsigned long uPid = static_cast<unsigned long>(proc.iProcessId);
+        LockCS lock(s_processCacheCs);
+        s_seenPids.Add(uPid);
+        LogProcessUpdated(proc);
+        auto dto = SystemTelemetryProvider::MapProcessResourceDto(proc);
+        s_processCache[uPid] = dto;
+    }
+
+    static void EvictTerminatedProcesses() {
+        LockCS lock(s_processCacheCs);
+        auto keys = s_processCache.GetKeys();
+        for (int i = 0; i < keys.GetLength(); ++i) {
+            if (!s_seenPids.Contains(keys[i])) {
+                s_processCache.Remove(keys[i]);
+            }
+        }
+        LogStreamCompleted(s_processCache.GetCount(), s_seenPids.GetCount());
     }
 
     static void EnsureProcessStreamerActive() {
         LockCS lock(s_processCacheCs);
         unsigned long long cur = GetTickMs();
-        if (!s_pProcessStreamer.IsNull() && (s_pProcessStreamer->IsRunning() || cur - s_lastProcessStreamStartMs < 2500)) return;
+        if (!s_pProcessStreamer.IsNull() && (s_pProcessStreamer->IsRunning() || cur - s_lastProcessStreamStartMs < 2000)) return;
         s_lastProcessStreamStartMs = cur;
+        s_seenPids.Clear();
+
         ProcessStreamOptions options;
         options.eDetailLevel = ProcessMetricsDetail::Progressive;
         options.iBatchSize = 25;
         options.iBatchIntervalMs = 50;
         options.bIncludeNetworkInfo = true;
 
+        AppLoggerManager::Info("TELEMETRY", String::Format("[ProcessStreamer] Starting background streamer pass (BatchSize={0})", static_cast<double>(options.iBatchSize)));
         s_pProcessStreamer = DotNetDupe::System::SmartPointer<ProcessStreamer>::NewShared(options);
         s_pProcessStreamer->OnBatch([](const DotNetDupe::System::Collections::Generic::List<DotNetDupe::System::Diagnostics::ProcessInfo>& batch) {
-            UpdateBatchInCache(batch);
+            MergeBatchInCache(batch);
         });
         s_pProcessStreamer->OnProcessUpdated([](const DotNetDupe::System::Diagnostics::ProcessInfo& proc) {
-            if (proc.iProcessId <= 0) return;
-            LockCS innerLock(s_processCacheCs);
-            auto dto = SystemTelemetryProvider::MapProcessResourceDto(proc);
-            s_processCache[dto.ProcessId] = dto;
+            UpdateProcessInCache(proc);
+        });
+        s_pProcessStreamer->OnCompleted([]() {
+            EvictTerminatedProcesses();
         });
         s_pProcessStreamer->Start();
     }
@@ -114,6 +184,16 @@ namespace SmartEventViewer {
         }
     }
 
+    static String FormatPorts(const DotNetDupe::System::Collections::Generic::List<int>& lstPorts) {
+        if (lstPorts.GetCount() == 0) return String("-");
+        String sResult = "";
+        for (int i = 0; i < lstPorts.GetCount() && i < 5; ++i) {
+            if (i > 0) sResult = sResult + ", ";
+            sResult = sResult + String::Format("{0}", static_cast<double>(lstPorts[i]));
+        }
+        return sResult;
+    }
+
     ProcessResourceDto SystemTelemetryProvider::MapProcessResourceDto(const DotNetDupe::System::Diagnostics::ProcessInfo& proc) {
         ProcessResourceDto procDto;
         try {
@@ -127,14 +207,14 @@ namespace SmartEventViewer {
             procDto.MemoryUsageMB = static_cast<unsigned long long>(rawRamBytes > 0 ? (rawRamBytes / (1024 * 1024)) : 0);
             procDto.NetworkReadBytes = static_cast<unsigned long long>(proc.network.lNetworkReadBytes > 0 ? proc.network.lNetworkReadBytes : 0);
             procDto.NetworkWriteBytes = static_cast<unsigned long long>(proc.network.lNetworkWriteBytes > 0 ? proc.network.lNetworkWriteBytes : 0);
-            procDto.OpenPorts = String("-");
-            procDto.ConnectionEstablished = false;
+            procDto.OpenPorts = FormatPorts(proc.lstOpenPorts);
+            procDto.ConnectionEstablished = proc.bHasEstablishedConnection || (procDto.NetworkReadBytes > 0 || procDto.NetworkWriteBytes > 0);
         } catch (...) {
         }
         return procDto;
     }
 
-    void SystemTelemetryProvider::PopulateUserSessions(SystemMetricsResponseDto& metrics) {
+    static void PopulateActiveSessions(SystemMetricsResponseDto& metrics) {
         auto activeSessions = ActiveUserSession::GetActiveSessions();
         for (int i = 0; i < activeSessions.GetCount(); ++i) {
             const auto& s = activeSessions[i];
@@ -146,7 +226,9 @@ namespace SmartEventViewer {
             dto.IsActive = s.bIsActive;
             metrics.ActiveUserSessions.Add(dto);
         }
+    }
 
+    static void PopulateExpiredSessions(SystemMetricsResponseDto& metrics) {
         auto expiredSessions = ActiveUserSession::GetExpiredSessions();
         for (int i = 0; i < expiredSessions.GetCount(); ++i) {
             const auto& s = expiredSessions[i];
@@ -158,7 +240,9 @@ namespace SmartEventViewer {
             dto.IsActive = s.bIsActive;
             metrics.ExpiredUserSessions.Add(dto);
         }
+    }
 
+    static void PopulateSystemUsers(SystemMetricsResponseDto& metrics) {
         auto users = UserPrincipal::EnumerateUsers();
         for (int i = 0; i < users.GetCount(); ++i) {
             const auto& u = users[i];
@@ -176,7 +260,24 @@ namespace SmartEventViewer {
             dto.Permissions = u.lstPermissions;
             metrics.SystemUsers.Add(dto);
         }
+    }
 
+    static String GetRdpStateString(RdpSessionState state) {
+        switch (state) {
+            case RdpSessionState::Active: return "Active";
+            case RdpSessionState::Connected: return "Connected";
+            case RdpSessionState::Disconnected: return "Disconnected";
+            case RdpSessionState::Idle: return "Idle";
+            case RdpSessionState::Listen: return "Listen";
+            case RdpSessionState::Shadow: return "Shadow";
+            case RdpSessionState::Reset: return "Reset";
+            case RdpSessionState::Down: return "Down";
+            case RdpSessionState::Init: return "Init";
+            default: return "Unknown";
+        }
+    }
+
+    static void PopulateRdpSessions(SystemMetricsResponseDto& metrics) {
         auto rdpList = TerminalSession::GetSessions();
         for (int i = 0; i < rdpList.GetCount(); ++i) {
             const auto& r = rdpList[i];
@@ -188,21 +289,16 @@ namespace SmartEventViewer {
             dto.ClientName = r.sClientName;
             dto.ClientIpAddress = r.sClientIpAddress;
             dto.IsRdpSession = r.bIsRdpSession;
-
-            switch (r.eState) {
-                case RdpSessionState::Active: dto.State = "Active"; break;
-                case RdpSessionState::Connected: dto.State = "Connected"; break;
-                case RdpSessionState::Disconnected: dto.State = "Disconnected"; break;
-                case RdpSessionState::Idle: dto.State = "Idle"; break;
-                case RdpSessionState::Listen: dto.State = "Listen"; break;
-                case RdpSessionState::Shadow: dto.State = "Shadow"; break;
-                case RdpSessionState::Reset: dto.State = "Reset"; break;
-                case RdpSessionState::Down: dto.State = "Down"; break;
-                case RdpSessionState::Init: dto.State = "Init"; break;
-                default: dto.State = "Unknown"; break;
-            }
+            dto.State = GetRdpStateString(r.eState);
             metrics.RdpSessions.Add(dto);
         }
+    }
+
+    void SystemTelemetryProvider::PopulateUserSessions(SystemMetricsResponseDto& metrics) {
+        PopulateActiveSessions(metrics);
+        PopulateExpiredSessions(metrics);
+        PopulateSystemUsers(metrics);
+        PopulateRdpSessions(metrics);
     }
 
     SystemMetricsResponseDto SystemTelemetryProvider::QuerySummary() {
@@ -284,6 +380,7 @@ namespace SmartEventViewer {
         for (int i = 0; i < values.GetLength(); ++i) {
             metrics.TopProcesses.Add(values[i]);
         }
+        AppLoggerManager::Debug("TELEMETRY", String::Format("[QueryProcesses] Serving {0} processes from cache", static_cast<double>(values.GetLength())));
         return metrics;
     }
 
@@ -297,30 +394,8 @@ namespace SmartEventViewer {
     }
 
     SystemMetricsResponseDto SystemTelemetryProvider::QuerySystemMetrics() {
-        EnsureProcessStreamerActive();
-        SystemMetricsResponseDto metrics;
+        auto metrics = QuerySummary();
         try {
-            double sysCpu = SystemMetrics::GetSystemCpuUsage();
-            metrics.CpuUsagePercent = (sysCpu < 0.0) ? 0.0 : ((sysCpu > 100.0) ? 100.0 : sysCpu);
-
-            auto memInfo = SystemMetrics::GetSystemMemoryUsage();
-            metrics.MemoryUsagePercent = memInfo.dMemoryUsagePercent;
-            metrics.MemoryTotalMB = memInfo.uMemoryTotalBytes / (1024 * 1024);
-            metrics.MemoryUsedMB = memInfo.uMemoryUsedBytes / (1024 * 1024);
-
-            auto diskInfo = SystemMetrics::GetSystemDiskUsage();
-            double calculatedReadMb = 0.0, calculatedWriteMb = 0.0;
-            CalculateDiskRates(diskInfo, calculatedReadMb, calculatedWriteMb);
-            metrics.DiskReadMBps = calculatedReadMb;
-            metrics.DiskWriteMBps = calculatedWriteMb;
-            metrics.NetworkUsageMbps = SystemMetrics::GetSystemNetworkUsage();
-
-            LockCS lock(s_processCacheCs);
-            auto values = s_processCache.GetValues();
-            for (int i = 0; i < values.GetLength(); ++i) {
-                metrics.TopProcesses.Add(values[i]);
-            }
-
             PopulateUserSessions(metrics);
         } catch (...) {
         }

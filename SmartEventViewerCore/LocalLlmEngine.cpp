@@ -54,15 +54,15 @@ namespace SmartEventViewer {
     }
 
     int LocalLlmEngine::ComputeThreatScore(unsigned int crit, unsigned int high, unsigned int err, unsigned int warn, unsigned int total) {
-        if (total == 0) return 12;
-        int rawScore = static_cast<int>((crit * 30) + (high * 20) + (err * 10) + (warn * 5));
+        if (total == 0) return 0;
+        int rawScore = static_cast<int>((crit * 25) + (high * 15) + (err * 8) + (warn * 3));
         return (rawScore > 100) ? 100 : rawScore;
     }
 
     String LocalLlmEngine::GetSeverityLabel(int score) {
-        if (score >= 75) return "CRITICAL (Immediate Action Required)";
-        if (score >= 45) return "HIGH (Active Investigation Needed)";
-        if (score >= 20) return "MEDIUM (Elevated Monitoring)";
+        if (score >= 70) return "CRITICAL (Immediate Action Required)";
+        if (score >= 40) return "HIGH (Active Investigation Needed)";
+        if (score >= 15) return "MEDIUM (Elevated Monitoring)";
         return "LOW (Normal Operational Baseline)";
     }
 
@@ -219,14 +219,20 @@ namespace SmartEventViewer {
                "3. ⚙️ **Service Hardening**: Verify start types for third-party background services.";
     }
 
+    static int CalculateCompositeScore(const TelemetryPostureReportDto& posture, const MultiChannelAnomaliesDto& anomalies) {
+        int iBase = (posture.ThreatScore >= 0) ? posture.ThreatScore : 0;
+        int iEventScore = static_cast<int>((anomalies.TotalCriticalCount * 10) + (anomalies.TotalErrorCount * 4) + (anomalies.TotalWarningCount * 1));
+        if (iEventScore > 35) iEventScore = 35;
+        int iComposite = iBase + iEventScore;
+        return (iComposite > 100) ? 100 : iComposite;
+    }
+
     String LocalLlmEngine::FormatSiemThreatReport(
         const String& sUserQuery,
         const MultiChannelAnomaliesDto& anomalies,
         const TelemetryPostureReportDto& posture) {
-        int compositeScore = (posture.ThreatScore > 0) ? posture.ThreatScore : 10;
+        int compositeScore = CalculateCompositeScore(posture, anomalies);
         int totalEvents = static_cast<int>(anomalies.SecurityEvents.GetCount() + anomalies.SystemEvents.GetCount() + anomalies.ApplicationEvents.GetCount() + anomalies.SysmonEvents.GetCount());
-        if (totalEvents > 0) compositeScore = compositeScore + (totalEvents * 3);
-        if (compositeScore > 100) compositeScore = 100;
         String sSev = GetSeverityLabel(compositeScore);
         String sQueryText = sUserQuery.IsEmpty() ? String("Full-Spectrum Host Threat & SIEM Assessment") : sUserQuery;
         String sContext = FormatSiemContext(anomalies, posture);

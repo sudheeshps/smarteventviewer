@@ -118,9 +118,9 @@ namespace SmartEventViewer {
 
     SystemMetricsResponseDto TelemetryService::GetProcesses() {
         SystemMetricsResponseDto cached;
-        if (TryGetCached("processes", 2500, cached)) return cached;
+        if (TryGetCached("processes", 1000, cached)) return cached;
         auto fresh = m_spProvider->QueryProcesses();
-        PutCached("processes", 2500, fresh);
+        PutCached("processes", 1000, fresh);
         return fresh;
     }
 

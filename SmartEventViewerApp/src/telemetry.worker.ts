@@ -158,11 +158,11 @@ function handleServerPush(category: string) {
   if (category === 'llm_analysis') {
     self.postMessage({ type: 'LLM_ANALYSIS_UPDATED' });
   } else if (category === 'summary' || category === 'processes') {
-    fetchActiveSubTab(false);
+    fetchActiveSubTab(true);
   } else if (category === 'sessions' && (currentActiveSubTab === 'sessions' || currentActiveSubTab === 'users')) {
-    fetchActiveSubTab(false);
+    fetchActiveSubTab(true);
   } else if (category === 'services' && currentActiveSubTab === 'services') {
-    fetchActiveSubTab(false);
+    fetchActiveSubTab(true);
   }
 }
 

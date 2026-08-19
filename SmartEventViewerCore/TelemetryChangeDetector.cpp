@@ -24,12 +24,32 @@ namespace SmartEventViewer {
         return false;
     }
 
+    static bool IsProcMetricDiff(const ProcessResourceDto& a, const ProcessResourceDto& b) {
+        if (std::abs(a.CpuUsagePercent - b.CpuUsagePercent) >= 0.2) return true;
+        if (a.MemoryUsageMB != b.MemoryUsageMB) return true;
+        if (a.NetworkReadBytes != b.NetworkReadBytes) return true;
+        if (a.NetworkWriteBytes != b.NetworkWriteBytes) return true;
+        return false;
+    }
+
+    static bool TryFindProcess(const DotNetDupe::System::Collections::Generic::List<ProcessResourceDto>& list,
+                               unsigned long uPid, ProcessResourceDto& outProc) {
+        for (int i = 0; i < list.GetCount(); ++i) {
+            if (list[i].ProcessId == uPid) {
+                outProc = list[i];
+                return true;
+            }
+        }
+        return false;
+    }
+
     static bool AreProcessesEqual(const DotNetDupe::System::Collections::Generic::List<ProcessResourceDto>& a,
                                   const DotNetDupe::System::Collections::Generic::List<ProcessResourceDto>& b) {
         if (a.GetCount() != b.GetCount()) return false;
         for (int i = 0; i < a.GetCount(); ++i) {
-            if (a[i].ProcessId != b[i].ProcessId) return false;
-            if (std::abs(a[i].CpuUsagePercent - b[i].CpuUsagePercent) >= 1.0) return false;
+            ProcessResourceDto match;
+            if (!TryFindProcess(b, a[i].ProcessId, match)) return false;
+            if (IsProcMetricDiff(a[i], match)) return false;
         }
         return true;
     }

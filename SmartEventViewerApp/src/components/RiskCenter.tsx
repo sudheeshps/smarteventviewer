@@ -36,7 +36,7 @@ export const RiskCenter: React.FC<RiskCenterProps> = ({ onSelectChannel }) => {
     suspiciousSessions: [],
     flaggedUsers: [],
     suspiciousServices: [],
-    threatScore: 10,
+    threatScore: 0,
     overallRisk: 'LOW',
   });
 
@@ -73,7 +73,7 @@ export const RiskCenter: React.FC<RiskCenterProps> = ({ onSelectChannel }) => {
           suspiciousSessions: [],
           flaggedUsers: [],
           suspiciousServices: [],
-          threatScore: 10,
+          threatScore: 0,
           overallRisk: 'LOW' as const,
         })),
       ]);
@@ -160,7 +160,7 @@ export const RiskCenter: React.FC<RiskCenterProps> = ({ onSelectChannel }) => {
     }
   };
 
-  const threatScoreColor = posture.threatScore >= 60 ? '#ef4444' : posture.threatScore >= 35 ? '#f97316' : posture.threatScore >= 15 ? '#eab308' : '#22c55e';
+  const threatScoreColor = posture.threatScore >= 70 ? '#ef4444' : posture.threatScore >= 40 ? '#f97316' : posture.threatScore >= 15 ? '#eab308' : '#22c55e';
 
   return (
     <div style={{ flex: 1, padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto', fontSize: '0.8rem', background: '#0b1120', color: '#f8fafc' }}>
@@ -171,32 +171,48 @@ export const RiskCenter: React.FC<RiskCenterProps> = ({ onSelectChannel }) => {
         borderRadius: '10px',
         border: '1px solid rgba(255, 255, 255, 0.1)',
         display: 'flex',
+        flexWrap: 'wrap',
         justifyContent: 'space-between',
         alignItems: 'center',
+        gap: '14px',
         boxShadow: '0 4px 16px rgba(0, 0, 0, 0.4)',
       }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <h1 style={{ fontSize: '1.25rem', color: '#f87171', margin: 0, fontWeight: 800, letterSpacing: '-0.02em' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '280px', flex: '1 1 auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+            <h1 style={{ fontSize: '1.2rem', color: '#f87171', margin: 0, fontWeight: 800, letterSpacing: '-0.02em' }}>
               🚨 SIEM Threat Intelligence & AI Analysis Operations
             </h1>
             <span style={{
-              background: `rgba(${posture.overallRisk === 'CRITICAL' ? '239,68,68' : posture.overallRisk === 'HIGH' ? '249,115,22' : '34,197,94'}, 0.2)`,
+              background: `rgba(${posture.overallRisk === 'CRITICAL' ? '239,68,68' : posture.overallRisk === 'HIGH' ? '249,115,22' : '34,197,94'}, 0.15)`,
               color: threatScoreColor,
-              padding: '2px 8px',
-              borderRadius: '4px',
+              padding: '3px 10px',
+              borderRadius: '6px',
               fontWeight: 800,
-              fontSize: '0.7rem',
+              fontSize: '0.72rem',
               border: `1px solid ${threatScoreColor}`,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              letterSpacing: '0.02em',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
             }}>
+              <span style={{
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                backgroundColor: threatScoreColor,
+                display: 'inline-block',
+                boxShadow: `0 0 6px ${threatScoreColor}`,
+              }} />
               POSTURE: {posture.overallRisk} ({posture.threatScore}/100)
             </span>
           </div>
-          <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: '4px 0 0 0' }}>
+          <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: 0, lineHeight: '1.4' }}>
             Cross-channel event aggregation (Security, System, App, Sysmon) correlated with live kernel runtime telemetry & Local Llama AI.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, flexWrap: 'wrap' }}>
           <button
             onClick={() => handleRunAiAnalysis('Full-Spectrum Host Threat & SIEM Assessment')}
             disabled={isAnalyzing}
@@ -206,13 +222,15 @@ export const RiskCenter: React.FC<RiskCenterProps> = ({ onSelectChannel }) => {
               border: 'none',
               padding: '7px 14px',
               borderRadius: '6px',
-              cursor: 'pointer',
+              cursor: isAnalyzing ? 'not-allowed' : 'pointer',
               fontWeight: 700,
               fontSize: '0.75rem',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
               boxShadow: '0 2px 8px rgba(225, 29, 72, 0.4)',
+              whiteSpace: 'nowrap',
+              opacity: isAnalyzing ? 0.7 : 1,
             }}
           >
             {isAnalyzing ? '⚡ Analyzing Host...' : '🚀 Run Full SIEM AI Assessment'}
@@ -228,6 +246,7 @@ export const RiskCenter: React.FC<RiskCenterProps> = ({ onSelectChannel }) => {
               cursor: 'pointer',
               fontWeight: 700,
               fontSize: '0.75rem',
+              whiteSpace: 'nowrap',
             }}
           >
             {isLoading ? 'Scanning...' : '🔄 Refresh Feeds'}

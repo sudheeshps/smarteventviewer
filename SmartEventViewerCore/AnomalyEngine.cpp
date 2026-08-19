@@ -17,8 +17,9 @@ namespace SmartEventViewer {
             sLowerName.Contains("wscript") || sLowerName.Contains("cscript") || sLowerName.Contains("certutil") ||
             sLowerName.Contains("mshta") || sLowerName.Contains("bitsadmin") || sLowerName.Contains("rundll32")) {
             String sLowerCmd = sCmd.ToLower();
-            return sLowerCmd.Contains("-enc") || sLowerCmd.Contains("downloadstring") || sLowerCmd.Contains("http://") ||
-                   sLowerCmd.Contains("https://") || sLowerCmd.Contains("bypass") || sLowerCmd.Contains("hidden") ||
+            return sLowerCmd.Contains("-enc") || sLowerCmd.Contains("-encodedcommand") ||
+                   sLowerCmd.Contains("downloadstring") || sLowerCmd.Contains("downloadfile") ||
+                   sLowerCmd.Contains("bypass") || sLowerCmd.Contains("hidden") ||
                    sLowerCmd.Contains("/urlcache") || sLowerCmd.Contains("iex");
         }
         return false;
@@ -89,6 +90,12 @@ namespace SmartEventViewer {
         return false;
     }
 
+    static bool IsSuspiciousAdminName(const String& sLowerUser) {
+        return sLowerUser.Contains("backdoor") || sLowerUser.Contains("hacker") ||
+               sLowerUser.Contains("tempadmin") || sLowerUser.Contains("testadmin") ||
+               sLowerUser.Contains("evil") || sLowerUser.Contains("payload");
+    }
+
     bool AnomalyEngine::StaticEvaluateUser(const UserPrincipalDto& user, UserAnomalyDto& outAnomaly) {
         String sLowerUser = user.Username.ToLower();
         if (sLowerUser == "guest" && !user.IsDisabled) {
@@ -97,9 +104,9 @@ namespace SmartEventViewer {
             outAnomaly.Risk = "High";
             return true;
         }
-        if (user.UserClass == "Admin" && sLowerUser != "administrator" && sLowerUser != "system") {
+        if (user.UserClass == "Admin" && IsSuspiciousAdminName(sLowerUser)) {
             outAnomaly.User = user;
-            outAnomaly.Reason = "Non-standard local administrator account";
+            outAnomaly.Reason = "Suspicious privileged administrator account detected";
             outAnomaly.Risk = "Medium";
             return true;
         }
@@ -112,65 +119,90 @@ namespace SmartEventViewer {
         return false;
     }
 
+    static bool IsSuspiciousServiceName(const String& sLowerName, const String& sLowerDisplay) {
+        return sLowerName.Contains("mimikatz") || sLowerName.Contains("meterpreter") ||
+               sLowerName.Contains("psexec") || sLowerName.Contains("cobaltstrike") ||
+               sLowerName.Contains("nc.exe") || sLowerName.Contains("backdoor") ||
+               sLowerDisplay.Contains("mimikatz") || sLowerDisplay.Contains("meterpreter");
+    }
+
     bool AnomalyEngine::StaticEvaluateService(const ServiceInfoDto& service, ServiceAnomalyDto& outAnomaly) {
         String sName = service.ServiceName.ToLower();
-        if (service.StartType == "Auto" && service.Status == "Stopped") {
+        String sDisplay = service.DisplayName.ToLower();
+        if (IsSuspiciousServiceName(sName, sDisplay)) {
             outAnomaly.Service = service;
-            outAnomaly.Reason = "Automatic service failed to start or stopped unexpectedly";
-            outAnomaly.Risk = "Low";
+            outAnomaly.Reason = "Known malicious or hacking tool service signature identified";
+            outAnomaly.Risk = "High";
             return true;
         }
-        if (!sName.StartsWith("win") && !sName.StartsWith("app") && !sName.StartsWith("sys") && service.ProcessId > 0 && service.Status == "Running") {
+        if (sName == "windefend" && service.Status == "Stopped") {
             outAnomaly.Service = service;
-            outAnomaly.Reason = "Active third-party service registered on host";
-            outAnomaly.Risk = "Low";
+            outAnomaly.Reason = "Critical security defense service (Windows Defender) is stopped";
+            outAnomaly.Risk = "High";
             return true;
         }
         return false;
     }
 
-    static void PopulateFlaggedArtifacts(
-        const SystemMetricsResponseDto& metrics,
-        const ServicesResponseDto& services,
-        TelemetryPostureReportDto& outReport,
-        int& outScore) {
+    static int AccumulateProcessScore(const SystemMetricsResponseDto& metrics, TelemetryPostureReportDto& outReport) {
+        int iScore = 0;
         for (int i = 0; i < metrics.TopProcesses.GetCount(); ++i) {
             ProcessAnomalyDto anom;
             if (AnomalyEngine::StaticEvaluateProcess(metrics.TopProcesses[i], anom)) {
                 outReport.FlaggedProcesses.Add(anom);
-                outScore += (anom.Risk == "High" ? 15 : 8);
+                iScore += (anom.Risk == "High" ? 15 : 8);
             }
         }
+        return (iScore > 35) ? 35 : iScore;
+    }
+
+    static int AccumulateSessionScore(const SystemMetricsResponseDto& metrics, TelemetryPostureReportDto& outReport) {
+        int iScore = 0;
         for (int i = 0; i < metrics.RdpSessions.GetCount(); ++i) {
             SessionAnomalyDto anom;
             if (AnomalyEngine::StaticEvaluateSession(metrics.RdpSessions[i], anom)) {
                 outReport.SuspiciousSessions.Add(anom);
-                outScore += (anom.Risk == "Critical" ? 25 : 15);
+                iScore += (anom.Risk == "Critical" ? 25 : 15);
             }
         }
+        return (iScore > 30) ? 30 : iScore;
+    }
+
+    static int AccumulateUserScore(const SystemMetricsResponseDto& metrics, TelemetryPostureReportDto& outReport) {
+        int iScore = 0;
         for (int i = 0; i < metrics.SystemUsers.GetCount(); ++i) {
             UserAnomalyDto anom;
             if (AnomalyEngine::StaticEvaluateUser(metrics.SystemUsers[i], anom)) {
                 outReport.FlaggedUsers.Add(anom);
-                outScore += (anom.Risk == "High" ? 12 : 6);
+                iScore += (anom.Risk == "High" ? 12 : 6);
             }
         }
+        return (iScore > 20) ? 20 : iScore;
+    }
+
+    static int AccumulateServiceScore(const ServicesResponseDto& services, TelemetryPostureReportDto& outReport) {
+        int iScore = 0;
         for (int i = 0; i < services.Services.GetCount(); ++i) {
             ServiceAnomalyDto anom;
             if (AnomalyEngine::StaticEvaluateService(services.Services[i], anom)) {
                 outReport.SuspiciousServices.Add(anom);
-                outScore += 4;
+                iScore += (anom.Risk == "High" ? 8 : 4);
             }
         }
+        return (iScore > 15) ? 15 : iScore;
     }
 
     TelemetryPostureReportDto AnomalyEngine::StaticEvaluatePosture(const SystemMetricsResponseDto& metrics, const ServicesResponseDto& services) {
         TelemetryPostureReportDto report;
-        int score = 0;
-        PopulateFlaggedArtifacts(metrics, services, report, score);
-        report.ThreatScore = score > 100 ? 100 : score;
-        if (report.ThreatScore >= 60) report.OverallRisk = "CRITICAL";
-        else if (report.ThreatScore >= 35) report.OverallRisk = "HIGH";
+        int iProcScore = AccumulateProcessScore(metrics, report);
+        int iSessScore = AccumulateSessionScore(metrics, report);
+        int iUserScore = AccumulateUserScore(metrics, report);
+        int iSvcScore = AccumulateServiceScore(services, report);
+
+        int iTotal = iProcScore + iSessScore + iUserScore + iSvcScore;
+        report.ThreatScore = (iTotal > 100) ? 100 : iTotal;
+        if (report.ThreatScore >= 70) report.OverallRisk = "CRITICAL";
+        else if (report.ThreatScore >= 40) report.OverallRisk = "HIGH";
         else if (report.ThreatScore >= 15) report.OverallRisk = "MEDIUM";
         else report.OverallRisk = "LOW";
         return report;
