@@ -95,27 +95,11 @@ export const EventsExplorer: React.FC<EventsExplorerProps> = ({ channelName, onO
       }
     } catch (err) {
       console.error(`[UI-APP DEBUG] Error fetching paged events via apiClient from ${baseUrl}:`, err);
-      const mockTotal = channel === 'Security' ? 30638 : channel === 'System' ? 27059 : 12268;
-      setChannelTotalCount(mockTotal);
-      setFilteredCount(mockTotal);
-      const computedTotalPages = Math.ceil(mockTotal / pageSize);
-      setServerTotalPages(computedTotalPages);
-
-      const startIndex = (page - 1) * pageSize;
-      const mockEvents: EventDto[] = Array.from({ length: pageSize }, (_, i) => {
-        const itemIdx = startIndex + i + 1;
-        return {
-          idx: itemIdx,
-          id: 4625 + (itemIdx % 5),
-          level: (itemIdx % 15 === 0 ? 'Critical' : itemIdx % 5 === 0 ? 'Error' : itemIdx % 3 === 0 ? 'Warning' : 'Information') as EventDto['level'],
-          risk: (itemIdx % 15 === 0 ? 'Critical' : itemIdx % 5 === 0 ? 'High' : itemIdx % 3 === 0 ? 'Medium' : 'Low') as EventDto['risk'],
-          provider: channel.split('/')[0],
-          time: formatTo12Hour(new Date(Date.now() - itemIdx * 60000).toISOString()),
-          desc: `Event Record #${itemIdx} in source '${channel}'.`,
-        };
-      });
-      setEvents(mockEvents);
-      setSelectedEvent(mockEvents[0]);
+      setChannelTotalCount(0);
+      setFilteredCount(0);
+      setServerTotalPages(1);
+      setEvents([]);
+      setSelectedEvent(null);
     } finally {
       setIsLoadingEvents(false);
     }

@@ -1,0 +1,102 @@
+name: Build and Release SmartEventViewer
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build & Publish Release (Windows x64)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Frontend Dependencies & Build SPA
+        run: |
+          cd SmartEventViewerApp
+          npm ci
+          npm run build
+          cd ..
+
+      - name: Restore NuGet Packages
+        run: nuget restore SmartEventViewer.sln
+
+      - name: Build C++ Solution (Release x64)
+        run: msbuild SmartEventViewer.sln /p:Configuration=Release /p:Platform=x64 /p:RestorePackages=false /t:Rebuild
+
+      - name: Run Unit Tests
+        run: .\bin\x64\Release\SmartEventViewerTests.exe
+
+      - name: Package Standalone Release Bundle
+        shell: cmd
+        run: |
+          set DIST_DIR=dist\SmartEventViewer_Release_x64
+          if exist dist rmdir /s /q dist
+          mkdir "%DIST_DIR%\bin"
+          mkdir "%DIST_DIR%\UI"
+          mkdir "%DIST_DIR%\models"
+          mkdir "%DIST_DIR%\logs"
+          type nul > "%DIST_DIR%\models\.gitkeep"
+          type nul > "%DIST_DIR%\logs\.gitkeep"
+
+          copy /y bin\x64\Release\*.dll "%DIST_DIR%\bin\"
+          copy /y bin\x64\Release\SmartEventViewerServer.exe "%DIST_DIR%\bin\"
+          copy /y bin\x64\Release\SmartEventViewerTests.exe "%DIST_DIR%\bin\"
+
+          for /d %%d in (packages\DotNetDupe.*) do (
+              copy /y "%%d\runtimes\win-x64\native\DotNetDupe.dll" "%DIST_DIR%\bin\"
+              copy /y "%%d\runtimes\win-x64\native\libcrypto-4-x64.dll" "%DIST_DIR%\bin\"
+              copy /y "%%d\runtimes\win-x64\native\libssl-4-x64.dll" "%DIST_DIR%\bin\"
+          )
+
+          xcopy /s /e /y /i "SmartEventViewerApp\dist\*" "%DIST_DIR%\UI\"
+          copy /y "README.md" "%DIST_DIR%\"
+          copy /y "LICENSE" "%DIST_DIR%\"
+
+          (
+              echo @echo off
+              echo setlocal
+              echo cd /d "%%~dp0"
+              echo net session ^>nul 2^>^&1
+              echo if %%errorlevel%% neq 0 ^(
+              echo     echo [ELEVATION REQUIRED] Requesting Administrator privileges to read Windows Security Event Logs...
+              echo     powershell -Command "Start-Process '%%~f0' -Verb RunAs"
+              echo     exit /b
+              echo ^)
+              echo echo Starting SmartEventViewer SIEM REST API Server and React Dashboard...
+              echo start "" "bin\SmartEventViewerServer.exe" 8080
+              echo timeout /t 2 /nobreak ^>nul
+              echo start "" "http://127.0.0.1:8080/"
+              echo echo SmartEventViewer is running at http://127.0.0.1:8080/
+          ) > "%DIST_DIR%\start_smarteventviewer.bat"
+
+          powershell -NoProfile -Command "Compress-Archive -Path '%DIST_DIR%\*' -DestinationPath 'dist\SmartEventViewer-windows-x64.zip' -Force"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: dist/SmartEventViewer-windows-x64.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: false

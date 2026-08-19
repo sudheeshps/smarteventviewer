@@ -215,7 +215,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectChannel }) => {
       // 1. Fetch channel count from native backend
       const channelsData = await fetchApiChannels(baseUrl).catch(() => ({ channels: [] }));
       const channelList = channelsData.channels || (Array.isArray(channelsData) ? (channelsData as unknown as string[]) : []);
-      setTotalChannels(channelList.length || 18);
+      setTotalChannels(channelList.length);
 
       // 2. Fetch channel summaries via dedicated summary endpoint
       const targetChannels = ['Security', 'System', 'Application'];
