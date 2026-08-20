@@ -24,6 +24,9 @@ if exist dist (
 mkdir "%DIST_DIR%\bin"
 mkdir "%DIST_DIR%\UI"
 mkdir "%DIST_DIR%\models"
+mkdir "%DIST_DIR%\logs"
+type nul > "%DIST_DIR%\models\.gitkeep"
+type nul > "%DIST_DIR%\logs\.gitkeep"
 
 echo [INFO] Copying Compiled Binaries ^& Dynamic Libraries from bin\x64\Release...
 copy /y bin\x64\Release\*.dll "%DIST_DIR%\bin\" 2>nul
@@ -72,16 +75,21 @@ if exist "SmartEventViewerApp\public\favicon.ico" (
     copy /y "SmartEventViewerApp\public\favicon.ico" "UI\" >nul 2>&1
 )
 
-echo [INFO] Copying Local GGUF LLM Model Files (models/)...
-if exist models (
-    xcopy /s /e /y /i "models\*" "%DIST_DIR%\models\"
-)
+echo [INFO] Copying Documentation and Launcher...
+if exist "README.md" copy /y "README.md" "%DIST_DIR%\" >nul 2>&1
+if exist "LICENSE" copy /y "LICENSE" "%DIST_DIR%\" >nul 2>&1
 
-echo [INFO] Creating Launcher Script (start_smarteventviewer.bat)...
+:: Copy one-click launcher with UAC auto-elevation
 (
     echo @echo off
-    echo setlocal enabledelayedexpansion
+    echo setlocal
     echo cd /d "%%~dp0"
+    echo net session ^>nul 2^>^&1
+    echo if %%errorlevel%% neq 0 ^(
+    echo     echo [ELEVATION REQUIRED] Requesting Administrator privileges to read Windows Security Event Logs...
+    echo     powershell -Command "Start-Process '%%~f0' -Verb RunAs"
+    echo     exit /b
+    echo ^)
     echo echo Starting SmartEventViewer SIEM REST API Server and React Dashboard...
     echo start "" "bin\SmartEventViewerServer.exe" 8080
     echo timeout /t 2 /nobreak ^>nul
@@ -89,8 +97,8 @@ echo [INFO] Creating Launcher Script (start_smarteventviewer.bat)...
     echo echo SmartEventViewer is running at http://127.0.0.1:8080/
 ) > "%DIST_DIR%\start_smarteventviewer.bat"
 
-rem echo [INFO] Creating ZIP Archive: %ZIP_NAME%...
-rem powershell -NoProfile -Command "Compress-Archive -Path '%DIST_DIR%\*' -DestinationPath '%ZIP_NAME%' -Force"
+echo [INFO] Creating ZIP Archive: %ZIP_NAME%...
+powershell -NoProfile -Command "Compress-Archive -Path '%DIST_DIR%\*' -DestinationPath '%ZIP_NAME%' -Force"
 
 echo ===================================================
 echo [SUCCESS] Package created successfully in %DIST_DIR%!

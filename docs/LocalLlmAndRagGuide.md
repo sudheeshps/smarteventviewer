@@ -69,7 +69,7 @@ Loads the bundled GGUF model binary and streams natural language security respon
 
 // Example Natural Language Security Query Workflow
 SmartEventViewer::LocalLlmEngine llm;
-llm.Initialize(String("models/Llama-3-8B-Instruct.Q4_K_M.gguf"));
+llm.Initialize(String("models/Qwen1.5-4B-Chat-Q4_K_M.gguf"));
 
 SmartEventViewer::RagVectorStore vectorStore;
 // Search RAG index for relevant events matching query
@@ -78,6 +78,11 @@ auto relevantEvents = vectorStore.QuerySimilarEvents(String("Find any privilege 
 // Generate security response
 String response = llm.ProcessQuery(String("Summarize security threats found in the events"), &relevantEvents[0], (unsigned int)relevantEvents.GetCount());
 ```
+
+### 3. Analysis Pipeline & State Pattern (`AnalysisService`)
+Manages asynchronous task queuing, model auto-downloading, context synthesis, and inference execution via a pure GoF State Pattern with `EventHandler` progress streaming.
+
+See the dedicated documentation: [AnalysisService State Pattern Architecture](AnalysisServiceStatePattern.md).
 
 ---
 
@@ -89,6 +94,6 @@ String response = llm.ProcessQuery(String("Summarize security threats found in t
    │   ├── SmartEventViewer.dll
    │   ├── SmartEventViewerTests.exe
    │   └── models/
-   │       └── Llama-3-8B-Instruct.Q4_K_M.gguf  (~4.3 GB bundled model)
+   │       └── Qwen1.5-4B-Chat-Q4_K_M.gguf  (On-demand auto-downloaded or bundled)
    ```
-2. **Standalone Operation**: No network calls or cloud APIs required. Runs 100% offline with complete privacy for sensitive enterprise event logs.
+2. **Standalone Operation**: No network calls or cloud APIs required for inference. Runs 100% offline with complete privacy for sensitive enterprise event logs.

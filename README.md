@@ -56,7 +56,7 @@
 - **📊 Real-Time Hardware & Telemetry Dashboard**: Live streaming CPU load, Physical RAM utilization, Disk I/O MB/s throughput, Network Mbps, active Windows user logons, system accounts, and RDP sessions.
 - **🔄 Progressive Two-Tier Process Streamer**: Instantaneous discovery (`<5ms`) with progressive background metric enrichment for per-process CPU %, Working Set Memory, Network Read/Write bytes, open listening ports, and socket connection states.
 - **🚨 Advanced Threat Scoring & Anomaly Engine**: Dynamic heuristic risk scoring engine detecting brute-force authentication attacks (Event ID 4625), privilege escalations (Event ID 4672/4673), suspicious hidden services, and unmapped administrative activities.
-- **🤖 Embedded Offline RAG AI Security Analyst**: Zero-cloud, private on-device LLM inference powered by `llama.cpp` (Qwen GGUF) and an in-memory vector store. Supports natural language queries, multi-turn follow-ups, and automated model weight downloads from HuggingFace with live progress bars.
+- **🤖 Embedded Offline RAG AI Security Analyst with State Pattern Pipeline**: Zero-cloud, private on-device LLM inference powered by `llama.cpp` (Qwen GGUF) and an in-memory vector store. Architected around a pure GoF State Pattern (`AnalysisService`) with real-time DotNetDupe `EventHandler` status and progress streaming.
 - **🌐 Modern Glassmorphism Web Interface**: Premium React 19 + TypeScript dark-mode SIEM dashboard operating over ultra-low-latency WebSockets (`/ws/telemetry`) and REST endpoints.
 - **📋 Forensic Exporter & Structured Log Viewer**: Export event logs and threat dossiers to EVTX / JSON, and inspect live structured server diagnostic logs.
 
@@ -67,11 +67,12 @@
 SmartEventViewer is architected entirely on top of the **`DotNetDupe`** C++ infrastructure library from NuGet, ensuring strict RAII memory management, high-performance collections, and unified system telemetry:
 
 - **Web Application Server & Dependency Injection**: Utilizes `DotNetDupe::WebAppCore::Server::WebAppServer` and `DotNetDupe::WebAppCore::Builder::WebApplication` with a full-featured Inversion of Control (IoC) container (`AddSingleton<T>`, `AddTransient<T>`), strongly-typed REST routing (`MapGet`, `MapPost`), WebSocket endpoints (`MapWebSocket`), and static file serving (`EnableStaticFiles`).
+- **Event-Driven Architecture & Delegates**: Leverages `DotNetDupe::System::EventHandler<T>` and `EventArgs` across background processes, process streams (`ProcessStreamer`), file downloads (`FileDownloader`), and AI analysis lifecycle notifications (`AnalysisService`).
 - **System Diagnostics & Progressive Telemetry**: Uses `DotNetDupe::System::Diagnostics::SystemMetrics`, `ProcessStreamer`, `ActiveUserSession`, `TerminalSession`, and `ServiceInfo` for non-blocking real-time process enumeration, socket table inspection, and system metrics.
 - **Memory & Object Management**: Exclusively utilizes `DotNetDupe::System::SmartPointer<T>` and reference-counted object hierarchies with zero raw pointer manipulation.
 - **High-Performance Collections**: Employs `DotNetDupe::System::Collections::Generic::List<T>`, `Dictionary<TKey, TValue>`, and `HashSet<T>`.
 - **Threading, Synchronization & Tasks**: Powers asynchronous request handling and event watchers via `DotNetDupe::System::Threading::Tasks::Task`, `Thread`, `CriticalSection`, and `Lock`.
-- **HTTP Engine & File Downloader**: Uses `DotNetDupe::System::Net::Http::FileDownloader` for asynchronous, resilient chunk-based downloading of HuggingFace GGUF model weights with byte-level progress reporting.
+- **HTTP Engine & File Downloader**: Uses `DotNetDupe::System::Net::Http::FileDownloader` for asynchronous, resilient chunk-based downloading of HuggingFace GGUF model weights with byte-level progress reporting via `DownloadProgressChanged`.
 - **Structured Enterprise Logging**: Implements `DotNetDupe::Extensions::Logging::LoggerFactory`, `FileLoggerProvider`, and `ConsoleLoggerProvider` for diagnostic telemetry and server auditing.
 
 ---
@@ -314,6 +315,7 @@ This builds the native C++ binaries, compiles the React SPA, copies all dynamic 
 ### Architecture & Design Strategy
 
 Detailed design guides and technical specifications:
+- 📄 **[AnalysisService State Pattern & EventHandler Architecture](docs/AnalysisServiceStatePattern.md)** — Architectural design of the pure GoF State Pattern, event-driven state transitions, and decoupled progress streaming.
 - 📄 **[LocalLlmEngine & RAG Guide](docs/LocalLlmAndRagGuide.md)** — Architectural design of the on-device RAG vector retrieval pipeline and GGUF llama inference engine.
 
 ---
@@ -352,32 +354,40 @@ The `AnomalyEngine` automatically categorizes detected threat vectors into stand
 
 ---
 
-#### 3. How Event Analysis Works Under the Hood (Local RAG + GGUF)
-SmartEventViewer provides a **100% private, on-device AI Security Analyst** using Retrieval-Augmented Generation (RAG) and local GGUF model inference:
+#### 3. How Event Analysis Works Under the Hood (Local RAG + GGUF & GoF State Pattern)
+SmartEventViewer coordinates offline AI threat analysis using a **pure GoF State Pattern** within `AnalysisService`, combined with an in-memory RAG vector index and `llama.cpp` local inference:
 
-```
-[User Query / Incident Prompt]
-             │
-             ├──► [LocalLlmEngine::ProcessTask]
-             │         │
-             │         ├──► [Model Provider: Checks models/Qwen1.5-4B-Chat-Q4_K_M.gguf]
-             │         │         │
-             │         │         └── (If Missing) ──► [DotNetDupe FileDownloader: HuggingFace Stream]
-             │         │                                (Streams byte-level % progress to UI)
-             │         │
-             │         ├──► [RagVectorStore: Vector Context Retrieval]
-             │         │         └── Scans active Windows Event Logs + Process Telemetry
-             │         │
-             │         └──► [llama.cpp Inference Engine]
-             │                   └── Synthesizes Root Cause, Blast Radius & Remediation
-             │
-             └──► [Structured Markdown Security Assessment]
+```mermaid
+stateDiagram-v2
+    [*] --> ModelDownloadingState: EnqueueTask()
+    
+    ModelDownloadingState --> ModelInitializingState: FileDownloader Stream Complete / Verified
+    ModelDownloadingState --> FailedState: Download Failure
+    
+    ModelInitializingState --> EventIngestingState: llama.cpp Context Pre-warmed
+    ModelInitializingState --> FailedState: Init Error
+    
+    EventIngestingState --> PromptSetupState: Cross-Channel Anomalies & Telemetry Ingested
+    EventIngestingState --> FailedState: Query Error
+    
+    PromptSetupState --> AnalysisExecutionState: Structured SIEM Prompt Formatted
+    PromptSetupState --> FailedState: Build Error
+    
+    AnalysisExecutionState --> CompletedState: Threat Dossier Synthesized
+    AnalysisExecutionState --> FailedState: Inference Error
+    
+    CompletedState --> [*]
+    FailedState --> [*]
 ```
 
-1. **On-Demand Model Provisioning**: If the model weights are not present locally, `DotNetDupe::System::Net::Http::FileDownloader` streams the GGUF weights directly from HuggingFace, sending real-time progress updates over `/api/analyze/status`.
-2. **Context Retrieval**: `RagVectorStore` builds an in-memory vector index of recent security events, error logs, and host telemetry snapshots.
-3. **Structured Prompt Synthesis**: The prompt combines the user's natural language question with relevant log context, event IDs, user accounts, and host resource utilization.
-4. **Local LLaMA Inference**: `llama.cpp` executes local quantized inference (Q4_K_M) on CPU/GPU without transmitting any data over the internet.
+1. **State Machine Context (`AnalysisService`)**: `AnalysisService` holds the active state object reference (`m_spCurrentState`) and public `EventHandler` delegates (`StateChanged`, `ProgressChanged`).
+2. **Decoupled Event Model**:
+   - `AnalysisStateChangedEventArgs` transports discrete lifecycle transitions (`DOWNLOADING` -> `INITIALIZING` -> `PROCESSING` -> `COMPLETED` / `FAILED`) and terminal payloads.
+   - `AnalysisProgressChangedEventArgs` encapsulates live progress metrics with polymorphic `SmartPointer<EventArgs>` details (e.g. `DownloadProgressChangedEventArgs` for byte-level streaming rates).
+3. **On-Demand Model Provisioning (`ModelDownloadingState`)**: If `models/Qwen1.5-4B-Chat-Q4_K_M.gguf` is missing, `DotNetDupe::System::Net::Http::FileDownloader` streams weights from HuggingFace with live byte % and MB/s progress.
+4. **Context Pre-warming & Multi-Channel Ingestion (`ModelInitializingState` & `EventIngestingState`)**: Pre-warms the quantized model backend and aggregates critical events across Security, System, Application, and Sysmon channels alongside live host telemetry posture.
+5. **SIEM Threat Synthesis (`PromptSetupState` & `AnalysisExecutionState`)**: Formats the RAG context and runs local quantized inference (Q4_K_M) on CPU/GPU without transmitting any data over the network.
+6. **Task Completion (`CompletedState`)**: Publishes the final analysis report and updates the REST/WebSocket cache for client UI consumption.
 
 ---
 
