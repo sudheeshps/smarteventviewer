@@ -60,13 +60,13 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(SolutionDir)Include;$(ProjectDir);$(SolutionDir)packages\DotNetDupe.4.0.0\include;$(SolutionDir)external\llama.cpp\include;$(SolutionDir)external\llama.cpp\ggml\include;$(SolutionDir)external\llama.cpp\common;$(SolutionDir)external\llama.cpp;$(SolutionDir)vcpkg_installed\x64-windows\x64-windows\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Include;$(ProjectDir);$(SolutionDir)packages\DotNetDupe.4.0.3\include;$(SolutionDir)packages\DotNetDupe.4.0.0\include;$(SolutionDir)external\llama.cpp\include;$(SolutionDir)external\llama.cpp\ggml\include;$(SolutionDir)external\llama.cpp\common;$(SolutionDir)external\llama.cpp;$(SolutionDir)vcpkg_installed\x64-windows\include;$(SolutionDir)vcpkg_installed\x64-windows\x64-windows\include;$(VcpkgInstalledDir)\$(VcpkgTriplet)\include;$(VCPKG_INSTALLATION_ROOT)\installed\x64-windows\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
-      <AdditionalLibraryDirectories>$(SolutionDir)packages\DotNetDupe.4.0.0\runtimes\win-x64\native;$(SolutionDir)vcpkg_installed\x64-windows\x64-windows\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(SolutionDir)packages\DotNetDupe.4.0.3\runtimes\win-x64\native;$(SolutionDir)packages\DotNetDupe.4.0.0\runtimes\win-x64\native;$(SolutionDir)vcpkg_installed\x64-windows\debug\lib;$(SolutionDir)vcpkg_installed\x64-windows\lib;$(SolutionDir)vcpkg_installed\x64-windows\x64-windows\lib;$(VcpkgInstalledDir)\$(VcpkgTriplet)\debug\lib;$(VcpkgInstalledDir)\$(VcpkgTriplet)\lib;$(VCPKG_INSTALLATION_ROOT)\installed\x64-windows\debug\lib;$(VCPKG_INSTALLATION_ROOT)\installed\x64-windows\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>DotNetDupe.lib;wevtapi.lib;wtsapi32.lib;iphlpapi.lib;psapi.lib;llama.lib;ggml.lib;ggml-base.lib;ggml-cpu.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
@@ -82,7 +82,7 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(SolutionDir)Include;$(ProjectDir);$(SolutionDir)packages\DotNetDupe.4.0.0\include;$(SolutionDir)external\llama.cpp\include;$(SolutionDir)external\llama.cpp\ggml\include;$(SolutionDir)external\llama.cpp\common;$(SolutionDir)external\llama.cpp;$(SolutionDir)vcpkg_installed\x64-windows\x64-windows\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Include;$(ProjectDir);$(SolutionDir)packages\DotNetDupe.4.0.3\include;$(SolutionDir)packages\DotNetDupe.4.0.0\include;$(SolutionDir)external\llama.cpp\include;$(SolutionDir)external\llama.cpp\ggml\include;$(SolutionDir)external\llama.cpp\common;$(SolutionDir)external\llama.cpp;$(SolutionDir)vcpkg_installed\x64-windows\include;$(SolutionDir)vcpkg_installed\x64-windows\x64-windows\include;$(VcpkgInstalledDir)\$(VcpkgTriplet)\include;$(VCPKG_INSTALLATION_ROOT)\installed\x64-windows\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -90,7 +90,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
-      <AdditionalLibraryDirectories>$(SolutionDir)packages\DotNetDupe.4.0.0\runtimes\win-x64\native;$(SolutionDir)vcpkg_installed\x64-windows\x64-windows\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(SolutionDir)packages\DotNetDupe.4.0.3\runtimes\win-x64\native;$(SolutionDir)packages\DotNetDupe.4.0.0\runtimes\win-x64\native;$(SolutionDir)vcpkg_installed\x64-windows\lib;$(SolutionDir)vcpkg_installed\x64-windows\x64-windows\lib;$(VcpkgInstalledDir)\$(VcpkgTriplet)\lib;$(VCPKG_INSTALLATION_ROOT)\installed\x64-windows\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>DotNetDupe.lib;wevtapi.lib;wtsapi32.lib;iphlpapi.lib;psapi.lib;llama.lib;ggml.lib;ggml-base.lib;ggml-cpu.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
