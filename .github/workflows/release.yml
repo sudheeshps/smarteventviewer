@@ -32,11 +32,10 @@ jobs:
           node-version: 20
 
       - name: Install Frontend Dependencies & Build SPA
+        working-directory: SmartEventViewerApp
         run: |
-          cd SmartEventViewerApp
-          npm ci
+          npm install
           npm run build
-          cd ..
 
       - name: Setup vcpkg & Install llama.cpp Dependencies
         run: |

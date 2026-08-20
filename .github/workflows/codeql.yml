@@ -65,6 +65,10 @@ jobs:
         with:
           node-version: 20
 
+      - name: Install Frontend Dependencies
+        working-directory: SmartEventViewerApp
+        run: npm install
+
       - name: Initialize CodeQL (JavaScript / TypeScript)
         uses: github/codeql-action/init@v3
         with:
