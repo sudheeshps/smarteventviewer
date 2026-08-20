@@ -6,6 +6,7 @@
 ![Platform](https://img.shields.io/badge/Platform-Windows%20x64-0078D6.svg?style=for-the-badge&logo=windows)
 ![React](https://img.shields.io/badge/Frontend-React%2019%20%2B%20TypeScript-61DAFB.svg?style=for-the-badge&logo=react)
 ![Framework](https://img.shields.io/badge/Framework-DotNetDupe-8A2BE2.svg?style=for-the-badge)
+![CodeQL](https://github.com/sudheeshps/smarteventviewer/actions/workflows/codeql.yml/badge.svg)
 ![License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)
 
 **High-Performance Native C++17 SIEM, Windows Event Log Analyzer & Telemetry Dashboard with Embedded Local RAG AI Security Analyst**

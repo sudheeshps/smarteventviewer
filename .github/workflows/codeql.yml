@@ -1,0 +1,77 @@
+name: "CodeQL Security Analysis"
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    - cron: '0 6 * * 1' # Run weekly on Mondays at 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  analyze-cpp:
+    name: CodeQL (C++)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v2
+
+      - name: Setup vcpkg & Install Dependencies
+        run: |
+          vcpkg install --triplet x64-windows
+
+      - name: Restore NuGet Packages
+        run: nuget restore SmartEventViewer.sln
+
+      - name: Initialize CodeQL (C++)
+        uses: github/codeql-action/init@v3
+        with:
+          languages: c-cpp
+          queries: security-extended,security-and-quality
+
+      - name: Build C++ Solution (Traced Build)
+        run: msbuild SmartEventViewer.sln /p:Configuration=Release /p:Platform=x64 /p:RestorePackages=false /p:VcpkgEnableManifest=true /t:Rebuild
+
+      - name: Perform CodeQL Analysis (C++)
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:c-cpp"
+
+  analyze-frontend:
+    name: CodeQL (TypeScript & React)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Initialize CodeQL (JavaScript / TypeScript)
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          queries: security-extended,security-and-quality
+
+      - name: Perform CodeQL Analysis (JavaScript / TypeScript)
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript-typescript"
