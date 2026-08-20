@@ -1,12 +1,13 @@
 #pragma once
 
+#include "ViewerCommon.h"
 #include "WebAppCore/Controllers/ControllerBase.h"
 #include "System/SmartPointer.h"
 #include "Dto/TelemetryDtos.h"
 #include "Core/ITelemetryService.h"
 
 namespace SmartEventViewer {
-    class TelemetryController : public DotNetDupe::WebAppCore::Controllers::ControllerBase {
+    class SMARTEVENTVIEWER_API TelemetryController : public DotNetDupe::WebAppCore::Controllers::ControllerBase {
     private:
         DotNetDupe::System::SmartPointer<ITelemetryService> m_spTelemetryService{ nullptr };
 

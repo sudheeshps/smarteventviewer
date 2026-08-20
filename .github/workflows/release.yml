@@ -1,17 +1,22 @@
-name: Build and Release SmartEventViewer
+name: Build, Test and Release SmartEventViewer
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  build-and-release:
-    name: Build & Publish Release (Windows x64)
+  build-and-test:
+    name: Build & Test (Windows x64)
     runs-on: windows-latest
 
     steps:
@@ -46,6 +51,25 @@ jobs:
 
       - name: Build C++ Solution (Release x64)
         run: msbuild SmartEventViewer.sln /p:Configuration=Release /p:Platform=x64 /p:RestorePackages=false /p:VcpkgEnableManifest=true /t:Rebuild
+
+      - name: Copy Runtime Dependencies to Output Directory
+        shell: cmd
+        run: |
+          if not exist bin\x64\Release mkdir bin\x64\Release
+          for /d %%d in (packages\DotNetDupe.*) do (
+              if exist "%%d\runtimes\win-x64\native" (
+                  copy /y "%%d\runtimes\win-x64\native\*.dll" bin\x64\Release\ >nul 2>&1
+              )
+          )
+          if exist vcpkg_installed\x64-windows\bin (
+              copy /y vcpkg_installed\x64-windows\bin\*.dll bin\x64\Release\ >nul 2>&1
+          )
+          if exist vcpkg_installed\x64-windows\x64-windows\bin (
+              copy /y vcpkg_installed\x64-windows\x64-windows\bin\*.dll bin\x64\Release\ >nul 2>&1
+          )
+          if exist "%VCPKG_INSTALLATION_ROOT%\installed\x64-windows\bin" (
+              copy /y "%VCPKG_INSTALLATION_ROOT%\installed\x64-windows\bin\*.dll" bin\x64\Release\ >nul 2>&1
+          )
 
       - name: Run Unit Tests
         run: .\bin\x64\Release\SmartEventViewerTests.exe
@@ -110,6 +134,13 @@ jobs:
           ) > "%DIST_DIR%\start_smarteventviewer.bat"
 
           powershell -NoProfile -Command "Compress-Archive -Path '%DIST_DIR%\*' -DestinationPath 'dist\SmartEventViewer-windows-x64.zip' -Force"
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SmartEventViewer-windows-x64
+          path: dist/SmartEventViewer-windows-x64.zip
+          retention-days: 14
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2

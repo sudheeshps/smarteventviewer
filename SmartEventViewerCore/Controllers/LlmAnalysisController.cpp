@@ -1,4 +1,5 @@
-#include "LlmAnalysisController.h"
+#include "pch.h"
+#include "Controllers/LlmAnalysisController.h"
 #include "Core/AnalysisService.h"
 #include "Logging/AppLoggerManager.h"
 

@@ -53,6 +53,10 @@ namespace SmartEventViewer {
         m_spNotifier = spNotifier;
     }
 
+    void AnalysisService::SetLlmEngine(const DotNetDupe::System::SmartPointer<LocalLlmEngine>& spLlmEngine) {
+        m_spLlmEngine = spLlmEngine;
+    }
+
     void AnalysisService::SetState(const DotNetDupe::System::SmartPointer<IAnalysisState>& spNextState) {
         m_spCurrentState = spNextState;
     }

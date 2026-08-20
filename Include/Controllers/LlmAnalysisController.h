@@ -1,12 +1,13 @@
 #pragma once
 
+#include "ViewerCommon.h"
 #include "WebAppCore/Controllers/ControllerBase.h"
 #include "System/SmartPointer.h"
 #include "Dto/AnalysisDtos.h"
 #include "Core/IAnalysisService.h"
 
 namespace SmartEventViewer {
-    class LlmAnalysisController : public DotNetDupe::WebAppCore::Controllers::ControllerBase {
+    class SMARTEVENTVIEWER_API LlmAnalysisController : public DotNetDupe::WebAppCore::Controllers::ControllerBase {
     private:
         DotNetDupe::System::SmartPointer<IAnalysisService> m_spAnalysisService{ nullptr };
 

@@ -1,10 +1,9 @@
 #include <gtest/gtest.h>
-#include "TestRestClient.h"
+#include "Controllers/DiagnosticsController.h"
 #include "System/Console.h"
 
 using namespace DotNetDupe::System;
 using namespace SmartEventViewer;
-using namespace SmartEventViewer::IntegrationTests;
 
 static void LogAndAssertLogColumn(const LogColumnFormatDto& col) {
     Console::WriteLine("  [COLUMN_DTO] Key={0} | Header={1} | Type={2} | Width={3}px",
@@ -24,12 +23,9 @@ static void LogAndAssertLogRecord(const LogRecordDto& rec) {
     EXPECT_GE(rec.ThreadId, 0);
 }
 
-TEST(DiagnosticsControllerTests, GivenRunningServer_WhenGetLogFormatCalled_ThenReturnsLogSchemaColumns) {
-    Console::WriteLine("[TEST] Invoking GET /api/logs/format...");
-    TestRestClient client;
-    LogFormatResponseDto response = client.GetLogFormat();
-    Console::WriteLine("[LOG_FORMAT_DTO] TotalColumns={0}", response.Columns.GetCount());
-    Console::WriteLine("[ASSERT] Columns.Count >= 6 && Columns[0].Key == 'timestamp'");
+TEST(DiagnosticsControllerTests, GivenController_WhenGetLogFormatCalled_ThenReturnsLogSchemaColumns) {
+    DiagnosticsController controller;
+    LogFormatResponseDto response = controller.GetLogFormat();
     EXPECT_GE(response.Columns.GetCount(), 6);
     EXPECT_EQ(response.Columns[0].Key, "timestamp");
     EXPECT_EQ(response.Columns[0].HeaderName, "Timestamp");
@@ -38,12 +34,9 @@ TEST(DiagnosticsControllerTests, GivenRunningServer_WhenGetLogFormatCalled_ThenR
     }
 }
 
-TEST(DiagnosticsControllerTests, GivenRunningServer_WhenGetServerLogsCalled_ThenReturnsServerLogEntries) {
-    Console::WriteLine("[TEST] Invoking GET /api/logs...");
-    TestRestClient client;
-    ServerLogsResponseDto response = client.GetServerLogs();
-    Console::WriteLine("[SERVER_LOGS_DTO] RecordsCount={0}", response.Records.GetCount());
-    Console::WriteLine("[ASSERT] Records.Count >= 0");
+TEST(DiagnosticsControllerTests, GivenController_WhenGetServerLogsCalled_ThenReturnsServerLogEntries) {
+    DiagnosticsController controller;
+    ServerLogsResponseDto response = controller.GetServerLogs();
     EXPECT_GE(response.Records.GetCount(), 0);
     for (int i = 0; i < response.Records.GetCount() && i < 10; ++i) {
         LogAndAssertLogRecord(response.Records[i]);

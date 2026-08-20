@@ -1,4 +1,5 @@
-#include "TelemetryController.h"
+#include "pch.h"
+#include "Controllers/TelemetryController.h"
 #include "Core/TelemetryService.h"
 
 namespace SmartEventViewer {
