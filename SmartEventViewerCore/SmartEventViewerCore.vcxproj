@@ -127,6 +127,11 @@
     <ClInclude Include="..\Include\Ai\AnalysisEvents.h" />
     <ClInclude Include="..\Include\Ai\IAnalysisState.h" />
     <ClInclude Include="..\Include\Ai\AnalysisStates.h" />
+    <ClInclude Include="..\Include\Controllers\EventsController.h" />
+    <ClInclude Include="..\Include\Controllers\TelemetryController.h" />
+    <ClInclude Include="..\Include\Controllers\LlmAnalysisController.h" />
+    <ClInclude Include="..\Include\Controllers\DiagnosticsController.h" />
+    <ClInclude Include="..\Include\WebSockets\TelemetryWebSocketHandler.h" />
     <ClInclude Include="..\Include\Collections\LruCache.h" />
     <ClInclude Include="..\Include\Logging\AppLoggerManager.h" />
   </ItemGroup>
@@ -153,6 +158,11 @@
     <ClCompile Include="RagVectorStore.cpp" />
     <ClCompile Include="AppLoggerManager.cpp" />
     <ClCompile Include="SystemTelemetryProvider.cpp" />
+    <ClCompile Include="Controllers\EventsController.cpp" />
+    <ClCompile Include="Controllers\TelemetryController.cpp" />
+    <ClCompile Include="Controllers\LlmAnalysisController.cpp" />
+    <ClCompile Include="Controllers\DiagnosticsController.cpp" />
+    <ClCompile Include="WebSockets\TelemetryWebSocketHandler.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

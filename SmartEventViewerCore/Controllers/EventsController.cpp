@@ -1,4 +1,5 @@
-#include "EventsController.h"
+#include "pch.h"
+#include "Controllers/EventsController.h"
 #include "Core/EventService.h"
 #include "System/Uri.h"
 #include "System/Convert.h"

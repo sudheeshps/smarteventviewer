@@ -91,7 +91,7 @@
     <ClInclude Include="Unit\Mocks\MockEventLogReader.h" />
     <ClInclude Include="Unit\Mocks\MockSystemTelemetryProvider.h" />
     <ClInclude Include="Unit\Mocks\MockTelemetryPushNotifier.h" />
-    <ClInclude Include="Integration\TestRestClient.h" />
+    <ClInclude Include="Unit\Mocks\MockLlamaModelProvider.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp" />

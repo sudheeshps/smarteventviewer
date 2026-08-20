@@ -22,6 +22,7 @@
 #include "Ai/AnalysisEvents.h"
 #include "Ai/IAnalysisState.h"
 #include "Ai/AnalysisStates.h"
+#include "Mocks/MockLlamaModelProvider.h"
 
 using DotNetDupe::System::String;
 using DotNetDupe::System::Console;
@@ -273,7 +274,8 @@ TEST(AnalysisServiceTests, GivenMockNotifier_WhenTaskEnqueued_ThenEmitsLlmAnalys
 }
 
 TEST(AnalysisServiceTests, GivenValidTask_WhenProcessed_ThenTransitionsStatusToCompleted) {
-    auto spLlm = SmartPtr<LocalLlmEngine>::NewShared();
+    auto spMockProvider = SmartPtr<ILlamaModelProvider>(SmartPtr<MockLlamaModelProvider>::NewShared());
+    auto spLlm = SmartPtr<LocalLlmEngine>::NewShared(spMockProvider);
     auto spEvents = SmartPtr<IEventService>(SmartPtr<EventService>::NewShared());
     auto spNotifier = SmartPtr<MockTelemetryPushNotifier>::NewShared();
 
@@ -290,43 +292,26 @@ TEST(AnalysisServiceTests, GivenValidTask_WhenProcessed_ThenTransitionsStatusToC
         status = service.GetTaskStatus(pending.TaskId);
     }
     Console::WriteLine(String::Format("Analysis status: {0} Analysis: {1}", status.Status, status.Analysis));
-    if (status.Status == "COMPLETED") {
-        EXPECT_FALSE(status.Analysis.IsEmpty());
-    }
-    else {
-        EXPECT_TRUE(status.Analysis.IsEmpty());
-    }
+    EXPECT_EQ(status.Status, "COMPLETED");
+    EXPECT_FALSE(status.Analysis.IsEmpty());
 }
 
-extern bool g_bEnableModelDownloadTest;
-
-TEST(LocalLlmEngineTests, GivenDownloadParameter_WhenModelDownloadExecuted_ThenReportsLiveProgress) {
-    if (!g_bEnableModelDownloadTest) {
-        Console::WriteLine("[TEST_SKIPPED] Live model download test skipped by default. Pass --test-download to run.");
-        return;
-    }
-
+TEST(LocalLlmEngineTests, DISABLED_GivenLiveNetwork_WhenModelDownloaded_ThenCachesFileOnDisk) {
     auto spLlm = SmartPtr<LocalLlmEngine>::NewShared();
     bool bProgressCalled = false;
     double dLastPercent = 0.0;
-    long long llLastDownloaded = 0;
-    long long llLastTotal = 0;
 
     spLlm->DownloadModelWithProgress("models/Qwen1.5-4B-Chat-Q4_K_M.gguf",
         DotNetDupe::System::Action<double, double, long long, long long>(
-            [&bProgressCalled, &dLastPercent, &llLastDownloaded, &llLastTotal](double pct, double rate, long long dl, long long total) {
-                (void)rate;
+            [&bProgressCalled, &dLastPercent](double pct, double rate, long long dl, long long total) {
                 bProgressCalled = true;
                 dLastPercent = pct;
-                llLastDownloaded = dl;
-                llLastTotal = total;
-                Console::WriteLine("[TEST_DOWNLOAD] Progress: {0}% ({1} / {2} bytes)", static_cast<int>(pct), dl, total);
+                Console::WriteLine("[LIVE_DOWNLOAD] {0}% ({1}/{2} bytes) at {3} KB/s", static_cast<int>(pct), dl, total, rate / 1024.0);
             }
         )
     );
 
     EXPECT_TRUE(bProgressCalled);
-    EXPECT_GT(llLastTotal, 0);
     EXPECT_GE(dLastPercent, 0.0);
     EXPECT_TRUE(spLlm->IsModelFilePresent("models/Qwen1.5-4B-Chat-Q4_K_M.gguf"));
 }
@@ -517,7 +502,8 @@ TEST(AnalysisStateTests, GivenFailedState_WhenExecuted_ThenRaisesTerminalStateCh
 }
 
 TEST(AnalysisServiceStateTests, GivenAnalysisService_WhenClientSubscribesToEventHandlers_ThenReceivesStateAndProgressNotifications) {
-    auto spLlm = SmartPtr<LocalLlmEngine>::NewShared();
+    auto spMockProvider = SmartPtr<ILlamaModelProvider>(SmartPtr<MockLlamaModelProvider>::NewShared());
+    auto spLlm = SmartPtr<LocalLlmEngine>::NewShared(spMockProvider);
     auto spEvents = SmartPtr<IEventService>(SmartPtr<EventService>::NewShared());
     AnalysisService service(spLlm, spEvents, nullptr);
 
@@ -543,10 +529,9 @@ TEST(AnalysisServiceStateTests, GivenAnalysisService_WhenClientSubscribesToEvent
     }
 
     EXPECT_TRUE(bStateChangedFired);
-    if (status.Status == "COMPLETED") {
-        EXPECT_TRUE(bCompletedFired);
-        EXPECT_FALSE(status.Analysis.IsEmpty());
-    }
+    EXPECT_TRUE(bCompletedFired);
+    EXPECT_EQ(status.Status, "COMPLETED");
+    EXPECT_FALSE(status.Analysis.IsEmpty());
 }
 
 

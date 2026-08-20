@@ -88,19 +88,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="Controllers\EventsController.h" />
-    <ClInclude Include="Controllers\TelemetryController.h" />
-    <ClInclude Include="Controllers\LlmAnalysisController.h" />
-    <ClInclude Include="Controllers\DiagnosticsController.h" />
-    <ClInclude Include="WebSockets\TelemetryWebSocketHandler.h" />
-  </ItemGroup>
-  <ItemGroup>
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="Controllers\EventsController.cpp" />
-    <ClCompile Include="Controllers\TelemetryController.cpp" />
-    <ClCompile Include="Controllers\LlmAnalysisController.cpp" />
-    <ClCompile Include="Controllers\DiagnosticsController.cpp" />
-    <ClCompile Include="WebSockets\TelemetryWebSocketHandler.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\SmartEventViewerCore\SmartEventViewerCore.vcxproj">
