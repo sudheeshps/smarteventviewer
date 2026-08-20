@@ -16,6 +16,12 @@
 #include "System/Console.h"
 #include "System/SmartPointer.h"
 #include "System/Threading/Thread.h"
+#include "System/Net/Http/FileDownloader.h"
+#include "System/Diagnostics/ProcessStreamer.h"
+#include "System/Diagnostics/ProcessStreamOptions.h"
+#include "Ai/AnalysisEvents.h"
+#include "Ai/IAnalysisState.h"
+#include "Ai/AnalysisStates.h"
 
 using DotNetDupe::System::String;
 using DotNetDupe::System::Console;
@@ -283,7 +289,7 @@ TEST(AnalysisServiceTests, GivenValidTask_WhenProcessed_ThenTransitionsStatusToC
         DotNetDupe::System::Threading::Thread::Sleep(100);
         status = service.GetTaskStatus(pending.TaskId);
     }
-    Console::WriteLine(String::Format("Analysis status: {0} Analysis: {1}"), status.Status, status.Analysis);
+    Console::WriteLine(String::Format("Analysis status: {0} Analysis: {1}", status.Status, status.Analysis));
     if (status.Status == "COMPLETED") {
         EXPECT_FALSE(status.Analysis.IsEmpty());
     }
@@ -380,3 +386,168 @@ TEST(ServiceUnitTests, GivenEventService_WhenGetCrossChannelAnomaliesCalled_Then
     EXPECT_GE(anomalies.TotalErrorCount, 1);
     EXPECT_GE(anomalies.TotalWarningCount, 1);
 }
+
+// =============================================================================
+// FileDownloader & ProcessStreamer EventHandler Integration Tests
+// =============================================================================
+TEST(FileDownloaderEventHandlerTests, GivenDownloadEventArgs_WhenPropertiesAccessed_ThenReturnsAccurateValues) {
+    using namespace DotNetDupe::System::Net::Http;
+    DownloadProgressChangedEventArgs progressArgs(1024, 2048, 50.0, 51200.0, DownloadStatus::Downloading);
+    EXPECT_EQ(progressArgs.GetBytesReceived(), 1024LL);
+    EXPECT_EQ(progressArgs.GetTotalBytesToReceive(), 2048LL);
+    EXPECT_DOUBLE_EQ(progressArgs.GetProgressPercentage(), 50.0);
+    EXPECT_DOUBLE_EQ(progressArgs.GetDownloadRateBytesPerSec(), 51200.0);
+    EXPECT_EQ(progressArgs.GetStatus(), DownloadStatus::Downloading);
+
+    DownloadCompletedEventArgs completedArgs(true, false, "");
+    EXPECT_TRUE(completedArgs.IsSuccess());
+    EXPECT_FALSE(completedArgs.IsCancelled());
+    EXPECT_TRUE(completedArgs.GetError().IsEmpty());
+
+    DownloadCompletedEventArgs failedArgs(false, false, "Connection refused");
+    EXPECT_FALSE(failedArgs.IsSuccess());
+    EXPECT_EQ(failedArgs.GetError(), "Connection refused");
+}
+
+TEST(ProcessStreamerEventHandlerTests, GivenProcessStreamer_WhenBatchAndProcessEventsAttached_ThenFiresSubscribers) {
+    using namespace DotNetDupe::System::Diagnostics;
+    ProcessStreamOptions options;
+    options.eDetailLevel = ProcessMetricsDetail::FastDiscoveryOnly;
+    options.iBatchSize = 5;
+    options.iBatchIntervalMs = 10;
+    options.bIncludeNetworkInfo = false;
+
+    DotNetDupe::System::Diagnostics::ProcessStreamer streamer(options);
+    bool bDiscovered = false;
+    bool bBatchFired = false;
+    bool bCompletedFired = false;
+
+    streamer.ProcessDiscovered += [&bDiscovered](const void* pSender, const ProcessEventArgs& e) {
+        if (e.GetProcess().iProcessId > 0) bDiscovered = true;
+    };
+    streamer.BatchReady += [&bBatchFired](const void* pSender, const ProcessBatchEventArgs& e) {
+        if (e.GetBatch().GetCount() > 0) bBatchFired = true;
+    };
+    streamer.Completed += [&bCompletedFired](const void* pSender, const DotNetDupe::System::EventArgs& e) {
+        bCompletedFired = true;
+    };
+
+    streamer.Start();
+    int iWaitedMs = 0;
+    while (streamer.IsRunning() && iWaitedMs < 2000) {
+        Thread::Sleep(50);
+        iWaitedMs += 50;
+    }
+
+    EXPECT_TRUE(bDiscovered || bBatchFired);
+    EXPECT_TRUE(bCompletedFired);
+}
+
+// =============================================================================
+// Analysis State Pattern & EventArgs Unit Tests
+// =============================================================================
+TEST(AnalysisEventsTests, GivenAnalysisEventArgs_WhenPropertiesAccessed_ThenReturnsAccurateValues) {
+    AnalyzeResponseDto respDto;
+    respDto.TaskId = "task_100";
+    respDto.Status = "COMPLETED";
+
+    AnalysisStateChangedEventArgs stateArgs("task_100", "ModelDownloading", "ModelInitializing", "INITIALIZING", "Loading weights...", respDto, true);
+    EXPECT_EQ(stateArgs.GetTaskId(), "task_100");
+    EXPECT_EQ(stateArgs.GetPreviousState(), "ModelDownloading");
+    EXPECT_EQ(stateArgs.GetNewState(), "ModelInitializing");
+    EXPECT_EQ(stateArgs.GetStatus(), "INITIALIZING");
+    EXPECT_EQ(stateArgs.GetProgressMessage(), "Loading weights...");
+    EXPECT_TRUE(stateArgs.IsTerminal());
+    EXPECT_EQ(stateArgs.GetResponse().Status, "COMPLETED");
+
+    auto spDlDetails = SmartPtr<DotNetDupe::System::Net::Http::DownloadProgressChangedEventArgs>::NewShared(
+        5242880LL, 10485760LL, 50.0, 1048576.0, DotNetDupe::System::Net::Http::DownloadStatus::Downloading);
+    AnalysisProgressChangedEventArgs progArgs("task_100", 50.0, "Downloading weights...", spDlDetails);
+    EXPECT_EQ(progArgs.GetTaskId(), "task_100");
+    EXPECT_DOUBLE_EQ(progArgs.GetProgressPercentage(), 50.0);
+    EXPECT_TRUE(progArgs.HasDetails());
+
+    auto spExtracted = progArgs.GetDetailsAs<DotNetDupe::System::Net::Http::DownloadProgressChangedEventArgs>();
+    EXPECT_FALSE(spExtracted.IsNull());
+    EXPECT_EQ(spExtracted->GetBytesReceived(), 5242880LL);
+}
+
+TEST(AnalysisStateTests, GivenEventIngestingState_WhenExecuted_ThenTransitionsContextToPromptSetupState) {
+    auto spReader = SmartPtr<MockEventLogReader>::NewShared();
+    EventRecord secRec(201, EventLevel::Error, "Microsoft-Windows-Security-Auditing", "2026-08-20 10:00:00", "State test event", "");
+    spReader->AddEvent("Security", secRec);
+    auto spEventService = SmartPtr<IEventService>(SmartPtr<EventService>::NewShared(spReader));
+    auto spLlm = SmartPtr<LocalLlmEngine>::NewShared();
+
+    AnalysisService service(spLlm, spEventService, nullptr);
+    auto pItem = SmartPtr<AnalysisTaskItem>::NewShared();
+    pItem->TaskId = "task_200";
+    pItem->Request.Channel = "Security";
+    pItem->Request.Query = "Audit test query";
+
+    EventIngestingState ingestState;
+    ingestState.Execute(service, pItem);
+
+    EXPECT_FALSE(service.GetCurrentState().IsNull());
+    EXPECT_EQ(service.GetCurrentState()->GetStateName(), "PromptSetup");
+}
+
+TEST(AnalysisStateTests, GivenFailedState_WhenExecuted_ThenRaisesTerminalStateChangedWithFailure) {
+    auto spLlm = SmartPtr<LocalLlmEngine>::NewShared();
+    AnalysisService service(spLlm, nullptr, nullptr);
+
+    bool bTerminalReceived = false;
+    String sReceivedStatus;
+    service.StateChanged += [&bTerminalReceived, &sReceivedStatus](const void* pSender, const AnalysisStateChangedEventArgs& e) {
+        if (e.IsTerminal()) {
+            bTerminalReceived = true;
+            sReceivedStatus = e.GetStatus();
+        }
+    };
+
+    auto pItem = SmartPtr<AnalysisTaskItem>::NewShared();
+    pItem->TaskId = "task_300";
+    pItem->Request.Channel = "Application";
+
+    FailedState failedState("Injected unit test error");
+    failedState.Execute(service, pItem);
+
+    EXPECT_TRUE(bTerminalReceived);
+    EXPECT_EQ(sReceivedStatus, "FAILED");
+}
+
+TEST(AnalysisServiceStateTests, GivenAnalysisService_WhenClientSubscribesToEventHandlers_ThenReceivesStateAndProgressNotifications) {
+    auto spLlm = SmartPtr<LocalLlmEngine>::NewShared();
+    auto spEvents = SmartPtr<IEventService>(SmartPtr<EventService>::NewShared());
+    AnalysisService service(spLlm, spEvents, nullptr);
+
+    bool bStateChangedFired = false;
+    bool bCompletedFired = false;
+
+    service.StateChanged += [&bStateChangedFired, &bCompletedFired](const void* pSender, const AnalysisStateChangedEventArgs& e) {
+        bStateChangedFired = true;
+        if (e.IsTerminal() && e.GetStatus() == "COMPLETED") {
+            bCompletedFired = true;
+        }
+    };
+
+    AnalyzeRequestDto req;
+    req.Channel = "Security";
+    req.Query = "Detect brute force attacks";
+    auto pending = service.EnqueueTask(req);
+
+    AnalyzeResponseDto status;
+    for (int i = 0; i < 30 && status.Status != "COMPLETED"; ++i) {
+        Thread::Sleep(100);
+        status = service.GetTaskStatus(pending.TaskId);
+    }
+
+    EXPECT_TRUE(bStateChangedFired);
+    if (status.Status == "COMPLETED") {
+        EXPECT_TRUE(bCompletedFired);
+        EXPECT_FALSE(status.Analysis.IsEmpty());
+    }
+}
+
+
+

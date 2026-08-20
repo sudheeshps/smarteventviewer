@@ -1,11 +1,14 @@
 #include "pch.h"
 #include "Core/AnalysisService.h"
+#include "Ai/AnalysisStates.h"
 #include "Core/EventService.h"
 #include "Core/TelemetryService.h"
 #include "System/Console.h"
 #include "System/Convert.h"
 #include "System/Threading/Thread.h"
+#include "System/Net/Http/FileDownloader.h"
 #include "Logging/AppLoggerManager.h"
+#include <exception>
 
 using Console = DotNetDupe::System::Console;
 using Thread = DotNetDupe::System::Threading::Thread;
@@ -15,8 +18,30 @@ namespace SmartEventViewer {
     AnalysisService::AnalysisService()
         : m_spLlmEngine(DotNetDupe::System::SmartPointer<LocalLlmEngine>::NewShared()),
           m_spEventService(DotNetDupe::System::SmartPointer<IEventService>(DotNetDupe::System::SmartPointer<EventService>::NewShared())),
-          m_spNotifier(nullptr) {
+          m_spNotifier(nullptr),
+          m_stateChanged(),
+          m_progressChanged(),
+          StateChanged(m_stateChanged),
+          ProgressChanged(m_progressChanged) {
         StartWorker();
+    }
+
+    AnalysisService::AnalysisService(
+        const DotNetDupe::System::SmartPointer<LocalLlmEngine>& spLlmEngine,
+        const DotNetDupe::System::SmartPointer<IEventService>& spEventService,
+        const DotNetDupe::System::SmartPointer<ITelemetryPushNotifier>& spNotifier)
+        : m_spLlmEngine(spLlmEngine.IsNull() ? DotNetDupe::System::SmartPointer<LocalLlmEngine>::NewShared() : spLlmEngine),
+          m_spEventService(spEventService.IsNull() ? DotNetDupe::System::SmartPointer<IEventService>(DotNetDupe::System::SmartPointer<EventService>::NewShared()) : spEventService),
+          m_spNotifier(spNotifier),
+          m_stateChanged(),
+          m_progressChanged(),
+          StateChanged(m_stateChanged),
+          ProgressChanged(m_progressChanged) {
+        StartWorker();
+    }
+
+    AnalysisService::~AnalysisService() {
+        Shutdown();
     }
 
     DotNetDupe::System::SmartPointer<AnalysisService> AnalysisService::GetSharedInstance() {
@@ -28,18 +53,24 @@ namespace SmartEventViewer {
         m_spNotifier = spNotifier;
     }
 
-    AnalysisService::AnalysisService(
-        const DotNetDupe::System::SmartPointer<LocalLlmEngine>& spLlmEngine,
-        const DotNetDupe::System::SmartPointer<IEventService>& spEventService,
-        const DotNetDupe::System::SmartPointer<ITelemetryPushNotifier>& spNotifier)
-        : m_spLlmEngine(spLlmEngine.IsNull() ? DotNetDupe::System::SmartPointer<LocalLlmEngine>::NewShared() : spLlmEngine),
-          m_spEventService(spEventService.IsNull() ? DotNetDupe::System::SmartPointer<IEventService>(DotNetDupe::System::SmartPointer<EventService>::NewShared()) : spEventService),
-          m_spNotifier(spNotifier) {
-        StartWorker();
+    void AnalysisService::SetState(const DotNetDupe::System::SmartPointer<IAnalysisState>& spNextState) {
+        m_spCurrentState = spNextState;
     }
 
-    AnalysisService::~AnalysisService() {
-        Shutdown();
+    DotNetDupe::System::SmartPointer<IAnalysisState> AnalysisService::GetCurrentState() const {
+        return m_spCurrentState;
+    }
+
+    DotNetDupe::System::SmartPointer<LocalLlmEngine> AnalysisService::GetLlmEngine() const {
+        return m_spLlmEngine;
+    }
+
+    DotNetDupe::System::SmartPointer<IEventService> AnalysisService::GetEventService() const {
+        return m_spEventService;
+    }
+
+    DotNetDupe::System::SmartPointer<ITelemetryPushNotifier> AnalysisService::GetNotifier() const {
+        return m_spNotifier;
     }
 
     void AnalysisService::StartWorker() {
@@ -67,9 +98,45 @@ namespace SmartEventViewer {
         }
     }
 
-    void AnalysisService::UpdateTaskResult(const String& sTaskId, const AnalyzeResponseDto& result) {
-        LockCS lock(m_resultsCs);
-        m_taskResults[sTaskId] = result;
+    void AnalysisService::RaiseStateChanged(const AnalysisStateChangedEventArgs& e) {
+        {
+            LockCS lock(m_resultsCs);
+            if (m_taskResults.ContainsKey(e.GetTaskId())) {
+                if (e.IsTerminal()) {
+                    m_taskResults[e.GetTaskId()] = e.GetResponse();
+                } else {
+                    m_taskResults[e.GetTaskId()].Status = e.GetStatus();
+                    m_taskResults[e.GetTaskId()].ProgressMessage = e.GetProgressMessage();
+                }
+            }
+        }
+        m_stateChanged.Invoke(this, e);
+        NotifyAnalysisUpdate();
+    }
+
+    static void UpdateDownloadDetails(AnalyzeResponseDto& dto, const AnalysisProgressChangedEventArgs& e) {
+        auto spDl = e.GetDetailsAs<DotNetDupe::System::Net::Http::DownloadProgressChangedEventArgs>();
+        if (!spDl.IsNull()) {
+            dto.DownloadProgress = e.GetProgressPercentage();
+            dto.DownloadedBytes = static_cast<unsigned long long>(spDl->GetBytesReceived());
+            dto.TotalBytes = static_cast<unsigned long long>(spDl->GetTotalBytesToReceive());
+            dto.DownloadRateBytesPerSec = spDl->GetDownloadRateBytesPerSec();
+        }
+    }
+
+    void AnalysisService::RaiseProgressChanged(const AnalysisProgressChangedEventArgs& e) {
+        {
+            LockCS lock(m_resultsCs);
+            if (m_taskResults.ContainsKey(e.GetTaskId())) {
+                auto& taskDto = m_taskResults[e.GetTaskId()];
+                taskDto.ProgressPercentage = e.GetProgressPercentage();
+                taskDto.ProgressMessage = e.GetProgressMessage();
+                if (e.HasDetails()) {
+                    UpdateDownloadDetails(taskDto, e);
+                }
+            }
+        }
+        m_progressChanged.Invoke(this, e);
         NotifyAnalysisUpdate();
     }
 
@@ -104,86 +171,30 @@ namespace SmartEventViewer {
         return pendingDto;
     }
 
-    bool AnalysisService::EnsureModelDownloaded(const String& sTaskId, AnalyzeResponseDto& taskDto) {
-        if (m_spLlmEngine->IsModelFilePresent()) return true;
-        AppLoggerManager::Info("AI_ENGINE", String::Format("[AnalysisService] Task '{0}': Model missing on disk. Starting HuggingFace download...", sTaskId));
-        taskDto.Status = "DOWNLOADING";
-        taskDto.ProgressMessage = "Model not found. Downloading Qwen 1.5 GGUF weights from HuggingFace...";
-        taskDto.DownloadProgress = 0.0;
-        UpdateTaskResult(sTaskId, taskDto);
-
-        m_spLlmEngine->DownloadModelWithProgress("", DotNetDupe::System::Action<double, double, long long, long long>(
-            [this, sTaskId, &taskDto](double pct, double rate, long long dl, long long total) {
-                taskDto.Status = "DOWNLOADING";
-                taskDto.DownloadProgress = pct;
-                taskDto.DownloadedBytes = static_cast<unsigned long long>(dl);
-                taskDto.TotalBytes = static_cast<unsigned long long>(total);
-                taskDto.DownloadRateBytesPerSec = rate;
-                taskDto.ProgressMessage = String::Format("Downloading model: {0:F1}% ({1} MB / {2} MB)", pct, dl / (1024 * 1024), total / (1024 * 1024));
-                UpdateTaskResult(sTaskId, taskDto);
-            }
-        ));
-        return m_spLlmEngine->IsModelFilePresent();
-    }
-
-    void AnalysisService::InitializeLlmEngine(const String& sTaskId, AnalyzeResponseDto& taskDto) {
-        if (m_spLlmEngine->IsModelLoaded()) return;
-        taskDto.Status = "INITIALIZING";
-        taskDto.ProgressMessage = "Loading GGUF model weights into llama.cpp context...";
-        taskDto.DownloadProgress = 100.0;
-        UpdateTaskResult(sTaskId, taskDto);
-        m_spLlmEngine->Initialize("models/Qwen1.5-4B-Chat-Q4_K_M.gguf");
-    }
-
-    AnalyzeResponseDto AnalysisService::ExecuteTaskInference(const String& sTaskId, const AnalyzeRequestDto& request) {
-        AnalyzeResponseDto result;
-        result.TaskId = sTaskId;
-        result.Channel = request.Channel.IsEmpty() ? String("All Channels (SIEM)") : request.Channel;
-        result.Query = request.Query;
-        result.DownloadProgress = 100.0;
-
-        MultiChannelAnomaliesDto anomalies;
-        if (m_spEventService) {
-            try { anomalies = m_spEventService->GetCrossChannelAnomalies(15); } catch (...) {}
+    static void HandlePipelineFailure(AnalysisService& context, const DotNetDupe::System::SmartPointer<AnalysisTaskItem>& pItem, const String& sError) {
+        context.SetState(DotNetDupe::System::SmartPointer<FailedState>::NewShared(sError));
+        if (!context.GetCurrentState().IsNull()) {
+            context.GetCurrentState()->Execute(context, pItem);
         }
-        TelemetryPostureReportDto posture;
-        if (TelemetryService::GetDefault()) {
-            try { posture = TelemetryService::GetDefault()->GetPostureReport(); } catch (...) {}
-        }
-
-        size_t totalEvents = anomalies.SecurityEvents.GetCount() + anomalies.SystemEvents.GetCount() +
-                             anomalies.ApplicationEvents.GetCount() + anomalies.SysmonEvents.GetCount();
-        result.EventsAnalyzed = totalEvents;
-        result.Analysis = LocalLlmEngine::FormatSiemThreatReport(request.Query, anomalies, posture);
-        result.Status = "COMPLETED";
-        result.ProgressMessage = "Full-spectrum SIEM threat analysis completed successfully.";
-        return result;
     }
 
     void AnalysisService::ProcessSingleTask(const DotNetDupe::System::SmartPointer<AnalysisTaskItem>& pItem) {
         if (pItem.IsNull()) return;
-        AnalyzeResponseDto taskDto;
-        taskDto.TaskId = pItem->TaskId;
-        taskDto.Channel = pItem->Request.Channel;
-        taskDto.Query = pItem->Request.Query;
-        taskDto.Status = "PROCESSING";
-        taskDto.ProgressMessage = "Synthesizing cross-channel anomalies and telemetry...";
-        UpdateTaskResult(pItem->TaskId, taskDto);
-
+        SetState(DotNetDupe::System::SmartPointer<ModelDownloadingState>::NewShared());
         try {
-            if (m_spLlmEngine && m_spLlmEngine->IsModelFilePresent()) {
-                InitializeLlmEngine(pItem->TaskId, taskDto);
+            while (!m_spCurrentState.IsNull()) {
+                auto spActiveState = m_spCurrentState;
+                spActiveState->Execute(*this, pItem);
+                if (spActiveState->IsTerminal()) {
+                    break;
+                }
             }
-            auto finalDto = ExecuteTaskInference(pItem->TaskId, pItem->Request);
-            UpdateTaskResult(pItem->TaskId, finalDto);
         } catch (const DotNetDupe::System::Exception& ex) {
-            taskDto.Status = "FAILED";
-            taskDto.ProgressMessage = String::Format("Inference failed: {0}", ex.What());
-            UpdateTaskResult(pItem->TaskId, taskDto);
+            HandlePipelineFailure(*this, pItem, ex.What());
         } catch (const std::exception& ex) {
-            taskDto.Status = "FAILED";
-            taskDto.ProgressMessage = String::Format("Inference failed: {0}", String(ex.what()));
-            UpdateTaskResult(pItem->TaskId, taskDto);
+            HandlePipelineFailure(*this, pItem, String(ex.what()));
+        } catch (...) {
+            HandlePipelineFailure(*this, pItem, "Unknown pipeline exception.");
         }
     }
 

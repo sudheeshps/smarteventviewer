@@ -54,18 +54,18 @@ namespace SmartEventViewer {
         if (batch.GetCount() == 0) return;
         const auto& p = batch[0];
         double dRamMb = static_cast<double>(p.memory.lPhysicalMemoryBytes / (1024 * 1024));
-        AppLoggerManager::Info("TELEMETRY", String::Format("[DotNetDupe:OnBatch] BatchSize={0} | Sample PID={1} ({2}) CPU={3}% RAM={4}MB NetR={5} NetW={6}",
+        AppLoggerManager::Info("TELEMETRY", String::Format("[DotNetDupe:BatchReady] BatchSize={0} | Sample PID={1} ({2}) CPU={3}% RAM={4}MB NetR={5} NetW={6}",
             static_cast<double>(batch.GetCount()), static_cast<double>(p.iProcessId), p.sName, p.dCpuUsagePercent, dRamMb, static_cast<double>(p.network.lNetworkReadBytes), static_cast<double>(p.network.lNetworkWriteBytes)));
     }
 
     static void LogProcessUpdated(const DotNetDupe::System::Diagnostics::ProcessInfo& proc) {
         double dRamMb = static_cast<double>(proc.memory.lPhysicalMemoryBytes / (1024 * 1024));
-        AppLoggerManager::Info("TELEMETRY", String::Format("[DotNetDupe:OnProcessUpdated] PID={0} ({1}) CPU={2}% RAM={3}MB NetR={4} NetW={5} Ports={6} Estab={7}",
+        AppLoggerManager::Info("TELEMETRY", String::Format("[DotNetDupe:ProcessUpdated] PID={0} ({1}) CPU={2}% RAM={3}MB NetR={4} NetW={5} Ports={6} Estab={7}",
             static_cast<double>(proc.iProcessId), proc.sName, proc.dCpuUsagePercent, dRamMb, static_cast<double>(proc.network.lNetworkReadBytes), static_cast<double>(proc.network.lNetworkWriteBytes), static_cast<double>(proc.lstOpenPorts.GetCount()), proc.bHasEstablishedConnection ? 1.0 : 0.0));
     }
 
     static void LogStreamCompleted(int iCacheCount, int iSeenCount) {
-        AppLoggerManager::Info("TELEMETRY", String::Format("[DotNetDupe:OnCompleted] Stream cycle completed. Cached={0}, ActiveSeen={1}",
+        AppLoggerManager::Info("TELEMETRY", String::Format("[DotNetDupe:Completed] Stream cycle completed. Cached={0}, ActiveSeen={1}",
             static_cast<double>(iCacheCount), static_cast<double>(iSeenCount)));
     }
 
@@ -123,6 +123,18 @@ namespace SmartEventViewer {
         LogStreamCompleted(s_processCache.GetCount(), s_seenPids.GetCount());
     }
 
+    static void AttachStreamerEvents(const DotNetDupe::System::SmartPointer<ProcessStreamer>& spStreamer) {
+        spStreamer->BatchReady += [](const void* pSender, const DotNetDupe::System::Diagnostics::ProcessBatchEventArgs& e) {
+            MergeBatchInCache(e.GetBatch());
+        };
+        spStreamer->ProcessUpdated += [](const void* pSender, const DotNetDupe::System::Diagnostics::ProcessEventArgs& e) {
+            UpdateProcessInCache(e.GetProcess());
+        };
+        spStreamer->Completed += [](const void* pSender, const DotNetDupe::System::EventArgs& e) {
+            EvictTerminatedProcesses();
+        };
+    }
+
     static void EnsureProcessStreamerActive() {
         LockCS lock(s_processCacheCs);
         unsigned long long cur = GetTickMs();
@@ -138,15 +150,7 @@ namespace SmartEventViewer {
 
         AppLoggerManager::Info("TELEMETRY", String::Format("[ProcessStreamer] Starting background streamer pass (BatchSize={0})", static_cast<double>(options.iBatchSize)));
         s_pProcessStreamer = DotNetDupe::System::SmartPointer<ProcessStreamer>::NewShared(options);
-        s_pProcessStreamer->OnBatch([](const DotNetDupe::System::Collections::Generic::List<DotNetDupe::System::Diagnostics::ProcessInfo>& batch) {
-            MergeBatchInCache(batch);
-        });
-        s_pProcessStreamer->OnProcessUpdated([](const DotNetDupe::System::Diagnostics::ProcessInfo& proc) {
-            UpdateProcessInCache(proc);
-        });
-        s_pProcessStreamer->OnCompleted([]() {
-            EvictTerminatedProcesses();
-        });
+        AttachStreamerEvents(s_pProcessStreamer);
         s_pProcessStreamer->Start();
     }
 

@@ -20,7 +20,8 @@ namespace SmartEventViewer {
         String TaskId{};
         String Status{}; // "PENDING", "PROCESSING", "DOWNLOADING", "COMPLETED", "FAILED"
         String ProgressMessage{};
-        double DownloadProgress{ 0.0 }; // 0.0 to 100.0
+        double ProgressPercentage{ 0.0 }; // Universal progress across all states (0.0 to 100.0)
+        double DownloadProgress{ 0.0 }; // 0.0 to 100.0 (download state only)
         double DownloadRateBytesPerSec{ 0.0 };
         unsigned long long DownloadedBytes{ 0 };
         unsigned long long TotalBytes{ 0 };
@@ -68,6 +69,7 @@ namespace DotNetDupe {
                         obj.SetProperty("taskId", JsonElement(value.TaskId));
                         obj.SetProperty("status", JsonElement(value.Status));
                         obj.SetProperty("progressMessage", JsonElement(value.ProgressMessage));
+                        obj.SetProperty("progressPercentage", JsonElement(value.ProgressPercentage));
                         obj.SetProperty("downloadProgress", JsonElement(value.DownloadProgress));
                         obj.SetProperty("downloadRateBytesPerSec", JsonElement(value.DownloadRateBytesPerSec));
                         obj.SetProperty("downloadedBytes", JsonElement(static_cast<double>(value.DownloadedBytes)));
@@ -84,6 +86,7 @@ namespace DotNetDupe {
                         if (element.TryGetProperty("taskId", prop) && prop.GetValueKind() == JsonValueKind::String) dto.TaskId = prop.GetString();
                         if (element.TryGetProperty("status", prop) && prop.GetValueKind() == JsonValueKind::String) dto.Status = prop.GetString();
                         if (element.TryGetProperty("progressMessage", prop) && prop.GetValueKind() == JsonValueKind::String) dto.ProgressMessage = prop.GetString();
+                        if (element.TryGetProperty("progressPercentage", prop) && prop.GetValueKind() == JsonValueKind::Number) dto.ProgressPercentage = prop.GetDouble();
                         if (element.TryGetProperty("downloadProgress", prop) && prop.GetValueKind() == JsonValueKind::Number) dto.DownloadProgress = prop.GetDouble();
                         if (element.TryGetProperty("downloadRateBytesPerSec", prop) && prop.GetValueKind() == JsonValueKind::Number) dto.DownloadRateBytesPerSec = prop.GetDouble();
                         if (element.TryGetProperty("downloadedBytes", prop) && prop.GetValueKind() == JsonValueKind::Number) dto.DownloadedBytes = static_cast<unsigned long long>(prop.GetDouble());

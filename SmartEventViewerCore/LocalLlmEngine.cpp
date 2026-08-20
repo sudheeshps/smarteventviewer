@@ -411,6 +411,22 @@ namespace SmartEventViewer {
         return false;
     }
 
+    static void SubscribeDownloaderEvents(
+        DotNetDupe::System::Net::Http::FileDownloader& downloader,
+        DotNetDupe::System::Action<double, double, long long, long long> progressCb,
+        DotNetDupe::System::Threading::AutoResetEvent& completionEvent,
+        std::atomic<bool>& bSuccess) {
+        downloader.DownloadProgressChanged += [progressCb](const void* pSender, const DotNetDupe::System::Net::Http::DownloadProgressChangedEventArgs& e) {
+            if (progressCb) {
+                progressCb(e.GetProgressPercentage(), e.GetDownloadRateBytesPerSec(), e.GetBytesReceived(), e.GetTotalBytesToReceive());
+            }
+        };
+        downloader.DownloadCompleted += [&completionEvent, &bSuccess](const void* pSender, const DotNetDupe::System::Net::Http::DownloadCompletedEventArgs& e) {
+            bSuccess = e.IsSuccess();
+            completionEvent.Set();
+        };
+    }
+
     bool LocalLlmEngine::ExecuteFileDownloader(const String& sUrl, const String& sTargetPath, DotNetDupe::System::Action<double, double, long long, long long> progressCb) {
         try {
             Console::WriteLine(String::Format("[AI_ENGINE] Initializing ExecuteFileDownloader for URL '{0}'...", sUrl));
@@ -419,14 +435,17 @@ namespace SmartEventViewer {
             DotNetDupe::System::Net::Http::FileDownloader downloader(sUrl, sTargetPath);
             DotNetDupe::System::Threading::AutoResetEvent completionEvent(false);
             std::atomic<bool> bSuccess{ false };
-            downloader.SetProgressCallback(DotNetDupe::System::Action<DotNetDupe::System::Net::Http::DownloadProgress>([progressCb, &completionEvent, &bSuccess](const DotNetDupe::System::Net::Http::DownloadProgress& prog) {
-                if (progressCb && prog.TotalBytes > 0) progressCb((static_cast<double>(prog.DownloadedBytes) / static_cast<double>(prog.TotalBytes)) * 100.0, prog.DownloadRateBytesPerSec, prog.DownloadedBytes, prog.TotalBytes);
-                if (prog.Status == DotNetDupe::System::Net::Http::DownloadStatus::Completed) { bSuccess = true; completionEvent.Set(); }
-                else if (prog.Status == DotNetDupe::System::Net::Http::DownloadStatus::Failed) { bSuccess = false; completionEvent.Set(); }
-            }));
-            if (downloader.Start()) { completionEvent.WaitOne(60 * 60 * 1000); return bSuccess.load(); }
+            SubscribeDownloaderEvents(downloader, progressCb, completionEvent, bSuccess);
+            if (downloader.Start()) {
+                completionEvent.WaitOne(60 * 60 * 1000);
+                return bSuccess.load();
+            }
             return false;
-        } catch (...) { return false; }
+        } catch (const DotNetDupe::System::Exception&) {
+            return false;
+        } catch (...) {
+            return false;
+        }
     }
 
     void LocalLlmEngine::DownloadModelFromUrl(const String& sDownloadUrl, const String& sModelPath, DotNetDupe::System::Action<double, double, long long, long long> progressCallback) {

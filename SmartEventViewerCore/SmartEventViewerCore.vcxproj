@@ -124,6 +124,9 @@
     <ClInclude Include="..\Include\Ai\ILlamaModelProvider.h" />
     <ClInclude Include="..\Include\Ai\LocalLlmEngine.h" />
     <ClInclude Include="..\Include\Ai\RagVectorStore.h" />
+    <ClInclude Include="..\Include\Ai\AnalysisEvents.h" />
+    <ClInclude Include="..\Include\Ai\IAnalysisState.h" />
+    <ClInclude Include="..\Include\Ai\AnalysisStates.h" />
     <ClInclude Include="..\Include\Collections\LruCache.h" />
     <ClInclude Include="..\Include\Logging\AppLoggerManager.h" />
   </ItemGroup>
@@ -143,6 +146,7 @@
     <ClCompile Include="EventService.cpp" />
     <ClCompile Include="TelemetryService.cpp" />
     <ClCompile Include="AnalysisService.cpp" />
+    <ClCompile Include="AnalysisStates.cpp" />
     <ClCompile Include="DiagnosticsService.cpp" />
     <ClCompile Include="TelemetryBackgroundWorker.cpp" />
     <ClCompile Include="LocalLlmEngine.cpp" />
@@ -155,12 +159,12 @@
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
-    <Import Project="..\packages\DotNetDupe.4.0.2\build\native\DotNetDupe.targets" Condition="Exists('..\packages\DotNetDupe.4.0.2\build\native\DotNetDupe.targets')" />
+    <Import Project="..\packages\DotNetDupe.4.0.3\build\native\DotNetDupe.targets" Condition="Exists('..\packages\DotNetDupe.4.0.3\build\native\DotNetDupe.targets')" />
   </ImportGroup>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
       <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
     </PropertyGroup>
-    <Error Condition="!Exists('..\packages\DotNetDupe.4.0.2\build\native\DotNetDupe.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\DotNetDupe.4.0.2\build\native\DotNetDupe.targets'))" />
+    <Error Condition="!Exists('..\packages\DotNetDupe.4.0.3\build\native\DotNetDupe.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\DotNetDupe.4.0.3\build\native\DotNetDupe.targets'))" />
   </Target>
 </Project>
