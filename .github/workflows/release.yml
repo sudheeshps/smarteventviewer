@@ -1,17 +1,22 @@
-name: Build and Release SmartEventViewer
+name: Build, Test and Release SmartEventViewer
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  build-and-release:
-    name: Build & Publish Release (Windows x64)
+  build-and-test:
+    name: Build & Test (Windows x64)
     runs-on: windows-latest
 
     steps:
@@ -129,6 +134,13 @@ jobs:
           ) > "%DIST_DIR%\start_smarteventviewer.bat"
 
           powershell -NoProfile -Command "Compress-Archive -Path '%DIST_DIR%\*' -DestinationPath 'dist\SmartEventViewer-windows-x64.zip' -Force"
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SmartEventViewer-windows-x64
+          path: dist/SmartEventViewer-windows-x64.zip
+          retention-days: 14
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
