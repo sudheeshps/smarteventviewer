@@ -2,18 +2,33 @@
 
 <div align="center">
 
-![C++17](https://img.shields.io/badge/Language-C%2B%2B17-blue.svg?style=for-the-badge&logo=c%2B%2B)
-![Platform](https://img.shields.io/badge/Platform-Windows%20x64-0078D6.svg?style=for-the-badge&logo=windows)
-![React](https://img.shields.io/badge/Frontend-React%2019%20%2B%20TypeScript-61DAFB.svg?style=for-the-badge&logo=react)
-![Build & Test](https://github.com/sudheeshps/smarteventviewer/actions/workflows/release.yml/badge.svg)
-![CodeQL](https://github.com/sudheeshps/smarteventviewer/actions/workflows/codeql.yml/badge.svg)
-![License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)
+<p>
+  <img src="https://img.shields.io/badge/Language-C%2B%2B17-blue.svg?style=for-the-badge&logo=c%2B%2B" alt="C++17" />
+  <img src="https://img.shields.io/badge/Platform-Windows%20x64-0078D6.svg?style=for-the-badge&logo=windows" alt="Platform" />
+  <img src="https://img.shields.io/badge/Frontend-React%2019%20%2B%20TypeScript-61DAFB.svg?style=for-the-badge&logo=react" alt="React" />
+  <img src="https://github.com/sudheeshps/smarteventviewer/actions/workflows/release.yml/badge.svg" alt="Build & Test" />
+  <img src="https://github.com/sudheeshps/smarteventviewer/actions/workflows/codeql.yml/badge.svg" alt="CodeQL" />
+  <img src="https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge" alt="License" />
+</p>
 
-**High-Performance Native C++17 SIEM, Windows Event Log Analyzer & Telemetry Dashboard with Embedded Local RAG AI Security Analyst**
+<p>
+  <strong>High-Performance Native C++17 SIEM, Windows Event Log Analyzer &amp; Telemetry Dashboard with Embedded Local RAG AI Security Analyst</strong>
+</p>
 
-*Built on top of the high-performance **DotNetDupe** C++ foundational infrastructure library.*
+<p>
+  <em>Built on top of the high-performance <strong>DotNetDupe</strong> C++ foundational infrastructure library.</em>
+</p>
 
-[Quick Start](#-quick-start--installation) • [Key Features](#-key-features) • [Built on DotNetDupe](#️-built-on-dotnetdupe-infrastructure) • [Server Hosting Code](#-server-hosting--dependency-injection-in-maincpp) • [Screenshots](#-screenshots--walkthrough) • [Architecture](#-architecture--tech-stack) • [Building from Source](#-building-from-source) • [References](#-references)
+<p>
+  <a href="#-quick-start--installation">Quick Start</a> •
+  <a href="#-key-features">Key Features</a> •
+  <a href="#️-built-on-dotnetdupe-infrastructure">Built on DotNetDupe</a> •
+  <a href="#-server-hosting--dependency-injection-in-maincpp">Server Hosting Code</a> •
+  <a href="#-screenshots--walkthrough">Screenshots</a> •
+  <a href="#-architecture--tech-stack">Architecture</a> •
+  <a href="#-building-from-source">Building from Source</a> •
+  <a href="#-references">References</a>
+</p>
 
 </div>
 
