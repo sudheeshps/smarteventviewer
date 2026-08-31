@@ -91,9 +91,11 @@ static void RegisterSingletons(WebApplicationBuilder& builder, SmartPointer<Smar
     spTelemetryService = SmartPointer<SmartEventViewer::ITelemetryService>(SmartPointer<SmartEventViewer::TelemetryService>::NewShared(spProvider, spPushNotifier));
     builder.GetServices().AddSingleton<SmartEventViewer::IEventService, SmartEventViewer::EventService>();
     builder.GetServices().AddSingleton<SmartEventViewer::ITelemetryService>(spTelemetryService);
-    builder.GetServices().AddSingleton<SmartEventViewer::IAnalysisService>(SmartEventViewer::AnalysisService::GetSharedInstance());
+
+    auto spAnalysis = SmartEventViewer::AnalysisService::GetSharedInstance();
+    spAnalysis->SetPushNotifier(spPushNotifier);
+    builder.GetServices().AddSingleton<SmartEventViewer::IAnalysisService>(spAnalysis);
     builder.GetServices().AddSingleton<SmartEventViewer::IDiagnosticsService, SmartEventViewer::DiagnosticsService>();
-    SmartEventViewer::AnalysisService::GetSharedInstance()->SetPushNotifier(spPushNotifier);
 }
 
 static void RegisterControllers(WebApplicationBuilder& builder) {

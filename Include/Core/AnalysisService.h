@@ -55,6 +55,7 @@ namespace SmartEventViewer {
 
         static DotNetDupe::System::SmartPointer<AnalysisService> GetSharedInstance();
         void SetPushNotifier(const DotNetDupe::System::SmartPointer<ITelemetryPushNotifier>& spNotifier);
+        void SetLlmEngine(const DotNetDupe::System::SmartPointer<LocalLlmEngine>& spLlmEngine);
 
         void SetState(const DotNetDupe::System::SmartPointer<IAnalysisState>& spNextState);
         DotNetDupe::System::SmartPointer<IAnalysisState> GetCurrentState() const;

@@ -1,4 +1,5 @@
-#include "TelemetryWebSocketHandler.h"
+#include "pch.h"
+#include "WebSockets/TelemetryWebSocketHandler.h"
 #include "Logging/AppLoggerManager.h"
 #include "System/Net/WebSockets/WebSocketException.h"
 #include "System/Exception.h"

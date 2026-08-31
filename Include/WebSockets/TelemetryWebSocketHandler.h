@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ViewerCommon.h"
 #include "WebAppCore/WebSockets/WebSocketContext.h"
 #include "Core/ITelemetryPushNotifier.h"
 #include "System/Collections/Concurrent/ConcurrentDictionary.h"
@@ -10,7 +11,7 @@ namespace SmartEventViewer {
     using String = DotNetDupe::System::String;
     using WebSocketContext = DotNetDupe::WebAppCore::WebSockets::WebSocketContext;
 
-    class TelemetryWebSocketHandler : public DotNetDupe::WebAppCore::WebSockets::IWebSocketHandler, public ITelemetryPushNotifier {
+    class SMARTEVENTVIEWER_API TelemetryWebSocketHandler : public DotNetDupe::WebAppCore::WebSockets::IWebSocketHandler, public ITelemetryPushNotifier {
     private:
         using ClientMap = DotNetDupe::System::Collections::Concurrent::ConcurrentDictionary<unsigned long long, DotNetDupe::System::SmartPointer<WebSocketContext>>;
         ClientMap m_clients{};
