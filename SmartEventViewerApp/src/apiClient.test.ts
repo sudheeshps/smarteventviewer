@@ -1,14 +1,15 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { fetchApiChannels, fetchApiEvents } from './apiClient';
 
-async function runApiTests() {
-  console.log('--- Running React UI API Client Integration Tests ---');
-  
-  // Test 1: fetchApiChannels with mock fetch
-  let test1Passed = false;
-  const originalFetch = window.fetch;
-  try {
-    window.fetch = (async (url: string) => {
-      console.log(`[API TEST] Intercepted fetch call to: ${url}`);
+describe('apiClient unit tests', () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it('fetchApiChannels should fetch and return channel list', async () => {
+    globalThis.fetch = vi.fn().mockImplementation(async (url: string) => {
       if (url.includes('/api/channels')) {
         return {
           ok: true,
@@ -17,22 +18,15 @@ async function runApiTests() {
         } as Response;
       }
       return { ok: false, status: 404 } as Response;
-    }) as typeof fetch;
+    });
 
     const channelsData = await fetchApiChannels('http://localhost:8080');
-    if (channelsData && channelsData.channels && channelsData.channels.length === 3) {
-      test1Passed = true;
-      console.log('[PASS] fetchApiChannels API access test');
-    }
-  } catch (err) {
-    console.error('[FAIL] fetchApiChannels test:', err);
-  }
+    expect(channelsData).toBeDefined();
+    expect(channelsData.channels).toEqual(['Security', 'System', 'Application']);
+  });
 
-  // Test 2: fetchApiEvents with mock fetch
-  let test2Passed = false;
-  try {
-    window.fetch = (async (url: string) => {
-      console.log(`[API TEST] Intercepted fetch call to: ${url}`);
+  it('fetchApiEvents should fetch and map channel event records', async () => {
+    globalThis.fetch = vi.fn().mockImplementation(async (url: string) => {
       if (url.includes('/api/events?channel=Security')) {
         return {
           ok: true,
@@ -45,26 +39,12 @@ async function runApiTests() {
         } as Response;
       }
       return { ok: false, status: 404 } as Response;
-    }) as typeof fetch;
+    });
 
     const eventsData = await fetchApiEvents('Security', 'http://localhost:8080');
-    if (eventsData && eventsData.events && eventsData.events[0].id === 4624) {
-      test2Passed = true;
-      console.log('[PASS] fetchApiEvents API access test');
-    }
-  } catch (err) {
-    console.error('[FAIL] fetchApiEvents test:', err);
-  } finally {
-    window.fetch = originalFetch;
-  }
+    expect(eventsData).toBeDefined();
+    expect(eventsData.events).toHaveLength(1);
+    expect(eventsData.events![0].id).toBe(4624);
+  });
+});
 
-  if (test1Passed && test2Passed) {
-    console.log('--- All React UI API Tests Passed Successfully ---');
-  } else {
-    console.error('--- Some React UI API Tests Failed ---');
-  }
-}
-
-if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__runApiTests = runApiTests;
-}

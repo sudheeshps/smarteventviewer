@@ -66,6 +66,28 @@ void SignalHandler(int signal) {
     }
 }
 
+class FilteredConsoleWriter : public LoggerTextWriter {
+private:
+    static bool IsTransientSocketNoise(const String& sValue) {
+        return sValue.Contains("Failed to send data") || sValue.Contains("Socket is closed");
+    }
+
+public:
+    FilteredConsoleWriter()
+        : LoggerTextWriter("Console", LogLevel::Information) {
+    }
+
+    void WriteLine(const String& sValue) override {
+        if (IsTransientSocketNoise(sValue)) return;
+        LoggerTextWriter::WriteLine(sValue);
+    }
+
+    void WriteLine(const char* pValue) override {
+        if (pValue != nullptr && IsTransientSocketNoise(String(pValue))) return;
+        LoggerTextWriter::WriteLine(pValue);
+    }
+};
+
 static void ConfigureLogging() {
     LoggerConfiguration logConfig;
     logConfig.FilePath = "logs/SmartEventViewerServer.log";
@@ -76,7 +98,7 @@ static void ConfigureLogging() {
     logConfig.Rollover.MaxBackupFiles = 5;
 
     LogManager::Configure(logConfig);
-    Console::SetOut(SmartPointer<LoggerTextWriter>::NewShared("Console"));
+    Console::SetOut(SmartPointer<FilteredConsoleWriter>::NewShared());
 }
 
 static void RegisterSingletons(WebApplicationBuilder& builder, SmartPointer<SmartEventViewer::TelemetryWebSocketHandler>& spPushNotifier, SmartPointer<SmartEventViewer::ITelemetryService>& spTelemetryService) {
