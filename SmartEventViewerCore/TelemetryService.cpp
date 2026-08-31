@@ -161,11 +161,10 @@ namespace SmartEventViewer {
     }
 
     void TelemetryService::CheckHeartbeat(unsigned long long curTimeMs) {
-        if (curTimeMs - m_uLastHeartbeatMs >= 2000) {
+        if (curTimeMs - m_uLastHeartbeatMs >= 10000) {
             m_uLastHeartbeatMs = curTimeMs;
             if (!m_spNotifier.IsNull()) {
                 m_spNotifier->BroadcastCategoryUpdate("summary");
-                m_spNotifier->BroadcastCategoryUpdate("processes");
             }
         }
     }
@@ -173,12 +172,15 @@ namespace SmartEventViewer {
     void TelemetryService::SampleSummaryAndProcesses() {
         try {
             auto summary = GetSummary();
-            if (m_spChangeDetector->HasSummaryChanged(summary)) {
+            bool bSummaryChanged = m_spChangeDetector->HasSummaryChanged(summary);
+            if (bSummaryChanged) {
                 m_spNotifier->BroadcastCategoryUpdate("summary");
+                m_uLastHeartbeatMs = GetCurrentTickMs();
             }
             auto processes = GetProcesses();
-            if (m_spChangeDetector->HaveProcessesChanged(processes)) {
+            if (!bSummaryChanged && m_spChangeDetector->HaveProcessesChanged(processes)) {
                 m_spNotifier->BroadcastCategoryUpdate("processes");
+                m_uLastHeartbeatMs = GetCurrentTickMs();
             }
         } catch (...) {
         }

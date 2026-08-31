@@ -1,5 +1,5 @@
 // Telemetry Web Worker running in a separate background thread
-// Polls active category endpoints at 1.5s intervals and immediately on tab switch.
+// Subscribes to real-time WebSocket telemetry updates with fallback polling.
 
 let socket: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -9,6 +9,8 @@ let currentBaseUrl: string = '';
 let currentActiveSubTab: string = 'overview';
 let pollingIntervalId: ReturnType<typeof setInterval> | null = null;
 let isFetching: boolean = false;
+let pendingFetch: boolean = false;
+let pushDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 self.onmessage = (event: MessageEvent) => {
   const { type, baseUrl, subTab } = event.data;
@@ -17,14 +19,16 @@ self.onmessage = (event: MessageEvent) => {
     currentBaseUrl = baseUrl || currentBaseUrl;
     currentActiveSubTab = subTab || currentActiveSubTab;
     connectWebSocket();
-    fetchActiveSubTab(false);
+    requestFetch();
     if (pollingIntervalId !== null) clearInterval(pollingIntervalId);
     pollingIntervalId = setInterval(() => {
       if (!socket || socket.readyState === WebSocket.CLOSED || socket.readyState === WebSocket.CLOSING) {
         scheduleReconnect();
+        requestFetch();
+      } else if (socket.readyState !== WebSocket.OPEN) {
+        requestFetch();
       }
-      fetchActiveSubTab(false);
-    }, 2000);
+    }, 3000);
   } else if (type === 'STOP_POLLING') {
     if (pollingIntervalId !== null) {
       clearInterval(pollingIntervalId);
@@ -37,6 +41,10 @@ self.onmessage = (event: MessageEvent) => {
     if (heartbeatIntervalId !== null) {
       clearInterval(heartbeatIntervalId);
       heartbeatIntervalId = null;
+    }
+    if (pushDebounceTimer) {
+      clearTimeout(pushDebounceTimer);
+      pushDebounceTimer = null;
     }
     if (socket) {
       socket.onclose = null;
@@ -51,10 +59,11 @@ self.onmessage = (event: MessageEvent) => {
       currentAbortController = null;
     }
     isFetching = false;
+    pendingFetch = false;
   } else if (type === 'CHANGE_SUBTAB') {
     if (currentActiveSubTab !== subTab) {
       currentActiveSubTab = subTab;
-      fetchActiveSubTab(true);
+      requestFetch();
     }
   }
 };
@@ -117,7 +126,7 @@ function connectWebSocket() {
 
     socket.onopen = () => {
       console.log('[TelemetryWorker] WebSocket connected:', wsUrl);
-      fetchActiveSubTab(true);
+      requestFetch();
       if (heartbeatIntervalId !== null) clearInterval(heartbeatIntervalId);
       heartbeatIntervalId = setInterval(() => {
         if (socket && socket.readyState === WebSocket.OPEN) {
@@ -154,15 +163,31 @@ function connectWebSocket() {
   }
 }
 
+function requestFetch() {
+  if (isFetching) {
+    pendingFetch = true;
+    return;
+  }
+  fetchActiveSubTab();
+}
+
 function handleServerPush(category: string) {
   if (category === 'llm_analysis') {
     self.postMessage({ type: 'LLM_ANALYSIS_UPDATED' });
-  } else if (category === 'summary' || category === 'processes') {
-    fetchActiveSubTab(true);
-  } else if (category === 'sessions' && (currentActiveSubTab === 'sessions' || currentActiveSubTab === 'users')) {
-    fetchActiveSubTab(true);
-  } else if (category === 'services' && currentActiveSubTab === 'services') {
-    fetchActiveSubTab(true);
+    return;
+  }
+
+  const isRelevant = 
+    (category === 'summary' || category === 'processes') ||
+    (category === 'sessions' && (currentActiveSubTab === 'sessions' || currentActiveSubTab === 'users')) ||
+    (category === 'services' && currentActiveSubTab === 'services');
+
+  if (isRelevant) {
+    if (pushDebounceTimer) clearTimeout(pushDebounceTimer);
+    pushDebounceTimer = setTimeout(() => {
+      pushDebounceTimer = null;
+      requestFetch();
+    }, 50);
   }
 }
 
@@ -181,14 +206,10 @@ function mapProcessItem(p: Record<string, unknown>) {
   };
 }
 
-async function fetchActiveSubTab(forceAbort: boolean = false) {
-  if (isFetching && !forceAbort) {
+async function fetchActiveSubTab() {
+  if (isFetching) {
+    pendingFetch = true;
     return;
-  }
-
-  if (forceAbort && currentAbortController) {
-    currentAbortController.abort();
-    currentAbortController = null;
   }
 
   isFetching = true;
@@ -198,7 +219,7 @@ async function fetchActiveSubTab(forceAbort: boolean = false) {
     if (currentAbortController) {
       currentAbortController.abort();
     }
-  }, 4000);
+  }, 5000);
   const urlPrefix = currentBaseUrl ? currentBaseUrl : (self.location.origin.includes(':') ? self.location.origin : 'http://127.0.0.1:8080');
 
   try {
@@ -305,5 +326,9 @@ async function fetchActiveSubTab(forceAbort: boolean = false) {
     clearTimeout(timeoutId);
     currentAbortController = null;
     isFetching = false;
+    if (pendingFetch) {
+      pendingFetch = false;
+      requestFetch();
+    }
   }
 }
